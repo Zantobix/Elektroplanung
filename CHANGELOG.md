@@ -9,6 +9,8 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+## [0.1.1]
+
 - Releases als einzelne Dateien statt Archiven: Windows-Exe (mit Programmsymbol, ohne Visual-C++-Laufzeit),
   Linux-AppImage, macOS-Disk-Image mit App
 - Behoben: Der Link im Info-Dialog öffnet jetzt den Browser
