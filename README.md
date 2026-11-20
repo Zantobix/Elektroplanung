@@ -23,6 +23,19 @@ und die Original-Icons aus [BYTE-RANGER-Software/Elektroplanung](https://github.
   Umgebungsvariable `EP_GLYPHEN`), bettet `build.rs` sie ein, sonst zeigen diese Knöpfe Text.
 - `resources/template.epr`: leeres Projekt im Originalformat als Vorlage für neue Projekte (ohne persönliche Daten).
 
+## Herunterladen
+
+Fertige Programme gibt es unter [Releases](https://github.com/Zantobix/Elektroplanung/releases), jeweils als
+einzelne Datei ohne Installation:
+
+| System | Datei | Hinweis |
+|---|---|---|
+| Windows | `Elektroplanung-<Version>-windows-x86_64.exe` | direkt starten. Die Exe ist nicht signiert: Windows SmartScreen warnt beim ersten Start → „Weitere Informationen“ → „Trotzdem ausführen“. |
+| Linux | `Elektroplanung-<Version>-x86_64.AppImage` | ausführbar machen (`chmod +x …`) und starten |
+| macOS (Apple Silicon) | `Elektroplanung-<Version>-macos-arm64.dmg` | App in „Programme“ ziehen. Nicht notarisiert: beim ersten Start Rechtsklick → „Öffnen“ (bzw. Systemeinstellungen › Datenschutz & Sicherheit › „Trotzdem öffnen“). |
+
+Einstellungen und Benutzerbibliothek liegen in `%APPDATA%\Elektroplanung` bzw. `~/.config/elektroplanung`.
+
 ## Bauen und starten
 
 ```bash

@@ -2,6 +2,7 @@
 #
 # Die Version steht nur an EINER Stelle: `version` in Cargo.toml. Tags werden nie von Hand gesetzt.
 # - Pull Request: bauen + testen, Programme als Artefakte an der Ausführung
+#   (Windows: einzelne .exe, Linux: .AppImage, macOS: .dmg mit der App)
 # - Push auf main: ebenso; ist die Version aus Cargo.toml neu (noch kein Tag v<Version>), legt die Pipeline
 #   nach erfolgreichem Bauen das Tag v<Version> und ein GitHub-Release mit den drei Programmen an.
 #   Text des Releases: der Abschnitt "## [<Version>]" aus CHANGELOG.md.
@@ -47,18 +48,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            name: linux-x86_64
-            exe: Elektroplanung
+          # Linux auf der älteren Ubuntu-Version bauen: läuft dann auch auf älteren Distributionen (glibc)
+          - os: ubuntu-22.04
+            datei: Elektroplanung-${{ needs.version.outputs.version }}-x86_64.AppImage
           - os: macos-latest
-            name: macos-arm64
-            exe: Elektroplanung
+            datei: Elektroplanung-${{ needs.version.outputs.version }}-macos-arm64.dmg
           - os: windows-latest
-            name: windows-x86_64
-            exe: Elektroplanung.exe
+            datei: Elektroplanung-${{ needs.version.outputs.version }}-windows-x86_64.exe
+            # C-Laufzeit fest einbinden: die Exe läuft ohne installiertes Visual-C++-Paket
+            rustflags: -C target-feature=+crt-static
     runs-on: ${{ matrix.os }}
     env:
-      PAKET: Elektroplanung-${{ needs.version.outputs.version }}-${{ matrix.name }}
+      DATEI: ${{ matrix.datei }}
+      VERSION: ${{ needs.version.outputs.version }}
+      RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -70,20 +73,69 @@ jobs:
         run: cargo test --release --locked
       - name: Bauen
         run: cargo build --release --locked
-      - name: Paket
+
+      - name: Windows – einzelne Exe
+        if: runner.os == 'Windows'
         shell: bash
+        run: cp target/release/Elektroplanung.exe "$DATEI"
+
+      - name: Linux – AppImage
+        if: runner.os == 'Linux'
         run: |
-          mkdir -p paket
-          cp "target/release/${{ matrix.exe }}" README.md LICENSE CHANGELOG.md paket/
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "$PAKET.zip" ./paket/*
-          else
-            tar -czf "$PAKET.tar.gz" -C paket .
-          fi
+          mkdir -p AppDir/usr/bin
+          cp target/release/Elektroplanung AppDir/usr/bin/
+          cp resources/elektroplanung.png AppDir/elektroplanung.png
+          ln -s usr/bin/Elektroplanung AppDir/AppRun
+          cat > AppDir/elektroplanung.desktop <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=Elektroplanung
+          Comment=Schaltpläne mit Blättern, Symbolen, Leitungen und Schriftfeld
+          Exec=Elektroplanung %f
+          Icon=elektroplanung
+          Categories=Graphics;Engineering;
+          Terminal=false
+          EOF
+          curl -sSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool AppDir "$DATEI"
+
+      - name: macOS – App in einem Disk-Image
+        if: runner.os == 'macOS'
+        run: |
+          APP=dmg/Elektroplanung.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp target/release/Elektroplanung "$APP/Contents/MacOS/"
+          mkdir symbol.iconset
+          for g in 16 32 128 256; do
+            sips -z $g $g resources/elektroplanung.png --out symbol.iconset/icon_${g}x${g}.png > /dev/null
+            sips -z $((g*2)) $((g*2)) resources/elektroplanung.png --out symbol.iconset/icon_${g}x${g}@2x.png > /dev/null
+          done
+          iconutil -c icns symbol.iconset -o "$APP/Contents/Resources/elektroplanung.icns"
+          cat > "$APP/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleName</key><string>Elektroplanung</string>
+            <key>CFBundleDisplayName</key><string>Elektroplanung</string>
+            <key>CFBundleIdentifier</key><string>io.github.zantobix.elektroplanung</string>
+            <key>CFBundleExecutable</key><string>Elektroplanung</string>
+            <key>CFBundleIconFile</key><string>elektroplanung</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>$VERSION</string>
+            <key>CFBundleVersion</key><string>$VERSION</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          EOF
+          codesign --force --deep -s - "$APP"
+          ln -s /Applications dmg/Programme
+          hdiutil create -volname Elektroplanung -srcfolder dmg -ov -format UDZO "$DATEI"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PAKET }}
-          path: ${{ env.PAKET }}.*
+          name: ${{ env.DATEI }}
+          path: ${{ env.DATEI }}
 
   release:
     needs: [version, bauen]
