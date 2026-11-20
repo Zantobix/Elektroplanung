@@ -35,6 +35,10 @@ jobs:
           else
             echo "neu=true" >> "$GITHUB_OUTPUT"
             echo "Version $V ist neu"
+            if ! grep -q "^## \[$V\]" CHANGELOG.md; then
+              echo "::error file=CHANGELOG.md::Abschnitt '## [$V]' fehlt (Version aus Cargo.toml)"
+              exit 1
+            fi
           fi
 
   bauen:

@@ -29,13 +29,6 @@ fn main() -> eframe::Result {
     }
     let mut options = eframe::NativeOptions { viewport: vp, ..Default::default() };
     options.persist_window = false;
-    #[cfg(target_os = "macos")]
-    if shot.is_some() {
-        options.event_loop_builder = Some(Box::new(|b| {
-            use winit::platform::macos::EventLoopBuilderExtMacOS;
-            b.with_activate_ignoring_other_apps(false);
-        }));
-    }
     eframe::run_native("Elektroplanung", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, shot.clone())))))
 }
 
