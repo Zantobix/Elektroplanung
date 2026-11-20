@@ -11,7 +11,7 @@ name = "Elektroplanung"
 path = "src/main.rs"
 
 [dependencies]
-eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "persistence"] }
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "persistence", "links"] }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -28,7 +28,7 @@ path = "src/lib.rs"
 
 # Linux: Fensteranbindung für X11 und Wayland (unter Windows/macOS nicht nötig)
 [target.'cfg(target_os = "linux")'.dependencies]
-eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "persistence", "x11", "wayland"] }
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "persistence", "links", "x11", "wayland"] }
 
 # Windows: Programmsymbol und Versionsangaben in die Exe einbetten (build.rs)
 [target.'cfg(windows)'.build-dependencies]
