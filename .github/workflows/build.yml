@@ -1,0 +1,108 @@
+# Bauen, testen und veröffentlichen auf Linux, macOS und Windows.
+#
+# Die Version steht nur an EINER Stelle: `version` in Cargo.toml. Tags werden nie von Hand gesetzt.
+# - Pull Request: bauen + testen, Programme als Artefakte an der Ausführung
+# - Push auf main: ebenso; ist die Version aus Cargo.toml neu (noch kein Tag v<Version>), legt die Pipeline
+#   nach erfolgreichem Bauen das Tag v<Version> und ein GitHub-Release mit den drei Programmen an.
+#   Text des Releases: der Abschnitt "## [<Version>]" aus CHANGELOG.md.
+name: Bauen
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      neu: ${{ steps.v.outputs.neu }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Version aus Cargo.toml, gibt es das Tag schon?
+        run: |
+          V=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$V" > /dev/null; then
+            echo "neu=false" >> "$GITHUB_OUTPUT"
+            echo "Version $V ist bereits veröffentlicht"
+          else
+            echo "neu=true" >> "$GITHUB_OUTPUT"
+            echo "Version $V ist neu"
+          fi
+
+  bauen:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+            exe: Elektroplanung
+          - os: macos-latest
+            name: macos-arm64
+            exe: Elektroplanung
+          - os: windows-latest
+            name: windows-x86_64
+            exe: Elektroplanung.exe
+    runs-on: ${{ matrix.os }}
+    env:
+      PAKET: Elektroplanung-${{ needs.version.outputs.version }}-${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux-Pakete (Fensteranbindung X11/Wayland)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev
+      - name: Testen
+        run: cargo test --release --locked
+      - name: Bauen
+        run: cargo build --release --locked
+      - name: Paket
+        shell: bash
+        run: |
+          mkdir -p paket
+          cp "target/release/${{ matrix.exe }}" README.md LICENSE CHANGELOG.md paket/
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "$PAKET.zip" ./paket/*
+          else
+            tar -czf "$PAKET.tar.gz" -C paket .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PAKET }}
+          path: ${{ env.PAKET }}.*
+
+  release:
+    needs: [version, bauen]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.neu == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: pakete
+          merge-multiple: true
+      - name: Release-Text aus CHANGELOG.md
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          awk -v v="## [$V]" 'index($0, v) == 1 {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md > notizen.md
+          [ -s notizen.md ] || echo "Version $V" > notizen.md
+          cat notizen.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Elektroplanung ${{ needs.version.outputs.version }}
+          body_path: notizen.md
+          files: pakete/*

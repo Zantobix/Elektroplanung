@@ -1,0 +1,216 @@
+{
+ "version": 1,
+ "values": [
+  {
+   "name": "window title new project",
+   "group": "window",
+   "value": "Elektroplanung Neues Projekt",
+   "source": "function 0x4055d8 / string 0x5b9d70"
+  },
+  {
+   "name": "min window width",
+   "group": "window",
+   "value": 830,
+   "unit": "px",
+   "source": "DFM TFORM1 Constraints.MinWidth"
+  },
+  {
+   "name": "min window height",
+   "group": "window",
+   "value": 600,
+   "unit": "px",
+   "source": "DFM TFORM1 Constraints.MinHeight"
+  },
+  {
+   "name": "toolbar button width",
+   "group": "window",
+   "value": 27,
+   "unit": "px",
+   "source": "DFM TFORM1 ToolBar2.ButtonWidth"
+  },
+  {
+   "name": "toolbar button height",
+   "group": "window",
+   "value": 26,
+   "unit": "px",
+   "source": "DFM TFORM1 ToolBar2.ButtonHeight"
+  },
+  {
+   "name": "status panel widths",
+   "group": "window",
+   "value": "130,350,200,rest",
+   "source": "DFM TFORM1 StatusBar1.Panels"
+  },
+  {
+   "name": "sheet font",
+   "group": "sheet",
+   "value": "Times New Roman",
+   "source": "function 0x4055d8 / string 0x5b9d38"
+  },
+  {
+   "name": "default potentials",
+   "group": "project",
+   "value": "L1,L2,L3,N,PE,24VDC,OV",
+   "source": "function 0x4055d8 / strings 0x5b9d58"
+  },
+  {
+   "name": "pen styles",
+   "group": "project",
+   "value": "Standard,Gestrichelt,Strich/Punkt,Gepunktet",
+   "source": "function 0x4055d8"
+  },
+  {
+   "name": "raster options",
+   "group": "grid",
+   "value": "Kein,1,0mm,2,5mm,3,5mm,5,0mm,7,0mm,10,0mm,14,0mm",
+   "source": "strings 0x5b9e0a-0x5b9e34"
+  },
+  {
+   "name": "default raster",
+   "group": "grid",
+   "value": 10.0,
+   "unit": "mm",
+   "source": "reference picture (Rasterfang 10,0mm)"
+  },
+  {
+   "name": "sheet width",
+   "group": "sheet",
+   "value": 297,
+   "unit": "mm",
+   "source": "reference picture measured (1235 px at 4.155 px/mm)"
+  },
+  {
+   "name": "sheet height",
+   "group": "sheet",
+   "value": 210,
+   "unit": "mm",
+   "source": "reference picture measured (872 px)"
+  },
+  {
+   "name": "frame margin left/right/bottom",
+   "group": "sheet",
+   "value": 5,
+   "unit": "mm",
+   "source": "reference picture measured"
+  },
+  {
+   "name": "frame margin top",
+   "group": "sheet",
+   "value": 20,
+   "unit": "mm",
+   "source": "reference picture measured"
+  },
+  {
+   "name": "column bar height",
+   "group": "sheet",
+   "value": 5,
+   "unit": "mm",
+   "source": "reference picture measured"
+  },
+  {
+   "name": "current path columns",
+   "group": "sheet",
+   "value": 8,
+   "source": "reference picture"
+  },
+  {
+   "name": "title block height",
+   "group": "sheet",
+   "value": 15,
+   "unit": "mm",
+   "source": "reference picture measured"
+  },
+  {
+   "name": "title block layout units",
+   "group": "titleblock",
+   "value": 10000,
+   "source": "function 0x401e40"
+  },
+  {
+   "name": "title block element count",
+   "group": "titleblock",
+   "value": 46,
+   "source": "function 0x401e40"
+  },
+  {
+   "name": "sheet colour",
+   "group": "sheet",
+   "value": "#EEDDDD",
+   "source": "reference picture pixel"
+  },
+  {
+   "name": "grid colour",
+   "group": "sheet",
+   "value": "#E0D0D0",
+   "source": "reference picture pixel"
+  },
+  {
+   "name": "view background",
+   "group": "sheet",
+   "value": "#808080",
+   "source": "reference picture pixel"
+  },
+  {
+   "name": "project status text",
+   "group": "titleblock",
+   "value": "Projekt wird bearbeitet",
+   "source": "string 0x5b94a5"
+  },
+  {
+   "name": "undo shortcut",
+   "group": "controls",
+   "value": "Ctrl+Z",
+   "source": "DFM ActionList ShortCut 16474"
+  },
+  {
+   "name": "redo shortcut",
+   "group": "controls",
+   "value": "Ctrl+W",
+   "source": "DFM ActionList ShortCut 16471"
+  },
+  {
+   "name": "toggle current path alignment",
+   "group": "controls",
+   "value": "S",
+   "source": "DFM hint 'Strompfadausrichtung (Taste S)'"
+  },
+  {
+   "name": "toggle automatic connections",
+   "group": "controls",
+   "value": "A",
+   "source": "DFM hint 'Automatische Verbindungen (Taste A)'"
+  },
+  {
+   "name": "path alignment snap distance",
+   "group": "controls",
+   "value": 3.0,
+   "unit": "mm",
+   "estimated": true
+  },
+  {
+   "name": "symbol library source",
+   "group": "symbols",
+   "value": "Datenbank\\Symbole.tfi (104 Symbole)",
+   "source": "Symbole.tfi format decoded, see MECHANICS.md"
+  },
+  {
+   "name": "symbol units",
+   "group": "symbols",
+   "value": 0.1,
+   "unit": "mm",
+   "source": "Symbole.tfi elements, checked against PDF print"
+  },
+  {
+   "name": "old project import",
+   "group": "files",
+   "value": ".epr (EP16)",
+   "source": "W2.epr chunk tree, checked against Wohnung 2 PDF page 3"
+  },
+  {
+   "name": "project save format",
+   "group": "files",
+   "value": "JSON .epj",
+   "estimated": true
+  }
+ ]
+}

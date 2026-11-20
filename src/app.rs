@@ -1,0 +1,1619 @@
+//! Hauptfenster: Zustand und Aktionen. Die Oberfläche selbst steht in `view.rs`.
+
+use crate::canvas;
+use crate::model::*;
+use crate::symbols::{self, SymDef};
+use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
+pub const RASTER: [(&str, f32); 8] = [
+    ("Kein", 0.0),
+    ("1,0mm", 1.0),
+    ("2,5mm", 2.5),
+    ("3,5mm", 3.5),
+    ("5,0mm", 5.0),
+    ("7,0mm", 7.0),
+    ("10,0mm", 10.0),
+    ("14,0mm", 14.0),
+];
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Tool {
+    Select,
+    Klemmstelle,
+    Line,
+    Curve,
+    Rect,
+    Triangle,
+    Circle,
+    Text,
+    TextBox,
+    Table,
+    Image,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RightTab {
+    Projekt,
+    Symbole,
+    Bauteile,
+}
+
+#[derive(Clone)]
+pub enum Drag {
+    None,
+    Move { last: P, moved: bool },
+    Rubber { start: P },
+    Create { tool: Tool, start: P },
+    Wire { start: P },
+    Resize { id: u64, corner: usize },
+    Pan { last: Pos2 },
+}
+
+pub enum TextTarget {
+    NewText(P),
+    EditObj(u64),
+}
+
+pub enum Dialog {
+    Text { title: String, value: String, target: TextTarget },
+    Symbol { id: u64, bmk: String, value: String, option: u16, options: Vec<String> },
+    Project { name: String, kunde: String, owner: String, von: String, ort: String, znr: String, done: bool },
+    Sheet { r: SheetRef, name: String, number: String, columns: String },
+    Options,
+    Info,
+    Message(String),
+    Table { id: u64, rows: String, cols: String, cells: Vec<String> },
+}
+
+/// Aktion, die nach der Rückfrage "Geänderte Daten Speichern?" ausgeführt wird.
+#[derive(Clone, Debug)]
+pub enum Pending {
+    New,
+    Open,
+    OpenPath(PathBuf),
+    Quit,
+}
+
+pub struct Shot {
+    pub path: PathBuf,
+    pub frames: u32,
+    pub requested: bool,
+    pub done: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
+pub struct View {
+    pub zoom: f32,
+    pub offset: Vec2,
+    pub user: bool,
+    pub last_size: Vec2,
+    pub last_portrait: bool,
+}
+
+#[derive(Clone)]
+pub struct TNode {
+    pub id: String,
+    pub label: String,
+    pub bold: bool,
+    /// 0 nichts, 1 Buch, 2 Buch+Stern, 3 Blatt, 4 Ordner
+    pub icon: u8,
+    pub action: TAction,
+    pub children: Vec<TNode>,
+}
+
+#[derive(Clone)]
+pub enum TAction {
+    None,
+    Symbol(String),
+    Sheet(SheetRef),
+    Stift(usize),
+    Leitung(usize),
+    Potential(usize),
+    Bauteil(usize),
+    Platz(usize),
+    /// Projektbild (PRJ › BLD)
+    Bild(usize),
+    /// Sammelschiene bzw. Klemmleiste einer Anlage (Anlage, Index)
+    Schiene(usize, usize),
+    Klemmleiste(usize, usize),
+}
+
+pub struct App {
+    pub project: Project,
+    pub path: Option<PathBuf>,
+    pub dirty: bool,
+    pub lib: Vec<SymDef>,
+    pub undo: Vec<Project>,
+    pub redo: Vec<Project>,
+    pub tabs: Vec<SheetRef>,
+    pub active: usize,
+    pub tool: Tool,
+    pub zoom_tool: bool,
+    pub pen: usize,
+    pub raster_idx: usize,
+    pub grid: bool,
+    pub path_align: bool,
+    pub auto_conn: bool,
+    pub size_frame: bool,
+    pub fix_active: bool,
+    pub leitung: usize,
+    pub klemme: usize,
+    pub selection: Vec<u64>,
+    pub clipboard: Vec<Obj>,
+    pub view: View,
+    /// Ansicht vor dem Öffnen des Symboleditors (wird nach Übernehmen/Abbruch wiederhergestellt)
+    pub view_before_edit: Option<View>,
+    /// offene Rückfrage "Geänderte Daten Speichern?" und die Aktion danach
+    pub ask_save: Option<Pending>,
+    /// Beenden ohne weitere Rückfrage erlaubt (nach Ja/Nein)
+    pub quit_ok: bool,
+    /// Ansicht je Blatt (Zoom/Verschiebung); ein noch nicht gezeigtes Blatt wird eingepasst wie im Original
+    pub sheet_views: std::collections::HashMap<SheetRef, View>,
+    pub view_sheet: Option<SheetRef>,
+    pub drag: Drag,
+    pub placing: Option<String>,
+    pub lib_dir: Option<PathBuf>,
+    pub lib_info: String,
+    /// Bibliothek kam aus dem Zwischenspeicher (Datenbank gesperrt) → regelmäßig neu versuchen
+    pub lib_stale: bool,
+    pub lib_retry: f64,
+    pub mouse_mm: P,
+    pub right_tab: RightTab,
+    /// erster sichtbarer Blattreiter (Reiter blättern wie im Original)
+    pub tab_first: usize,
+    pub tree_open: HashSet<String>,
+    pub tree_sel: Option<String>,
+    pub search: String,
+    pub dialog: Option<Dialog>,
+    /// Eigenschaftendialoge wie im Original (Symbol, Text, Blatt)
+    pub props: Option<crate::props::Props>,
+    /// Werkzeugfenster Ausrichtung offen, Index des Referenzobjekts
+    pub align_win: bool,
+    /// Programmoptionen (Dialog "Option", dauerhaft gespeichert) und offener Dialog
+    pub opt: crate::optionen::Optionen,
+    pub opt_dlg: Option<crate::optionen::OptDlg>,
+    /// Dialoge Projekteigenschaften, Projektinfo, Drucken, Potential
+    pub dlg2: Option<crate::dialoge::Dlg2>,
+    /// Blattauswahl und Drucker für den nächsten Ausdruck
+    pub print_sel: Option<Vec<SheetRef>>,
+    pub print_printer: Option<String>,
+    /// zuletzt im Dialog Symboleigenschaften gewählte Freigaben
+    pub sym_frg_default: (bool, bool),
+    pub align_ref: usize,
+    pub info: String,
+    pub shot: Option<Shot>,
+    pub sheet_color: Color32,
+    pub grid_color: Color32,
+    pub invert_wheel: bool,
+    pub images: HashMap<String, egui::TextureHandle>,
+    pub sheet_screen_rect: Rect,
+    /// Zeichenfläche im letzten Bild (für Zoom per Tastatur)
+    pub canvas_area: Rect,
+    /// Ziehen zum Umsortieren: Blatt im Projektbaum, Blattreiter, Seitenreiter des Symboleditors
+    pub tree_drag: Option<SheetRef>,
+    pub tab_drag: Option<usize>,
+    pub page_drag: Option<usize>,
+    pub export_req: Option<PathBuf>,
+    /// PDF erzeugen: (Datei, danach drucken)
+    pub pdf_req: Option<(PathBuf, bool)>,
+    pub sym_edit: Option<crate::extra::SymEdit>,
+    pub xdlg: Option<crate::extra::XDialog>,
+    pub fav_overrides: std::collections::BTreeMap<String, bool>,
+    pub recent: Vec<String>,
+    pub show_library: bool,
+    /// weitere Dialoge (dialoge3.rs)
+    pub dlg3: Option<crate::dialoge3::Dlg3>,
+    /// Bibliotheksverwaltung: Reiter und Synchronisierung
+    pub lib_tab: usize,
+    pub lib_sync: (String, bool, bool, usize, String),
+    pub lib_filter: String,
+    /// Lage des letzten Rechtsklicks auf dem Blatt (für "Verweis einfügen")
+    pub mouse_ctx: P,
+    pub right_w: f32,
+}
+
+impl App {
+    pub fn new(cc: &eframe::CreationContext<'_>, shot: Option<PathBuf>) -> Self {
+        crate::setup_style(&cc.egui_ctx);
+        let mut tree_open = HashSet::new();
+        for k in [
+            "sym/fav",
+            "sym/fav/Kontakte/Schalter",
+            "sym/fav/Motore",
+            "sym/fav/Relais",
+            "sym/fav/Schutzeinrichtung",
+            "sym/fav/Siemens",
+            "sym/fav/Signaleinrichtung",
+            "sym/fav/Signaleinrichtung/Lampen",
+            "prj/a0",
+            "prj/a0/bl",
+        ] {
+            tree_open.insert(k.to_string());
+        }
+        Self {
+            project: Project::new_default(),
+            path: None,
+            dirty: false,
+            lib: vec![],
+            undo: vec![],
+            redo: vec![],
+            tabs: vec![SheetRef { anlage: 0, sheet: 0 }],
+            active: 0,
+            tool: Tool::Select,
+            zoom_tool: false,
+            pen: 0,
+            raster_idx: 6,
+            grid: true,
+            path_align: true,
+            auto_conn: true,
+            size_frame: true,
+            fix_active: true,
+            leitung: 0,
+            klemme: 0,
+            selection: vec![],
+            clipboard: vec![],
+            view_before_edit: None,
+            ask_save: None,
+            quit_ok: false,
+            sheet_views: Default::default(),
+            view_sheet: None,
+            view: View { zoom: 4.0, offset: Vec2::ZERO, user: false, last_size: Vec2::ZERO, last_portrait: false },
+            drag: Drag::None,
+            placing: None,
+            mouse_mm: P::new(65.0, 45.0),
+            right_tab: RightTab::Symbole,
+            tab_first: 0,
+            tree_open,
+            tree_sel: None,
+            search: String::new(),
+            dialog: None,
+            props: None,
+            align_win: false,
+            opt: Default::default(),
+            opt_dlg: None,
+            lib_stale: false,
+            lib_retry: 0.0,
+            dlg2: None,
+            print_sel: None,
+            print_printer: None,
+            sym_frg_default: (true, false),
+            align_ref: 0,
+            info: String::new(),
+            shot: shot.map(|path| Shot { path, frames: 0, requested: false, done: Arc::new(AtomicBool::new(false)) }),
+            sheet_color: Color32::from_rgb(238, 221, 221),
+            grid_color: Color32::from_rgb(224, 208, 208),
+            invert_wheel: false,
+            images: HashMap::new(),
+            sheet_screen_rect: Rect::NOTHING,
+            canvas_area: Rect::NOTHING,
+            tree_drag: None,
+            tab_drag: None,
+            page_drag: None,
+            export_req: None,
+            pdf_req: None,
+            sym_edit: None,
+            xdlg: None,
+            fav_overrides: Default::default(),
+            recent: vec![],
+            show_library: false,
+            dlg3: None,
+            lib_tab: 0,
+            lib_sync: (String::new(), true, true, 0, String::new()),
+            lib_filter: String::new(),
+            mouse_ctx: P::new(50.0, 50.0),
+            right_w: 441.0,
+            lib_dir: None,
+            lib_info: String::new(),
+        }
+        .with_library(cc)
+    }
+
+    fn with_library(mut self, cc: &eframe::CreationContext<'_>) -> Self {
+        let saved: Option<PathBuf> = cc.storage.and_then(|s| s.get_string("lib_dir")).map(PathBuf::from);
+        if let Some(o) = cc.storage.and_then(|s| s.get_string("optionen")).and_then(|j| serde_json::from_str(&j).ok()) {
+            self.opt = o;
+        }
+        self.apply_start_options();
+        if let Some(st) = cc.storage {
+            if let Some(f) = st.get_string("favs") {
+                for l in f.lines() {
+                    if let Some((k, v)) = l.rsplit_once('\t') {
+                        self.fav_overrides.insert(k.to_string(), v == "1");
+                    }
+                }
+            }
+            if let Some(r) = st.get_string("recent") {
+                self.recent = r.lines().filter(|l| !l.is_empty()).map(|l| l.to_string()).take(5).collect();
+            }
+        }
+        self.load_library(saved.as_deref());
+        if let Some(tb) = crate::extra::load_default_titleblock() {
+            self.project.titleblock = tb;
+        }
+        if std::env::args().any(|a| a == "--dump-lib") {
+            eprintln!("{}", self.lib_info);
+            for d in &self.lib {
+                if d.fav {
+                    eprintln!("{} {:?} bmk={} pins={:?} title={:?}", d.name, d.group, d.bmk, d.pins, d.title);
+                    for p in &d.prims {
+                        if let symbols::Prim::TextBox(..) = p {
+                            eprintln!("   {:?}", p);
+                        }
+                    }
+                }
+            }
+        }
+        let args: Vec<String> = std::env::args().collect();
+        if let Some(f) = args.iter().position(|a| a == "--open").and_then(|i| args.get(i + 1)) {
+            self.open_path(PathBuf::from(f), false);
+            if let Some(t) = args.iter().position(|a| a == "--sheet").and_then(|i| args.get(i + 1)).and_then(|s| s.parse::<usize>().ok()) {
+                let mut n = 0;
+                'o: for (ai, an) in self.project.anlagen.iter().enumerate() {
+                    for si in 0..an.sheets.len() {
+                        if n == t {
+                            self.tabs = vec![SheetRef { anlage: ai, sheet: si }];
+                            self.active = 0;
+                            break 'o;
+                        }
+                        n += 1;
+                    }
+                }
+            }
+        } else if let Some(f) = args.iter().skip(1).find(|a| !a.starts_with("--") && (a.ends_with(".epr") || a.ends_with(".epj"))) {
+            self.open_path(PathBuf::from(f), false);
+        }
+        // Prüfhilfe für Bildschirmfotos: Eigenschaftendialog eines Objekts (Text oder BMK) bzw. des Blattes öffnen
+        if let Some(label) = args.iter().position(|a| a == "--props").and_then(|i| args.get(i + 1)).cloned() {
+            let hit = self.sheet().and_then(|s| {
+                s.objects.iter().find(|o| match &o.kind {
+                    Kind::Text { text, .. } => text == &label,
+                    Kind::Symbol { bmk, .. } => bmk == &label,
+                    _ => false,
+                })
+            }).map(|o| o.id);
+            match (hit, label.as_str()) {
+                (Some(id), _) => {
+                    self.selection = vec![id];
+                    self.edit_props(id);
+                }
+                (None, "Anlage") => self.open_anlage_props(self.cur().map(|r| r.anlage).unwrap_or(0)),
+                (None, "Option") => self.open_optionen(),
+                (None, "Projekt") => self.open_projekt_dialog(),
+                (None, "Drucken") => self.open_druck_dialog(),
+                (None, "Projektinfo") => self.dlg2 = Some(crate::dialoge::Dlg2::Info),
+                (None, "Blatt") => {
+                    if let Some(r) = self.cur() {
+                        self.open_sheet_props(r);
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(f) = args.iter().position(|a| a == "--pdf").and_then(|i| args.get(i + 1)) {
+            self.pdf_req = Some((PathBuf::from(f), false));
+        }
+        if let Some(n) = args.iter().position(|a| a == "--edit-symbol").and_then(|i| args.get(i + 1)) {
+            if let Some(k) = self.lib.iter().find(|d| &d.name == n).map(|d| d.key.clone()) {
+                self.open_symbol_editor(Some(k));
+                if args.iter().any(|a| a == "--symeigen") {
+                    self.open_sym_eigenschaften();
+                }
+            }
+        }
+        if std::env::args().any(|a| a == "--demo") {
+            self.demo();
+        }
+        self
+    }
+
+    /// Beispielschaltung (nur mit --demo, zum Testen der Symboldarstellung).
+    fn demo(&mut self) {
+        let names = ["Sicherung", "Schließer", "Öffner", "Leistungskontakt", "Relais", "Lampe", "Motorschutz", "Motor"];
+        let mut x = 30.0;
+        for n in names {
+            if let Some(k) = self.lib.iter().find(|d| d.name == n && (d.fav || d.haupt == 300)).map(|d| d.key.clone()) {
+                self.place_symbol(k, P::new(x, 80.0));
+                x += 32.0;
+            }
+        }
+        let l = self.leitung;
+        self.add_obj(Kind::Wire { pts: vec![P::new(15.0, 45.0), P::new(280.0, 45.0)], leitung: l, bez: vec![], opts: 0 });
+        self.add_obj(Kind::Text { pos: P::new(14.0, 45.0), text: "L1".into(), size: 3.0, align: Align::Right, vertical: false, style: Default::default() });
+        self.selection.clear();
+        self.dirty = false;
+    }
+
+    /// Symbolbibliothek laden: Original-Datenbank, sonst eingebaute Ersatzsymbole.
+    /// Gesperrte Datenbank alle 5 s erneut versuchen (das Original sperrt sie, solange es läuft).
+    pub fn retry_library(&mut self, now: f64) {
+        if !self.lib_stale || now < self.lib_retry {
+            return;
+        }
+        self.lib_retry = now + 5.0;
+        let dir = self.lib_dir.clone();
+        for d in symbols::db_candidates(dir.as_deref()) {
+            if symbols::load_db(&d).is_ok() {
+                self.lib_stale = false;
+                self.load_library(Some(&d));
+                return;
+            }
+        }
+    }
+
+    pub fn load_library(&mut self, dir: Option<&std::path::Path>) {
+        let cache = crate::config_dir().join("bibliothek_cache.json");
+        let mut errors = vec![];
+        let mut loaded = false;
+        for d in symbols::db_candidates(dir) {
+            match symbols::load_db(&d) {
+                Ok(lib) => {
+                    self.lib_info = format!("Bibliothek: {} Symbole aus {}", lib.len(), d.display());
+                    if let Ok(s) = serde_json::to_string(&lib) {
+                        let _ = std::fs::create_dir_all(cache.parent().unwrap());
+                        let _ = std::fs::write(&cache, s);
+                    }
+                    self.lib = lib;
+                    self.lib_dir = Some(d);
+                    loaded = true;
+                    break;
+                }
+                Err(e) => errors.push(format!("{}: {e}", d.display())),
+            }
+        }
+        if !loaded {
+            // Das Original läuft und sperrt die Datenbank: zuletzt gelesene Bibliothek verwenden
+            match std::fs::read_to_string(&cache).ok().and_then(|s| serde_json::from_str::<Vec<SymDef>>(&s).ok()) {
+                Some(mut lib) if !lib.is_empty() => {
+                    // Zwischenspeicher älterer Versionen: Optionen/Alternativtexte aus den Originaldaten nachtragen;
+                    // ganz ohne Originaldaten → später erneut aus der Datenbank lesen
+                    let mut stale = false;
+                    for d in lib.iter_mut().filter(|d| d.key.starts_with("db:")) {
+                        if d.raw.is_empty() {
+                            stale = true;
+                        } else if d.flag_names.is_empty() && d.alt_sets.is_empty() {
+                            let (alt, opts) = symbols::parse_lib_extras(&d.raw);
+                            d.alt_sets = alt;
+                            d.flag_names = opts;
+                        }
+                    }
+                    self.lib_stale = stale || !errors.is_empty();
+                    self.lib_info = format!("Bibliothek: {} Symbole (zwischengespeichert, Datenbank gesperrt – wird neu gelesen, sobald frei)", lib.len());
+                    self.lib = lib;
+                }
+                _ => {
+                    self.lib = symbols::builtin();
+                    self.lib_info = if errors.is_empty() { "Original-Datenbank nicht gefunden – Ersatzsymbole".into() } else { format!("Datenbank nicht lesbar ({}) – Ersatzsymbole", errors.join("; ")) };
+                }
+            }
+        }
+
+        let extra: Vec<SymDef> = self.project.symdefs.iter().filter(|d| symbols::find(&self.lib, &d.key).is_none()).cloned().collect();
+        self.lib.extend(extra);
+        self.load_user_library();
+    }
+
+    /// Neues BMK aus der Vorlage des Symbols (mit Zähler, eindeutig im Projekt).
+    pub fn new_bmk(&self, def: &SymDef) -> String {
+        let sheet_no = self.sheet().map(|s| s.number).unwrap_or(1);
+        let tpl = if def.bmk.is_empty() { String::new() } else { def.bmk.clone() };
+        if tpl.is_empty() {
+            return String::new();
+        }
+        let used: HashSet<String> = self
+            .project
+            .anlagen
+            .iter()
+            .flat_map(|a| a.sheets.iter())
+            .flat_map(|s| s.objects.iter())
+            .filter_map(|o| if let Kind::Symbol { bmk, .. } = &o.kind { Some(bmk.clone()) } else { None })
+            .collect();
+        if !tpl.contains("%C") {
+            return symbols::expand_bmk(&tpl, 1, sheet_no);
+        }
+        for c in 1..10000 {
+            let b = symbols::expand_bmk(&tpl, c, sheet_no);
+            if !used.contains(&b) {
+                return b;
+            }
+        }
+        symbols::expand_bmk(&tpl, 1, sheet_no)
+    }
+
+    pub fn raster(&self) -> f32 {
+        RASTER[self.raster_idx].1
+    }
+
+    pub fn cur(&self) -> Option<SheetRef> {
+        if self.sym_edit.is_some() {
+            return Some(SheetRef { anlage: usize::MAX, sheet: 0 });
+        }
+        self.tabs.get(self.active).copied()
+    }
+
+    pub fn sheet(&self) -> Option<&Sheet> {
+        if let Some(e) = &self.sym_edit {
+            return Some(&e.sheet);
+        }
+        self.cur().and_then(|r| self.project.sheet(r))
+    }
+
+    pub fn checkpoint(&mut self) {
+        self.undo.push(self.project.clone());
+        if self.undo.len() > 200 {
+            self.undo.remove(0);
+        }
+        self.redo.clear();
+        self.dirty = true;
+        self.project.geaendert = today();
+    }
+
+    pub fn do_undo(&mut self) {
+        if let Some(p) = self.undo.pop() {
+            self.redo.push(std::mem::replace(&mut self.project, p));
+            self.selection.clear();
+            self.fix_tabs();
+        }
+    }
+
+    pub fn do_redo(&mut self) {
+        if let Some(p) = self.redo.pop() {
+            self.undo.push(std::mem::replace(&mut self.project, p));
+            self.selection.clear();
+            self.fix_tabs();
+        }
+    }
+
+    pub fn fix_tabs(&mut self) {
+        let prj = &self.project;
+        self.tabs.retain(|r| prj.sheet(*r).is_some());
+        if self.active >= self.tabs.len() {
+            self.active = self.tabs.len().saturating_sub(1);
+        }
+    }
+
+    pub fn snap(&self, p: P) -> P {
+        let r = self.raster();
+        if r <= 0.0 {
+            return P::new((p.x * 10.0).round() / 10.0, (p.y * 10.0).round() / 10.0);
+        }
+        P::new(GRID_ORIGIN + ((p.x - GRID_ORIGIN) / r).round() * r, GRID_ORIGIN + ((p.y - GRID_ORIGIN) / r).round() * r)
+    }
+
+    /// Nächster Anschlusspunkt (Symbol, Klemme, Leitungsende) in Reichweite.
+    pub fn pin_near(&self, p: P, tol: f32, exclude: &[u64]) -> Option<P> {
+        let sheet = self.sheet()?;
+        let mut best: Option<(f32, P)> = None;
+        for o in &sheet.objects {
+            if exclude.contains(&o.id) {
+                continue;
+            }
+            for q in canvas::obj_pins(o, &self.lib) {
+                let d = q.dist(p);
+                if d <= tol && best.map(|b| d < b.0).unwrap_or(true) {
+                    best = Some((d, q));
+                }
+            }
+        }
+        best.map(|b| b.1)
+    }
+
+    pub fn with_sheet<R>(&mut self, f: impl FnOnce(&mut Sheet, &mut u64) -> R) -> Option<R> {
+        if let Some(e) = &mut self.sym_edit {
+            let mut next = self.project.next_id;
+            let out = f(&mut e.sheet, &mut next);
+            self.project.next_id = next;
+            return Some(out);
+        }
+        let r = self.cur()?;
+        let mut next = self.project.next_id;
+        let out = self.project.sheet_mut(r).map(|s| f(s, &mut next));
+        self.project.next_id = next;
+        out
+    }
+
+    pub fn add_obj(&mut self, kind: Kind) -> u64 {
+        self.checkpoint();
+        let pen = self.pen;
+        let id = self.project.alloc_id();
+        self.with_sheet(|s, _| s.objects.push(Obj { id, kind, pen, fixed: false, group: None, raw: None }));
+        self.edit_tag_new(id);
+        self.selection = vec![id];
+        id
+    }
+
+    pub fn next_terminal(&self, leiste: &str) -> u32 {
+        let mut max = 0;
+        for a in &self.project.anlagen {
+            for s in &a.sheets {
+                for o in &s.objects {
+                    if let Kind::Terminal { leiste: l, nr, .. } = &o.kind {
+                        if l == leiste {
+                            max = max.max(*nr);
+                        }
+                    }
+                }
+            }
+        }
+        max + 1
+    }
+
+    pub fn klemmleisten(&self) -> Vec<String> {
+        let a = self.cur().map(|r| r.anlage).unwrap_or(0);
+        self.project.anlagen.get(a).map(|a| a.klemmleisten.clone()).unwrap_or_default()
+    }
+
+    /// Symbol platzieren: erster Anschluss liegt auf dem Raster; mit AutoVerb wird eine Leitung aufgetrennt.
+    pub fn place_symbol(&mut self, key: String, at: P) {
+        let Some(def) = symbols::find(&self.lib, &key).cloned() else { return };
+        let pin0 = def.pins.first().copied().unwrap_or_default();
+        let mut pos = self.snap(at.add(pin0)).sub(pin0);
+        pos = self.align_to_path(pos, &def.pins, &[]);
+        let bmk = self.new_bmk(&def);
+        if !self.project.symdefs.iter().any(|d| d.key == def.key) {
+            self.project.symdefs.push(def.clone());
+        }
+        // BMK-Lage wie das Original sie speichert (VSY Feld 10/11, Ausrichtung Feld 12): rechtsbündig am Titelanker
+        // der Bibliothek bzw. links neben dem Symbol. Ohne eigene Lage übernahm der Schreiber die Werte eines
+        // Vorlageblocks (hochkant, im Symbol) – das Original zeigte die BMK dann winzig und senkrecht.
+        let (title, title_align) = symbol_title_rot(&def, 0, 0);
+        let ext = SymExt { querverweise: def.frg.0, sicherung: def.frg.1, title_align, ..Default::default() };
+        self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option: 0, title: Some((title, false)), flags: 0, ext });
+        if self.auto_conn {
+            let wpins: Vec<P> = def.pins.iter().map(|q| sym_xform(*q, pos, 0, false, false)).collect();
+            self.insert_into_wire(&wpins);
+        }
+    }
+
+    /// Strompfadausrichtung: Symbol waagerecht auf Anschlüsse anderer Objekte ausrichten (±3 mm, geschätzt).
+    pub fn align_to_path(&self, pos: P, local_pins: &[P], exclude: &[u64]) -> P {
+        if !self.path_align || local_pins.is_empty() {
+            return pos;
+        }
+        let Some(sheet) = self.sheet() else { return pos };
+        let px = pos.x + local_pins[0].x;
+        let mut best: Option<f32> = None;
+        for o in &sheet.objects {
+            if exclude.contains(&o.id) {
+                continue;
+            }
+            for q in canvas::obj_pins(o, &self.lib) {
+                let d = (q.x - px).abs();
+                if d > 0.01 && d <= 3.0 && best.map(|b| d < (b - px).abs()).unwrap_or(true) {
+                    best = Some(q.x);
+                }
+            }
+        }
+        match best {
+            Some(x) => P::new(pos.x + (x - px), pos.y),
+            None => pos,
+        }
+    }
+
+    /// Liegen die beiden äußeren Symbolanschlüsse auf derselben Leitung, wird die Leitung dazwischen aufgetrennt.
+    pub fn insert_into_wire(&mut self, pins: &[P]) {
+        if pins.len() < 2 {
+            return;
+        }
+        let (a, b) = (pins[0], pins[pins.len() - 1]);
+        self.with_sheet(|s, next| {
+            let mut new_objs = vec![];
+            let mut remove = vec![];
+            for o in &s.objects {
+                if let Kind::Wire { pts, leitung, .. } = &o.kind {
+                    for (i, w) in pts.windows(2).enumerate() {
+                        if seg_dist(a, w[0], w[1]) < 0.05 && seg_dist(b, w[0], w[1]) < 0.05 {
+                            let (n, f) = if w[0].dist(a) <= w[0].dist(b) { (a, b) } else { (b, a) };
+                            let mut p1: Vec<P> = pts[..=i].to_vec();
+                            p1.push(n);
+                            let mut p2: Vec<P> = vec![f];
+                            p2.extend_from_slice(&pts[i + 1..]);
+                            remove.push(o.id);
+                            for mut part in [p1, p2] {
+                                part.dedup_by(|x, y| x.dist(*y) < 0.01);
+                                if part.len() >= 2 {
+                                    let id = *next;
+                                    *next += 1;
+                                    new_objs.push(Obj { id, kind: Kind::Wire { pts: part, leitung: *leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            s.objects.retain(|o| !remove.contains(&o.id));
+            s.objects.extend(new_objs);
+        });
+    }
+
+    pub fn selected_objs(&self) -> Vec<Obj> {
+        self.sheet().map(|s| s.objects.iter().filter(|o| self.selection.contains(&o.id)).cloned().collect()).unwrap_or_default()
+    }
+
+    pub fn expand_groups(&mut self) {
+        let Some(s) = self.sheet() else { return };
+        let groups: HashSet<u64> = s.objects.iter().filter(|o| self.selection.contains(&o.id)).filter_map(|o| o.group).collect();
+        if groups.is_empty() {
+            return;
+        }
+        let extra: Vec<u64> = s.objects.iter().filter(|o| o.group.map(|g| groups.contains(&g)).unwrap_or(false)).map(|o| o.id).collect();
+        for id in extra {
+            if !self.selection.contains(&id) {
+                self.selection.push(id);
+            }
+        }
+    }
+
+    pub fn delete_selection(&mut self) {
+        if self.selection.is_empty() {
+            return;
+        }
+        self.checkpoint();
+        let sel = self.selection.clone();
+        self.with_sheet(|s, _| s.objects.retain(|o| !sel.contains(&o.id)));
+        self.selection.clear();
+    }
+
+    pub fn copy(&mut self) {
+        let objs = self.selected_objs();
+        if !objs.is_empty() {
+            self.clipboard = objs;
+        }
+    }
+
+    pub fn paste(&mut self) {
+        if self.clipboard.is_empty() || self.cur().is_none() {
+            return;
+        }
+        self.checkpoint();
+        let d = if self.raster() > 0.0 { self.raster() } else { 5.0 };
+        let mut new_sel = vec![];
+        let clip = self.clipboard.clone();
+        let mut gmap: HashMap<u64, u64> = HashMap::new();
+        for mut o in clip {
+            o.id = self.project.alloc_id();
+            if let Some(g) = o.group {
+                let ng = *gmap.entry(g).or_insert_with(|| 1_000_000 + o.id);
+                o.group = Some(ng);
+            }
+            o.kind.translate(P::new(d, d));
+            let new_bmk = if let Kind::Symbol { key, .. } = &o.kind {
+                symbols::find(&self.lib, key).map(|def| self.new_bmk(def))
+            } else {
+                None
+            };
+            if let (Kind::Symbol { bmk, .. }, Some(nb)) = (&mut o.kind, new_bmk) {
+                *bmk = nb;
+            }
+            new_sel.push(o.id);
+            self.with_sheet(|s, _| s.objects.push(o));
+        }
+        self.selection = new_sel;
+        for o in &mut self.clipboard {
+            o.kind.translate(P::new(d, d));
+        }
+    }
+
+    /// op: 1 drehen, 2 vertikal spiegeln, 4 horizontal spiegeln
+    pub fn transform_selection(&mut self, op: u8) {
+        if self.selection.is_empty() {
+            return;
+        }
+        self.checkpoint();
+        let sel = self.selection.clone();
+        let lib = self.lib.clone();
+        self.with_sheet(|s, _| {
+            for o in s.objects.iter_mut().filter(|o| sel.contains(&o.id)) {
+                let (mn, mx) = canvas::obj_bounds(o, &lib);
+                let c = P::new(((mn.x + mx.x) / 2.0 / 0.5).round() * 0.5, ((mn.y + mx.y) / 2.0 / 0.5).round() * 0.5);
+                let f = |p: &mut P| match op {
+                    1 => {
+                        let (dx, dy) = (p.x - c.x, p.y - c.y);
+                        *p = P::new(c.x - dy, c.y + dx);
+                    }
+                    2 => p.x = 2.0 * c.x - p.x,
+                    _ => p.y = 2.0 * c.y - p.y,
+                };
+                match &mut o.kind {
+                    Kind::Symbol { rot, mirror_h, mirror_v, ext, .. } => {
+                        let old = (*rot, *mirror_h, *mirror_v);
+                        match op {
+                            1 => *rot = (*rot + 1) % 4,
+                            2 => *mirror_h = !*mirror_h,
+                            _ => *mirror_v = !*mirror_v,
+                        }
+                        ext.bounds = ext.bounds.map(|b| retransform_bounds(b, old, (*rot, *mirror_h, *mirror_v)));
+                    }
+                    Kind::Text { vertical, .. } => {
+                        if op == 1 {
+                            *vertical = !*vertical
+                        }
+                    }
+                    Kind::Terminal { .. } | Kind::Busbar { .. } => {}
+                    Kind::Verweis { pos, text_pos, dir, vertical, .. } => {
+                        f(pos);
+                        f(text_pos);
+                        if op == 1 {
+                            *dir = (*dir + 270) % 360;
+                            *vertical = !*vertical;
+                        }
+                    }
+                    Kind::Line { a, b }
+                    | Kind::Rect { a, b }
+                    | Kind::Triangle { a, b }
+                    | Kind::Circle { a, b }
+                    | Kind::TextBox { a, b, .. }
+                    | Kind::Table { a, b, .. }
+                    | Kind::Image { a, b, .. } => {
+                        f(a);
+                        f(b)
+                    }
+                    Kind::Curve { a, c1, c2, b } => {
+                        f(a);
+                        f(c1);
+                        f(c2);
+                        f(b)
+                    }
+                    Kind::Wire { pts, .. } | Kind::Poly { pts } => pts.iter_mut().for_each(f),
+                }
+            }
+        });
+    }
+
+    pub fn group_selection(&mut self, on: bool) {
+        if self.selection.len() < if on { 2 } else { 1 } {
+            return;
+        }
+        self.checkpoint();
+        let sel = self.selection.clone();
+        let gid = self.project.alloc_id() + 1_000_000;
+        self.with_sheet(|s, _| {
+            for o in s.objects.iter_mut().filter(|o| sel.contains(&o.id)) {
+                o.group = if on { Some(gid) } else { None };
+            }
+        });
+    }
+
+    pub fn set_fixed(&mut self, v: bool) {
+        if self.selection.is_empty() {
+            return;
+        }
+        self.checkpoint();
+        let sel = self.selection.clone();
+        self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| sel.contains(&o.id)).for_each(|o| o.fixed = v));
+    }
+
+    pub fn set_text_align(&mut self, al: Option<Align>, vert: Option<bool>) {
+        let sel = self.selection.clone();
+        self.checkpoint();
+        self.with_sheet(|s, _| {
+            for o in s.objects.iter_mut().filter(|o| sel.contains(&o.id)) {
+                if let Kind::Text { align, vertical, .. } = &mut o.kind {
+                    if let Some(a) = al {
+                        *align = a;
+                    }
+                    if let Some(v) = vert {
+                        *vertical = v;
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn new_sheet(&mut self) {
+        let a = self.cur().map(|r| r.anlage).unwrap_or(0);
+        self.checkpoint();
+        let Some(anl) = self.project.anlagen.get_mut(a) else { return };
+        let n = anl.sheets.iter().map(|s| s.number).max().unwrap_or(0) + 1;
+        anl.sheets.push(Sheet::new(n));
+        let r = SheetRef { anlage: a, sheet: anl.sheets.len() - 1 };
+        self.open_sheet(r);
+    }
+
+    pub fn new_anlage(&mut self) {
+        self.checkpoint();
+        let n = self.project.anlagen.len() + 1;
+        let mut sheet = Sheet::new(1);
+        sheet.portrait = self.opt.hochformat;
+        sheet.columns = self.opt.pfade.max(1) as u32;
+        sheet.col_auto = true;
+        self.project.anlagen.push(Anlage { name: format!("Anlage {n}"), sheets: vec![sheet], sammelschienen: vec![], klemmleisten: vec!["Klemme 1".into()], klemmen: vec![], schienen: Default::default(), set: self.opt.anlage(), raw: None });
+        let a = self.project.anlagen.len() - 1;
+        self.tree_open.insert(format!("prj/a{a}"));
+        self.tree_open.insert(format!("prj/a{a}/bl"));
+        self.open_sheet(SheetRef { anlage: a, sheet: 0 });
+    }
+
+    pub fn open_sheet(&mut self, r: SheetRef) {
+        if let Some(i) = self.tabs.iter().position(|t| *t == r) {
+            self.active = i;
+        } else {
+            self.tabs.push(r);
+            self.active = self.tabs.len() - 1;
+        }
+        self.selection.clear();
+    }
+
+    pub fn new_project(&mut self) {
+        self.sym_edit = None;
+        self.project = Project::new_default();
+        if let Some(tb) = crate::extra::load_default_titleblock() {
+            self.project.titleblock = tb;
+        }
+        self.path = None;
+        self.dirty = false;
+        self.undo.clear();
+        self.redo.clear();
+        self.tabs = vec![SheetRef { anlage: 0, sheet: 0 }];
+        self.active = 0;
+        self.selection.clear();
+        self.pen = 0;
+        self.leitung = 0;
+        self.klemme = 0;
+        self.view.user = false;
+        self.view.last_size = Vec2::ZERO;
+        self.sheet_views.clear();
+        self.view_sheet = None;
+    }
+
+    /// Blatt innerhalb seiner Anlage verschieben (Ziehen im Baum oder an den Reitern); Reiter und gemerkte
+    /// Ansichten folgen dem Blatt.
+    pub fn move_sheet(&mut self, anlage: usize, from: usize, to: usize) {
+        let Some(a) = self.project.anlagen.get_mut(anlage) else { return };
+        if from == to || from >= a.sheets.len() || to >= a.sheets.len() {
+            return;
+        }
+        self.checkpoint();
+        let a = &mut self.project.anlagen[anlage];
+        let s = a.sheets.remove(from);
+        a.sheets.insert(to, s);
+        let map = |i: usize| -> usize {
+            if i == from {
+                to
+            } else if from < to && i > from && i <= to {
+                i - 1
+            } else if to < from && i >= to && i < from {
+                i + 1
+            } else {
+                i
+            }
+        };
+        for t in &mut self.tabs {
+            if t.anlage == anlage {
+                t.sheet = map(t.sheet);
+            }
+        }
+        // Reiter der Anlage in die neue Blattreihenfolge bringen (ihre Plätze in der Reiterleiste bleiben)
+        let active = self.tabs.get(self.active).copied();
+        let slots: Vec<usize> = (0..self.tabs.len()).filter(|i| self.tabs[*i].anlage == anlage).collect();
+        let mut own: Vec<SheetRef> = slots.iter().map(|i| self.tabs[*i]).collect();
+        own.sort_by_key(|t| t.sheet);
+        for (slot, t) in slots.into_iter().zip(own) {
+            self.tabs[slot] = t;
+        }
+        if let Some(a) = active {
+            self.active = self.tabs.iter().position(|t| *t == a).unwrap_or(0);
+        }
+        let views: Vec<(SheetRef, View)> = self.sheet_views.drain().collect();
+        for (mut r, v) in views {
+            if r.anlage == anlage {
+                r.sheet = map(r.sheet);
+            }
+            self.sheet_views.insert(r, v);
+        }
+        if let Some(r) = self.view_sheet.as_mut() {
+            if r.anlage == anlage {
+                r.sheet = map(r.sheet);
+            }
+        }
+        self.dirty = true;
+    }
+
+    /// Aktion ausführen; bei ungespeicherten Änderungen zuerst fragen wie das Original ("Geänderte Daten Speichern?").
+    pub fn guarded(&mut self, p: Pending) {
+        if self.dirty {
+            self.ask_save = Some(p);
+        } else {
+            self.run_pending(p);
+        }
+    }
+
+    pub fn run_pending(&mut self, p: Pending) {
+        match p {
+            Pending::New => self.new_project(),
+            Pending::Open => self.open(false),
+            Pending::OpenPath(path) => self.open_path(path, false),
+            Pending::Quit => self.quit_ok = true,
+        }
+    }
+
+    pub fn new_leitung(&mut self) {
+        self.checkpoint();
+        let n = self.project.leitungen.len() + 1;
+        let palette = [[0, 0, 0], [160, 0, 0], [0, 0, 170], [0, 120, 0], [150, 90, 0], [120, 0, 120]];
+        self.project.leitungen.push(Leitung { name: format!("Leitung {n}"), color: palette[(n - 1) % palette.len()], width_mm: 0.25, quer: 1.5, adern: 3, kennz: 0, style: 0, id: 0 });
+        self.leitung = self.project.leitungen.len() - 1;
+    }
+
+    pub fn new_potential(&mut self) {
+        self.checkpoint();
+        let n = self.project.potentiale.len() + 1;
+        self.project.potentiale.push(format!("Potential {n}"));
+        self.info = format!("Potential {n} angelegt");
+    }
+
+    pub fn new_pen(&mut self) {
+        self.checkpoint();
+        let n = self.project.stifte.len() + 1;
+        self.project.stifte.push(Stift { name: format!("Stift {n}"), style: 0, color: [0, 0, 160], width: 0.25 });
+        self.pen = self.project.stifte.len() - 1;
+    }
+
+    pub fn new_klemmleiste(&mut self) {
+        let a = self.cur().map(|r| r.anlage).unwrap_or(0);
+        self.checkpoint();
+        if let Some(anl) = self.project.anlagen.get_mut(a) {
+            let n = anl.klemmleisten.len() + 1;
+            anl.klemmleisten.push(format!("Klemme {n}"));
+            self.klemme = anl.klemmleisten.len() - 1;
+            self.tree_open.insert(format!("prj/a{a}/kl"));
+        }
+    }
+
+    /// Neue Sammelschiene: waagerechte Leitung über die Blattbreite mit Namen.
+    pub fn new_busbar(&mut self) {
+        if self.cur().is_none() {
+            return;
+        }
+        let a = self.cur().map(|r| r.anlage).unwrap_or(0);
+        self.checkpoint();
+        let Some(anl) = self.project.anlagen.get_mut(a) else { return };
+        let n = anl.sammelschienen.len() + 1;
+        let name = format!("Sammelschiene {n}");
+        anl.sammelschienen.push(name.clone());
+        let (fx0, fy0, fx1, _) = self.sheet().map(|s| s.frame()).unwrap_or((FRAME_LEFT, FRAME_TOP, SHEET_W - FRAME_RIGHT, 0.0));
+        let y = self.snap(P::new(0.0, fy0 + COLUMN_BAR_H + 10.0 * n as f32)).y;
+        let leitung = self.leitung;
+        let id = self.project.alloc_id();
+        let tid = self.project.alloc_id();
+        let x0 = fx0 + 20.0;
+        let x1 = fx1 - 10.0;
+        self.with_sheet(|s, _| {
+            s.objects.push(Obj { id, kind: Kind::Wire { pts: vec![P::new(x0, y), P::new(x1, y)], leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
+            s.objects.push(Obj {
+                id: tid,
+                kind: Kind::Text { pos: P::new(x0 - 1.0, y), text: name, size: 2.5, align: Align::Right, vertical: false, style: Default::default() },
+                pen: 0,
+                fixed: false,
+                group: None, raw: None
+            });
+        });
+        self.tree_open.insert(format!("prj/a{a}/ss"));
+        self.selection = vec![id, tid];
+    }
+
+    pub fn save_as(&mut self) {
+        let stem = self.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Projekt".into());
+        let dlg = rfd::FileDialog::new()
+            .add_filter("Elektroplanung Projekt (Originalformat)", &["epr"])
+            .add_filter("Elektroplanung Projekt (JSON)", &["epj"])
+            .set_file_name(format!("{stem}.epr"));
+        if let Some(p) = dlg.save_file() {
+            self.path = Some(p);
+            self.save();
+        }
+    }
+
+    pub fn save(&mut self) {
+        let Some(p) = self.path.clone() else {
+            self.save_as();
+            return;
+        };
+        let is_epr = p.extension().map(|e| e.eq_ignore_ascii_case("epr")).unwrap_or(false);
+        let mut skipped = vec![];
+        let res = if is_epr {
+            // Vor dem ersten Überschreiben einer Originaldatei eine Sicherung anlegen
+            let bak = p.with_extension("epr.bak");
+            if self.opt.backup && p.exists() && !bak.exists() {
+                let _ = std::fs::copy(&p, &bak);
+            }
+            skipped = crate::epr_write::unsupported(&self.project);
+            crate::epr_write::save(&self.project, &p)
+        } else {
+            serde_json::to_string_pretty(&self.project).map_err(|e| e.to_string()).and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string()))
+        };
+        match res {
+            Ok(()) => {
+                self.dirty = false;
+                self.info = format!("Gespeichert: {}", p.display());
+                if !skipped.is_empty() {
+                    self.dialog = Some(Dialog::Message(format!(
+                        "Gespeichert. Folgende Objekte kann das Originalformat (.epr) noch nicht aufnehmen und wurden nicht geschrieben:\n{}\n\nZum vollständigen Speichern zusätzlich als .epj sichern.",
+                        skipped.join("\n")
+                    )));
+                }
+            }
+            Err(e) => self.dialog = Some(Dialog::Message(format!("Fehler beim abspeichern der Projektdatei!\n{e}"))),
+        }
+    }
+
+    pub fn open(&mut self, add: bool) {
+        let dlg = rfd::FileDialog::new().add_filter("Elektroplanung Projekt", &["epj", "epr"]).add_filter("Neues Format", &["epj"]).add_filter("Altes Format", &["epr"]);
+        let Some(p) = dlg.pick_file() else { return };
+        self.open_path(p, add);
+    }
+
+    /// Projekt laden: .epr (Originalformat, wird übernommen) oder .epj (eigenes Format).
+    pub fn open_path(&mut self, p: PathBuf, add: bool) {
+        let is_epr = p.extension().map(|e| e.eq_ignore_ascii_case("epr")).unwrap_or(false);
+        let res = if is_epr {
+            crate::epr::import(&p)
+        } else {
+            std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str::<Project>(&s).map_err(|e| e.to_string()))
+        };
+        if res.is_ok() {
+            self.remember_recent(&p);
+        }
+        match res {
+            Ok(prj) => {
+                if add {
+                    self.add_project(prj);
+                } else {
+                    self.new_project();
+                    self.project = prj;
+                    let extra: Vec<SymDef> = self.project.symdefs.iter().filter(|d| symbols::find(&self.lib, &d.key).is_none()).cloned().collect();
+                    self.lib.extend(extra);
+                    self.path = Some(p);
+                    self.fix_tabs();
+                    // Wie das Original: alle Blätter als Reiter öffnen, erstes aktiv, Explorer auf "Projekt"
+                    self.tabs.clear();
+                    for (ai, a) in self.project.anlagen.iter().enumerate() {
+                        for si in 0..a.sheets.len() {
+                            self.tabs.push(SheetRef { anlage: ai, sheet: si });
+                        }
+                    }
+                    self.active = 0;
+                    self.right_tab = RightTab::Projekt;
+                    // Fehler in den Daten (TErrliste): Blöcke ohne Darstellung melden
+                    let lines = crate::epr::load_warnings(&self.project);
+                    if !lines.is_empty() {
+                        self.dlg3 = Some(crate::dialoge3::Dlg3::Errliste { lines });
+                    }
+                    self.info = format!("Ladestatus: {} Blätter geladen", self.project.total_sheets());
+                    self.tree_open.retain(|k| !k.starts_with("prj/"));
+                }
+            }
+            Err(e) => self.dialog = Some(Dialog::Message(format!("Projekt wird gelesen – Fehler:\n{e}"))),
+        }
+    }
+
+    /// Anlagen eines anderen Projekts anhängen (Datei › Projekt hinzufügen).
+    pub fn add_project(&mut self, prj: Project) {
+        self.checkpoint();
+        for d in &prj.symdefs {
+            if !self.project.symdefs.iter().any(|x| x.key == d.key) {
+                self.project.symdefs.push(d.clone());
+            }
+            if symbols::find(&self.lib, &d.key).is_none() {
+                self.lib.push(d.clone());
+            }
+        }
+        let base = self.project.anlagen.len();
+        let off = self.project.next_id;
+        for mut a in prj.anlagen {
+            // Originalblöcke beziehen sich auf die andere Datei: im neuen Projekt neu erzeugen
+            a.raw = None;
+            for s in &mut a.sheets {
+                s.raw = None;
+                for o in &mut s.objects {
+                    o.id += off;
+                    o.raw = None;
+                }
+            }
+            self.project.anlagen.push(a);
+        }
+        self.project.next_id += prj.next_id + 1;
+        self.open_sheet(SheetRef { anlage: base, sheet: 0 });
+    }
+
+    pub fn title(&self) -> String {
+        let name = if !self.project.name.is_empty() {
+            self.project.name.clone()
+        } else if let Some(p) = &self.path {
+            p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+        } else {
+            "Neues Projekt".into()
+        };
+        format!("Elektroplanung {name}{}", if self.dirty { " *" } else { "" })
+    }
+
+    pub fn not_yet(&mut self, what: &str) {
+        self.dialog = Some(Dialog::Message(format!("„{what}“ ist in dieser Version noch nicht enthalten.")));
+    }
+
+    /// Blattnummerierung: Blätter jeder Anlage fortlaufend ab 1 nummerieren.
+    pub fn renumber(&mut self) {
+        self.checkpoint();
+        for a in &mut self.project.anlagen {
+            for (i, s) in a.sheets.iter_mut().enumerate() {
+                s.number = i as u32 + 1;
+            }
+        }
+        self.info = "Blätter neu nummeriert".into();
+    }
+
+    /// Listenexport: Betriebsmittelliste als CSV (Semikolon getrennt).
+    pub fn list_export(&mut self) {
+        let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("Liste.csv").save_file() else { return };
+        let mut out = String::from("Anlage;Blatt;BMK;Symbol;Wert;Bauteil;Typ;Firma;Artikel\n");
+        for a in &self.project.anlagen {
+            for s in &a.sheets {
+                for o in &s.objects {
+                    if let Kind::Symbol { key, bmk, value, .. } = &o.kind {
+                        let name = symbols::find(&self.lib, key).map(|d| d.name.clone()).unwrap_or_default();
+                        let b = self.project.part_of.get(&o.id).and_then(|i| self.project.bauteile.get(*i)).cloned().unwrap_or_default();
+                        out.push_str(&format!("{};{};{};{};{};{};{};{};{}\n", a.name, s.number, bmk, name, value, b.name, b.typ, b.firma, b.artikel));
+                    }
+                }
+            }
+        }
+        match std::fs::write(&p, out) {
+            Err(e) => self.dialog = Some(Dialog::Message(format!("Fehler beim Schreiben: {e}"))),
+            Ok(()) => self.info = format!("Liste exportiert: {}", p.display()),
+        }
+    }
+
+    pub fn hit_top(&self, m: P, tol: f32) -> Option<u64> {
+        let s = self.sheet()?;
+        s.objects.iter().rev().find(|o| self.edit_visible(o.id) && canvas::hit(o, m, tol, &self.lib)).map(|o| o.id)
+    }
+
+    pub fn edit_props(&mut self, id: u64) {
+        if self.open_props(id) || self.open_props3(id) {
+            return;
+        }
+        let Some(o) = self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == id)).cloned() else { return };
+        match &o.kind {
+            Kind::Symbol { bmk, value, option, key, .. } => {
+                let options = symbols::find(&self.lib, key).map(|d| d.options.clone()).unwrap_or_default();
+                self.dialog = Some(Dialog::Symbol { id, bmk: bmk.clone(), value: value.clone(), option: *option, options })
+            }
+            Kind::Text { text, .. } | Kind::TextBox { text, .. } => {
+                self.dialog = Some(Dialog::Text { title: "Text bearbeiten".into(), value: text.clone(), target: TextTarget::EditObj(id) })
+            }
+            Kind::Table { rows, cols, cells, .. } => self.dialog = Some(Dialog::Table { id, rows: rows.to_string(), cols: cols.to_string(), cells: cells.clone() }),
+            Kind::Terminal { nr, .. } => self.dialog = Some(Dialog::Text { title: "Klemmennummer".into(), value: nr.to_string(), target: TextTarget::EditObj(id) }),
+            Kind::Image { .. } => {
+                if let Some(p) = rfd::FileDialog::new().add_filter("Bilder", &["png", "jpg", "jpeg", "bmp"]).pick_file() {
+                    let ps = p.to_string_lossy().to_string();
+                    self.checkpoint();
+                    self.with_sheet(|s, _| {
+                        if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
+                            if let Kind::Image { path, .. } = &mut o.kind {
+                                *path = ps;
+                            }
+                        }
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn open_sheet_props(&mut self, r: SheetRef) {
+        self.open_sheet_props_dialog(r);
+        if self.props.is_some() {
+            return;
+        }
+        if let Some(s) = self.project.sheet(r) {
+            self.dialog = Some(Dialog::Sheet { r, name: s.name.clone(), number: s.number.to_string(), columns: s.columns.to_string() });
+        }
+    }
+
+    pub fn project_props(&mut self) {
+        self.open_projekt_dialog();
+    }
+
+    #[allow(dead_code)]
+    pub fn project_props_alt(&mut self) {
+        let p = &self.project;
+        self.dialog = Some(Dialog::Project {
+            name: p.name.clone(),
+            kunde: p.kunde.clone(),
+            owner: p.owner.clone(),
+            von: p.von.clone(),
+            ort: p.ort.clone(),
+            znr: p.znr.clone(),
+            done: p.abgeschlossen,
+        });
+    }
+
+    pub fn apply_dialog(&mut self, dlg: Dialog) {
+        match dlg {
+            Dialog::Text { value, target, .. } => match target {
+                TextTarget::NewText(pos) => {
+                    if !value.trim().is_empty() {
+                        self.add_obj(Kind::Text { pos, text: value, size: 3.5, align: Align::Left, vertical: false, style: Default::default() });
+                    }
+                }
+                TextTarget::EditObj(id) => {
+                    self.checkpoint();
+                    self.with_sheet(|s, _| {
+                        if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
+                            match &mut o.kind {
+                                Kind::Text { text, .. } | Kind::TextBox { text, .. } => *text = value,
+                                Kind::Terminal { nr, .. } => *nr = value.trim().parse().unwrap_or(*nr),
+                                _ => {}
+                            }
+                        }
+                    });
+                }
+            },
+            Dialog::Symbol { id, bmk: nb, value: nv, option: no, .. } => {
+                self.checkpoint();
+                self.with_sheet(|s, _| {
+                    if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
+                        if let Kind::Symbol { bmk, value, option, .. } = &mut o.kind {
+                            *bmk = nb;
+                            *value = nv;
+                            *option = no;
+                        }
+                    }
+                });
+            }
+            Dialog::Project { name, kunde, owner, von, ort, znr, done } => {
+                self.checkpoint();
+                let p = &mut self.project;
+                p.name = name;
+                p.kunde = kunde;
+                p.owner = owner;
+                p.von = von;
+                p.ort = ort;
+                p.znr = znr;
+                p.abgeschlossen = done;
+            }
+            Dialog::Sheet { r, name, number, columns } => {
+                let num: u32 = number.trim().parse().unwrap_or(0);
+                if num == 0 {
+                    self.dialog = Some(Dialog::Message("Die Blattnummer darf nicht kleiner als 1 sein!".into()));
+                    return;
+                }
+                let dup = self.project.anlagen.get(r.anlage).map(|a| a.sheets.iter().enumerate().any(|(i, s)| i != r.sheet && s.number == num)).unwrap_or(false);
+                if dup {
+                    self.dialog = Some(Dialog::Message("Ein Blatt mit dieser Blattnummer ist bei dieser Anlage schon vorhanden!".into()));
+                    return;
+                }
+                self.checkpoint();
+                if let Some(s) = self.project.sheet_mut(r) {
+                    s.name = name;
+                    s.number = num;
+                    s.columns = columns.trim().parse().unwrap_or(8).clamp(1, 40);
+                }
+            }
+            Dialog::Table { id, rows, cols, cells } => {
+                self.checkpoint();
+                let r: usize = rows.parse().unwrap_or(1).clamp(1, 50);
+                let c: usize = cols.parse().unwrap_or(1).clamp(1, 20);
+                self.with_sheet(|s, _| {
+                    if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
+                        if let Kind::Table { rows, cols, cells: cc, .. } = &mut o.kind {
+                            *rows = r;
+                            *cols = c;
+                            *cc = cells;
+                            cc.resize(r * c, String::new());
+                        }
+                    }
+                });
+            }
+            _ => {}
+        }
+    }
+
+    /// DXF-Datei auf das aktuelle Blatt übernehmen (als Gruppe).
+    pub fn dxf_import(&mut self) {
+        let Some(p) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).pick_file() else { return };
+        let frame = self.sheet().map(|s| s.frame()).unwrap_or((5.0, 20.0, 292.0, 205.0));
+        match crate::dxf::import(&p, frame) {
+            Ok(kinds) => {
+                if self.cur().is_none() {
+                    return;
+                }
+                self.checkpoint();
+                let gid = self.project.alloc_id() + 1_000_000;
+                let mut ids = vec![];
+                for k in kinds {
+                    let id = self.project.alloc_id();
+                    let pen = self.pen;
+                    self.with_sheet(|s, _| s.objects.push(Obj { id, kind: k, pen, fixed: false, group: Some(gid), raw: None }));
+                    ids.push(id);
+                }
+                self.info = format!("DXF Import: {} Elemente", ids.len());
+                self.selection = ids;
+            }
+            Err(e) => self.dialog = Some(Dialog::Message(format!("DXF Import – Fehler:\n{e}"))),
+        }
+    }
+
+    /// Markierte Objekte ausrichten: 0 links, 1 rechts, 2 oben, 3 unten, 4 waagerecht mittig, 5 senkrecht mittig.
+    pub fn align_selection(&mut self, how: u8) {
+        let objs = self.selected_objs();
+        if objs.len() < 2 {
+            return;
+        }
+        let bs: Vec<(u64, P, P)> = objs.iter().map(|o| {
+            let (a, b) = canvas::obj_bounds(o, &self.lib);
+            (o.id, a, b)
+        }).collect();
+        let first = bs[0];
+        let target = match how {
+            0 => first.1.x,
+            1 => first.2.x,
+            2 => first.1.y,
+            3 => first.2.y,
+            4 => (first.1.y + first.2.y) / 2.0,
+            _ => (first.1.x + first.2.x) / 2.0,
+        };
+        self.checkpoint();
+        let fix = self.fix_active;
+        self.with_sheet(|s, _| {
+            for (id, a, b) in &bs {
+                let d = match how {
+                    0 => P::new(target - a.x, 0.0),
+                    1 => P::new(target - b.x, 0.0),
+                    2 => P::new(0.0, target - a.y),
+                    3 => P::new(0.0, target - b.y),
+                    4 => P::new(0.0, target - (a.y + b.y) / 2.0),
+                    _ => P::new(target - (a.x + b.x) / 2.0, 0.0),
+                };
+                if let Some(o) = s.objects.iter_mut().find(|o| o.id == *id) {
+                    if !(o.fixed && fix) {
+                        o.kind.translate(d);
+                    }
+                }
+            }
+        });
+    }
+
+    /// Markierung als Symbol: markierte Zeichenelemente werden zu einem Projektsymbol, Klemmstellen zu Anschlüssen.
+    pub fn selection_to_symbol(&mut self) {
+        let objs = self.selected_objs();
+        if objs.is_empty() {
+            self.dialog = Some(Dialog::Message("Bitte zuerst Zeichenelemente markieren.".into()));
+            return;
+        }
+        let pts: Vec<P> = objs.iter().flat_map(|o| { let (a, b) = canvas::obj_bounds(o, &self.lib); [a, b] }).collect();
+        let (mn, mx) = canvas::pts_bounds(&pts);
+        let c = self.snap(P::new((mn.x + mx.x) / 2.0, (mn.y + mx.y) / 2.0));
+        let l = |p: P| p.sub(c);
+        let mut prims = vec![];
+        let mut pins = vec![];
+        for o in &objs {
+            let st = self.project.stifte.get(o.pen).map(|s| s.style).unwrap_or(0);
+            match &o.kind {
+                Kind::Line { a, b } => prims.push(symbols::Prim::Line(l(*a), l(*b), st)),
+                Kind::Curve { a, c1, c2, b } => prims.push(symbols::Prim::Bezier(l(*a), l(*c1), l(*c2), l(*b), st)),
+                Kind::Rect { a, b } => {
+                    let (p0, p1) = canvas::norm_rect(*a, *b);
+                    prims.push(symbols::Prim::Poly(vec![l(p0), l(P::new(p1.x, p0.y)), l(p1), l(P::new(p0.x, p1.y))], st))
+                }
+                Kind::Triangle { a, b } => prims.push(symbols::Prim::Poly(canvas::triangle_pts(*a, *b).iter().map(|p| l(*p)).collect(), st)),
+                Kind::Circle { a, b } => prims.push(symbols::Prim::Ellipse(l(*a), l(*b), st)),
+                Kind::Poly { pts } => prims.push(symbols::Prim::Poly(pts.iter().map(|p| l(*p)).collect(), st)),
+                Kind::Wire { pts, .. } => {
+                    for w in pts.windows(2) {
+                        prims.push(symbols::Prim::Line(l(w[0]), l(w[1]), 0));
+                    }
+                }
+                Kind::Text { pos, text, size, .. } => prims.push(symbols::Prim::Text(l(*pos), text.clone(), *size)),
+                Kind::Terminal { pos, .. } => pins.push(l(*pos)),
+                _ => {}
+            }
+        }
+        let n = self.project.symdefs.iter().filter(|d| d.haupt == 0).count() + 1;
+        let key = format!("proj:{}", self.project.alloc_id());
+        let def = symbols::SymDef {
+            key: key.clone(),
+            name: format!("Symbol {n}"),
+            group: vec!["Projekt".into()],
+            haupt: 0,
+            fav: false,
+            bmk: "-A%C".into(),
+            prims,
+            pins,
+            title: None,
+            vis: vec![],
+            pin_vis: vec![],
+            flag: vec![],
+            flag_names: vec![],
+            text_idx: vec![],
+            alt_sets: vec![],
+            raw: vec![],
+            frg: (true, false),
+            params: vec![],
+            value_pos: None,
+            text_mode: vec![],
+            fill: vec![],
+            options: vec![],
+        };
+        self.checkpoint();
+        self.project.symdefs.push(def.clone());
+        self.lib.push(def.clone());
+        let sel = self.selection.clone();
+        self.with_sheet(|s, _| s.objects.retain(|o| !sel.contains(&o.id)));
+        let bmk = self.new_bmk(&def);
+        let id = self.project.alloc_id();
+        let pen = self.pen;
+        self.with_sheet(|s, _| {
+            s.objects.push(Obj {
+                id,
+                kind: Kind::Symbol { key, pos: c, rot: 0, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option: 0, title: None, flags: 0, ext: Default::default() },
+                pen,
+                fixed: false,
+                group: None, raw: None
+            })
+        });
+        self.selection = vec![id];
+        self.info = format!("{} im Projekt angelegt (Benutzerbauteile › Projekt)", def.name);
+    }
+
+    pub fn make_kind(&self, tool: Tool, a: P, b: P) -> Option<Kind> {
+        if a.dist(b) < 0.01 {
+            return None;
+        }
+        Some(match tool {
+            Tool::Line => Kind::Line { a, b },
+            Tool::Curve => {
+                let d = b.sub(a);
+                Kind::Curve {
+                    a,
+                    c1: P::new(a.x + d.x * 0.33 - d.y * 0.35, a.y + d.y * 0.33 + d.x * 0.35),
+                    c2: P::new(a.x + d.x * 0.66 + d.y * 0.35, a.y + d.y * 0.66 - d.x * 0.35),
+                    b,
+                }
+            }
+            Tool::Rect => Kind::Rect { a, b },
+            Tool::Triangle => Kind::Triangle { a, b },
+            Tool::Circle => Kind::Circle { a, b },
+            Tool::TextBox => Kind::TextBox { a, b, text: "Text".into(), size: 3.5 },
+            Tool::Table => Kind::Table { a, b, rows: 3, cols: 3, cells: vec![String::new(); 9], header: true, fixed_w: false },
+            Tool::Image => Kind::Image { a, b, path: String::new(), mode: 0, frame: true },
+            _ => return None,
+        })
+    }
+}
+
+/// Rechtwinklige Leitungsführung (erst in Hauptrichtung, dann quer).
+pub fn route(a: P, b: P) -> Vec<P> {
+    if (a.x - b.x).abs() < 0.01 || (a.y - b.y).abs() < 0.01 {
+        return vec![a, b];
+    }
+    let corner = if (b.y - a.y).abs() >= (b.x - a.x).abs() { P::new(a.x, b.y) } else { P::new(b.x, a.y) };
+    vec![a, corner, b]
+}
+
+/// Lage (relativ zum Symbol) und Ausrichtung der BMK eines neu gesetzten Symbols: am Titelanker der Bibliothek
+/// (Element Typ 9), sonst links neben dem Umriss, jeweils rechtsbündig und mittig zur Ankerhöhe.
+pub fn symbol_title(def: &SymDef) -> (P, u8) {
+    symbol_title_rot(def, 0, 0)
+}
+
+/// Wie `symbol_title`, für ein gedrehtes Symbol (Drehung in 90°-Schritten, Bild/Option): ungedreht am Titelanker,
+/// gedreht links bzw. über dem gedrehten Umriss, damit die BMK nicht im Symbol liegt.
+pub fn symbol_title_rot(def: &SymDef, rot: u8, option: u16) -> (P, u8) {
+    let (mn, mx) = symbols::bounds_opt(def, option);
+    if rot % 4 == 0 {
+        return match def.title {
+            Some(t) => (P::new(t.x.min(mn.x - 0.8), t.y - 1.25), 2),
+            None => (P::new(mn.x - 1.0, (mn.y + mx.y) / 2.0 - 1.25), 2),
+        };
+    }
+    let c = [P::new(mn.x, mn.y), P::new(mx.x, mn.y), P::new(mx.x, mx.y), P::new(mn.x, mx.y)];
+    let pts: Vec<P> = c.iter().map(|q| sym_xf(*q, P::default(), rot, false, false, 1.0)).collect();
+    let (rmn, rmx) = crate::canvas::pts_bounds(&pts);
+    // waagerecht liegendes Symbol: BMK mittig darüber
+    (P::new((rmn.x + rmx.x) / 2.0, rmn.y - 3.5), 1)
+}

@@ -1,0 +1,31 @@
+[package]
+name = "elektroplanung"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/Zantobix/Elektroplanung"
+description = "Unabhängiger Nachbau der Planungssoftware Elektroplanung (MD Evolution) in Rust"
+
+[[bin]]
+name = "Elektroplanung"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "persistence"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.18"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[profile.release]
+opt-level = 3
+
+[lib]
+name = "elektroplanung"
+path = "src/lib.rs"
+
+# Linux: Fensteranbindung für X11 und Wayland (unter Windows/macOS nicht nötig)
+[target.'cfg(target_os = "linux")'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "persistence", "x11", "wayland"] }

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "elektroplanung": {
+      "command": "target/release/Elektroplanung",
+      "args": ["--mcp"],
+      "env": { "EP_DATENBANK": "/pfad/zur/Original/Datenbank" }
+    }
+  }
+}

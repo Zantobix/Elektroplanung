@@ -1,0 +1,5 @@
+/target
+*.epr.bak
+# lokale Einstellungen (Pfade zu Beispielprojekt, Datenbank, Glyphen)
+/.cargo/config.toml
+/.mcp.json
