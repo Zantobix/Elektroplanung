@@ -148,7 +148,7 @@ fn edited_sym(project: &Project, k: &Block) -> Option<Block> {
         a.name == b.name && a.bmk == b.bmk && a.prims == b.prims && a.pins == b.pins && a.title == b.title && a.vis == b.vis
             && a.pin_vis == b.pin_vis && a.options == b.options && a.flag == b.flag && a.flag_names == b.flag_names
             && a.alt_sets == b.alt_sets && a.text_mode == b.text_mode && a.fill == b.fill && a.value_pos == b.value_pos
-            && a.params == b.params && a.pens == b.pens
+            && a.params == b.params && a.pens == b.pens && a.frg == b.frg
     };
     if same(def, &orig) {
         return None;
@@ -869,6 +869,8 @@ fn sym_block(def: &crate::symbols::SymDef, tpl: &Block, id: u64) -> Block {
         b.data.resize(88, 0);
     }
     b.data[80..88].copy_from_slice(&id.to_le_bytes());
+    // Freigaben (Querverweise, Sicherungsübersicht) bei Byte 112
+    crate::symbol_freigaben::setzen(&mut b.data, def.frg);
     let (els, texts, opts) = sym_elements(def);
     let mut grd = tpl.kid("GRD").map(|g| Block { kids: vec![], ..g.clone() }).unwrap_or_else(|| Block::new("GRD", vec![100, 0, 0, 0, 25, 0, 0, 0]));
     grd.kids.push(Block::new("GRS", els));
