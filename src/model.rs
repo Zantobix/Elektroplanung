@@ -6,7 +6,8 @@ pub const SHEET_W: f32 = 297.0;
 pub const SHEET_H: f32 = 210.0;
 pub const FRAME_LEFT: f32 = 5.0;
 pub const FRAME_RIGHT: f32 = 5.0;
-pub const FRAME_TOP: f32 = 20.0;
+/// oberer Rand quer (ANL +0xa8 = 100 in 0,1 mm)
+pub const FRAME_TOP: f32 = 10.0;
 pub const FRAME_BOTTOM: f32 = 5.0;
 pub const COLUMN_BAR_H: f32 = 5.0;
 pub const TITLE_H: f32 = 15.0;
@@ -267,11 +268,15 @@ pub struct SymExt {
     /// statt "N" im Symbol "Verbindung"
     #[serde(default)]
     pub texts: Vec<(u32, String)>,
+    /// Eigentümer (VSY › OWR, z. B. die Spule eines Kontakts) als Objekt-Id, 0 = keiner: das Symbol zeigt dessen
+    /// Kennzeichnung und darunter seine Lage (`eigentuemer.rs`)
+    #[serde(default)]
+    pub eigentuemer: u64,
 }
 
 impl Default for SymExt {
     fn default() -> Self {
-        SymExt { title_align: 0, value_off: None, value_align: 0, alt: 0, querverweise: true, sicherung: false, funktion: String::new(), rack: -1, bounds: None, params: vec![], counter: 0, texts: vec![] }
+        SymExt { title_align: 0, value_off: None, value_align: 0, alt: 0, querverweise: true, sicherung: false, funktion: String::new(), rack: -1, bounds: None, params: vec![], counter: 0, texts: vec![], eigentuemer: 0 }
     }
 }
 
@@ -336,7 +341,8 @@ pub struct Sheet {
     pub col_labels: Vec<String>,
     #[serde(default)]
     pub ort: String,
-    /// Rahmenhöhe ohne Spaltenleiste in mm (BLT-Feld 24 in 0,1 mm; 0 = Standard 180 mm quer)
+    /// BLT-Feld 24 in mm: Unterkante der Zeichenfläche (das Original berechnet es beim Zeichnen neu: Blatthöhe −
+    /// unterer Rand − Schriftfeld − Kontaktspiegel); nur noch zum Zurückschreiben
     #[serde(default)]
     pub frame_h: f32,
     /// Subindex (BLT Feld 23 Byte 0; Feld 23 Bit 8… = Blattnummer)
@@ -384,17 +390,16 @@ impl Sheet {
         }
     }
 
-    /// Rahmen (x0, y0, x1, y1) in mm. Quer: links/rechts/unten 5; oben = unten − Rahmenhöhe − Spaltenleiste
-    /// (BLT-Feld 24: 1900 → 10 mm wie im Original-Ausdruck "Altbau EG", Standard 1800 → 20 mm wie ein neues Blatt im Original);
-    /// hoch: links 10, oben/rechts/unten 5 (gemessen im Original-PDF "Elektroplanung Wohnung 2", Seite 1).
+    /// Rahmen (x0, y0, x1, y1) in mm aus den Rändern der Anlage (ANL +0xa0…+0xac, in W2 und der Vorlage überall
+    /// 50/50/100/50): quer links/rechts/unten 5, oben 10 (Original-Ausdruck "Altbau EG", Listenblätter in der
+    /// Gegenprobe); hoch links 10, oben/rechts/unten 5 (Original-PDF "Elektroplanung Wohnung 2", Seite 1).
+    /// BLT Feld 24 ist keine Rahmenhöhe, sondern die Unterkante der Zeichenfläche (siehe `kontaktspiegel`).
     pub fn frame(&self) -> (f32, f32, f32, f32) {
         let (w, h) = self.dims();
         if self.portrait {
             (10.0, 5.0, w - 5.0, h - 5.0)
         } else {
-            let fh = if self.frame_h > 50.0 { self.frame_h } else { h - FRAME_BOTTOM - FRAME_TOP - COLUMN_BAR_H };
-            let top = (h - FRAME_BOTTOM - fh - COLUMN_BAR_H).clamp(5.0, 60.0);
-            (FRAME_LEFT, top, w - FRAME_RIGHT, h - FRAME_BOTTOM)
+            (FRAME_LEFT, FRAME_TOP, w - FRAME_RIGHT, h - FRAME_BOTTOM)
         }
     }
 

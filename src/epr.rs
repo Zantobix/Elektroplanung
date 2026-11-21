@@ -247,7 +247,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
                         None
                     }
                 } else if crate::kontaktspiegel::ist_spiegel(k) {
-                    Some((crate::kontaktspiegel::lesen(k, &sh), 0))
+                    Some((crate::kontaktspiegel::lesen(k), 0))
                 } else if k.is("OBJ") {
                     match k.kid("TIT") {
                         _ if crate::klemmen::is_terminal(k) => Some((terminal(k, &klm), 0)),
@@ -281,7 +281,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
     }
     update_busbar_xrefs(&mut p);
     link_verweise(&mut p);
-    crate::kontaktspiegel::verknuepfen(&mut p);
+    crate::eigentuemer::verknuepfen(&mut p);
     for a in &mut p.anlagen {
         if a.sheets.is_empty() {
             a.sheets.push(Sheet::new(1));
@@ -290,6 +290,8 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
     p.next_id = next_id + 10;
     crate::epr_projekt::import(prj, &mut p);
     crate::epr_zusatz::import(prj, &mut p);
+    // nach der Schriftfeldhöhe (Projektebene): Y-Lage der Kontaktspiegel hängt von ihr ab
+    crate::kontaktspiegel::verknuepfen(&mut p);
     Ok(p)
 }
 
@@ -538,6 +540,8 @@ fn symbol(k: &Block) -> Option<(Kind, usize)> {
                     let (l, t, r, b) = (k.i32(32), k.i32(33), k.i32(34), k.i32(35));
                     (r > l && b > t).then(|| (P::new(mm(l), mm(t)), P::new(mm(r), mm(b))))
                 },
+                // Eigentümer (OWR) verknüpft `eigentuemer::verknuepfen` nach dem Einlesen
+                eigentuemer: 0,
             },
         },
         0,

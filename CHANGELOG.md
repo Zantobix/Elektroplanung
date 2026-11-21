@@ -67,6 +67,14 @@ Neu:
   `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
 Behoben:
+- Kontaktspiegel wie im Original: steht unmittelbar über dem Schriftfeld (Unterkante der Zeichenfläche minus
+  größte Spiegelhöhe des Blattes, bisher mitten im Schriftfeld), Schrift und Schaltzeichen in Kontaktgröße,
+  Lage „/Pfad“ für Kontakte auf demselben Blatt (sonst „Blatt/Pfad“), X-Lage folgt der Spule
+- Eigentümer (VSY › OWR): Symbole mit Eigentümer zeigen dessen Kennzeichnung und darunter klein seine Lage
+  („-K1“ mit „/5“ statt „-Q1+W2“); Kontaktspiegel › Übernehmen und Eigentümer › Setzen schreiben das OWR
+  (bisher wurde die Kennzeichnung der Spule in den Kontakt kopiert)
+- Rahmen quer beginnt immer 10 mm unter der Blattkante (oberer Rand der Anlage); BLT Feld 24 ist die Unterkante
+  der Zeichenfläche, keine Rahmenhöhe (neue Blätter und Listenblätter lagen bisher bei 20 mm)
 - .epr: Anschlussnummern im Kontaktspiegel als STR im ALT (das Original meldete „Fehler beim erzeugen des
   Objekts: STR“); leere Tabellen ohne STR (das Original meldete die ZCN-Datenstruktur als fehlerhaft)
 - Listenblätter: Spaltenbreiten, Ränder, Abstand der Tabellen und Zeilenhöhe wie im Original

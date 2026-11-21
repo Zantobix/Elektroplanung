@@ -12,24 +12,28 @@
 //!   1 Öffner / 2 Wechsler), darin je eingetragener Anschlussnummer ALT (8 Byte) mit Unterblock STR (ohne 0). W2.epr enthält einen
 //!   Spiegel ohne Zeilen (Blatt „Sicherungen -F10, -F1 und -F2“), dessen Spule gelöscht ist.
 //! - Übernehmen (0x4995ac): Zeilen ohne Eintrag entfallen; die Referenz einer Zeile ist der Kontakt im Projekt,
-//!   dessen Eigentümer damit die Spule wird.
-//! - Zeichnen (0x43d4xx): Y beginnt bei der Rahmenhöhe des Blattes (BLT Feld 24), je Zeile 3 mm; ein Wechsler
-//!   bekommt davor 2 mm (außer in der ersten Zeile) und danach 0,5 mm mehr. Die Schaltzeichen liegen waagerecht
-//!   (Anschlüsse bei ±1,5…3 mm um X), ohne eigene Nummern zeigen sie die Anschlusstexte des referenzierten Symbols.
-//!   Daneben steht die Lage des referenzierten Kontakts.
+//!   dessen Eigentümer (VSY › OWR, `eigentuemer.rs`) damit die Spule wird.
+//! - Lage (Zeichenroutine 0x438b94): vor dem Zeichnen setzt das Original BLT Feld 24 = Unterkante der Zeichenfläche
+//!   (Blatthöhe − unterer Rand (ANL +0xac bzw. hoch +0xa4) − Schriftfeldhöhe) − größte Höhe (Feld 14) aller
+//!   Kontaktspiegel des Blattes, und die X-Lage jedes Spiegels = X der Spule (VSY Feld 16). Der Spiegel steht also
+//!   unmittelbar über dem Schriftfeld; W2: Blatt mit dem leeren Spiegel hat Feld 24 = 1870 = 1900 − 30.
+//! - Zeichnen (0x43d4xx): Y beginnt bei Feld 24, je Zeile 3 mm; ein Wechsler bekommt davor 2 mm (außer in der
+//!   ersten Zeile) und danach 0,5 mm mehr. Jede Zeile ist das Bibliothekssymbol in voller Größe (Maßstab 1, Drehung
+//!   3), daher sind Schrift und Schaltzeichen so groß wie an einem Kontakt; ohne eigene Nummern zeigen sie die
+//!   Anschlusstexte des referenzierten Symbols. Daneben steht die Lage des referenzierten Kontakts (Textroutine
+//!   0x46e9f4 Art 0x18): „/Pfad“ auf demselben Blatt, sonst „Blatt/Pfad“. Gemessen an einer Aufnahme des Originals
+//!   (14 Punkte/mm): Ziffern 1,65 mm hoch (Schrift ≈ 2,5 mm), Nummern 3,4 mm links/rechts der Mitte, Lage ab +7 mm.
 //! - ALT (8 Byte) vor dem STR einer Anschlussnummer: Feld 0 = Spalte 1–3 (Übernehmen ruft die Listenroutine
 //!   0x403084 mit Gitterspalte − 1 auf, Gitterspalten 2–4 = „1“–„3“, und hört bei der ersten leeren Spalte auf),
 //!   Feld 1 = 0.
 //! - Feld 14 (OBJ 0x38) = Höhe des Spiegels in 0,1 mm: Übernehmen zählt je Zeile 30, vor einem Wechsler (außer in
 //!   der ersten Zeile) 25 dazu, mindestens 30 (W2: 30 beim Spiegel ohne Zeilen).
-//! - Lage: Gezeichnet wird an der eigenen X-Lage (OBJ Feld 6). Die Spule wird nur im Kontextmenü (gibt es schon
-//!   einen Spiegel zu ihr?) und im Dialog aufgelöst; keine Stelle verschiebt den Spiegel mit der Spule oder löscht
-//!   ihn mit ihr (W2 enthält einen Spiegel, dessen Spule gelöscht ist). Der Nachbau macht es ebenso.
+//! - Die X-Lage folgt der Spule beim Zeichnen (siehe oben); gelöscht wird der Spiegel mit ihr nicht (W2 enthält
+//!   einen Spiegel, dessen Spule gelöscht ist) – dann bleibt die gespeicherte X-Lage (OBJ Feld 6).
 //! - „Alles markieren“ (0x42a710) und Kopieren (0x41a3e4) lassen Kontaktspiegel aus; beim Einfügen eines Spiegels
 //!   leert das Original Zeilen und Spule (0x45a3c8).
 //! - Die Schaltzeichen nimmt das Original aus drei Bibliothekssymbolen der Programmeinstellungen (Schließer,
-//!   Öffner, Wechsler); der Nachbau zeichnet eigene Zeichen (keine Grafik aus der Exe), Schriftgrößen und Lage der
-//!   Texte sind geschätzt.
+//!   Öffner, Wechsler); der Nachbau zeichnet eigene Zeichen (keine Grafik aus der Exe) in den gemessenen Maßen.
 
 use crate::app::App;
 use crate::canvas::{bmk_ctx, times, DrawCtx};
@@ -63,15 +67,23 @@ pub struct Zeile {
     pub kennung: [u64; 3],
 }
 
-/// Y-Lage der ersten Zeile: Rahmenhöhe des Blattes (BLT Feld 24) wie im Original.
-pub fn start_y(s: &Sheet) -> f32 {
-    if s.portrait {
-        277.0
-    } else if s.frame_h > 50.0 {
-        s.frame_h
-    } else {
-        180.0
-    }
+/// Schriftgröße der Anschlussnummern und der Lage (mm), gemessen an der Aufnahme des Originals
+pub const SCHRIFT: f32 = 2.5;
+/// Abstand der Anschlussnummern von der Mitte und Beginn der Lage rechts davon (mm)
+const NUMMER_X: f32 = 3.4;
+const LAGE_X: f32 = 7.0;
+
+/// Unterkante der Zeichenfläche: Blatthöhe − unterer Rand (5 mm) − Schriftfeldhöhe (W2: 210 − 5 − 15 = 190 mm,
+/// hoch 297 − 5 − 15 = 277 mm – BLT Feld 24 ohne Kontaktspiegel).
+pub fn zeichen_unterkante(p: &Project, s: &Sheet) -> f32 {
+    s.dims().1 - FRAME_BOTTOM - p.title_h()
+}
+
+/// Y-Lage der ersten Zeile wie im Original (BLT Feld 24): Unterkante der Zeichenfläche minus größte Höhe der
+/// Kontaktspiegel des Blattes – der Spiegel steht unmittelbar über dem Schriftfeld.
+pub fn start_y(p: &Project, s: &Sheet) -> f32 {
+    let h = s.objects.iter().filter_map(|o| if let Kind::Spiegel { rows, .. } = &o.kind { Some(hoehe(rows)) } else { None }).max().unwrap_or(0);
+    zeichen_unterkante(p, s) - h as f32 / 10.0
 }
 
 /// Y-Lagen der Zeilen ab `y0`.
@@ -101,7 +113,7 @@ pub fn hoehe(rows: &[Zeile]) -> i32 {
 /// Umriss des Spiegels (für Markierung und Treffer).
 pub fn bounds(pos: P, rows: &[Zeile]) -> (P, P) {
     let last = zeilen_y(pos.y, rows).last().copied().unwrap_or(pos.y);
-    (P::new(pos.x - 7.0, pos.y - 2.4), P::new(pos.x + 15.0, last + 1.2))
+    (P::new(pos.x - 7.5, pos.y - 2.6), P::new(pos.x + 15.0, last + 2.0))
 }
 
 /// Linien des Schaltzeichens einer Zeile relativ zum Zeilenpunkt (mm, waagerecht liegend).
@@ -119,8 +131,8 @@ fn zeichen(art: u8) -> &'static [(f32, f32, f32, f32)] {
 /// Lage der Anschlussnummern 1–3 relativ zum Zeilenpunkt und ihre Ausrichtung.
 fn nummern_lage(art: u8) -> [(f32, f32, Align2); 3] {
     match art {
-        2 => [(-3.2, 0.0, Align2::RIGHT_CENTER), (3.2, 0.6, Align2::LEFT_CENTER), (3.2, -1.9, Align2::LEFT_CENTER)],
-        _ => [(-3.2, 0.0, Align2::RIGHT_CENTER), (3.2, 0.0, Align2::LEFT_CENTER), (3.2, 0.0, Align2::LEFT_CENTER)],
+        2 => [(-NUMMER_X, 0.0, Align2::RIGHT_CENTER), (NUMMER_X, 0.5, Align2::LEFT_CENTER), (NUMMER_X, -1.9, Align2::LEFT_CENTER)],
+        _ => [(-NUMMER_X, 0.0, Align2::RIGHT_CENTER), (NUMMER_X, 0.0, Align2::LEFT_CENTER), (NUMMER_X, 0.0, Align2::LEFT_CENTER)],
     }
 }
 
@@ -135,12 +147,14 @@ pub fn anschluesse(def: &SymDef) -> Vec<String> {
         .collect()
 }
 
-/// Angezeigte Kennzeichnung eines Symbols im Projekt.
+/// Angezeigte Kennzeichnung eines Symbols im Projekt (mit Eigentümer: dessen Kennzeichnung).
 fn bmk_von(p: &Project, id: u64) -> Option<String> {
     let (r, o) = p.find_obj(id)?;
-    let Kind::Symbol { bmk, ext, .. } = &o.kind else { return None };
+    if !matches!(o.kind, Kind::Symbol { .. }) {
+        return None;
+    }
     let a = &p.anlagen[r.anlage];
-    Some(symbols::display_bmk(bmk, ext.counter, &bmk_ctx(a, &a.sheets[r.sheet])))
+    Some(crate::eigentuemer::anzeige_bmk(p, o, &bmk_ctx(a, &a.sheets[r.sheet])))
 }
 
 /// Art eines Kontakts aus dem Symbolnamen (Öffner/Wechsler, sonst Schließer).
@@ -155,8 +169,8 @@ fn art_aus(def: Option<&SymDef>) -> u8 {
     }
 }
 
-/// Alle Symbole mit gleicher (angezeigter) Kennzeichnung wie die Spule, außer ihr selbst und anderen Spulen mit
-/// eigenem Kontaktspiegel: (Objekt-Id, vorgeschlagene Art), in Projektreihenfolge.
+/// Alle Symbole mit gleicher (angezeigter) Kennzeichnung wie die Spule oder mit ihr als Eigentümer, außer ihr
+/// selbst und anderen Spulen mit eigenem Kontaktspiegel: (Objekt-Id, vorgeschlagene Art), in Projektreihenfolge.
 pub fn kontakte(p: &Project, lib: &[SymDef], owner: u64) -> Vec<(u64, u8)> {
     let Some(ziel) = bmk_von(p, owner).filter(|b| !b.trim().is_empty()) else { return vec![] };
     let spulen: Vec<u64> = p.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects).filter_map(|o| if let Kind::Spiegel { owner, .. } = o.kind { Some(owner) } else { None }).collect();
@@ -165,11 +179,11 @@ pub fn kontakte(p: &Project, lib: &[SymDef], owner: u64) -> Vec<(u64, u8)> {
         for s in &a.sheets {
             let ctx = bmk_ctx(a, s);
             for o in &s.objects {
-                let Kind::Symbol { bmk, ext, key, .. } = &o.kind else { continue };
+                let Kind::Symbol { ext, key, .. } = &o.kind else { continue };
                 if o.id == owner || spulen.contains(&o.id) {
                     continue;
                 }
-                if symbols::display_bmk(bmk, ext.counter, &ctx) == ziel {
+                if ext.eigentuemer == owner || crate::eigentuemer::anzeige_bmk(p, o, &ctx) == ziel {
                     v.push((o.id, art_aus(symbols::find(lib, key))));
                 }
             }
@@ -185,8 +199,9 @@ pub fn lage(p: &Project, id: u64) -> Option<String> {
     Some(crate::berechnet::blatt_pfad(&p.anlagen[r.anlage].sheets[r.sheet], pos.x))
 }
 
-/// Kontaktspiegel nachführen: Y-Lage je Blatt, und bei `auto` neue Kontakte gleicher Kennzeichnung aufnehmen bzw.
-/// Zeilen gelöschter oder umbenannter Kontakte entfernen. Rückgabe: ob sich etwas geändert hat.
+/// Kontaktspiegel nachführen: Y-Lage je Blatt, X-Lage der Spule (auf demselben Blatt), und bei `auto` neue
+/// Kontakte gleicher Kennzeichnung aufnehmen bzw. Zeilen gelöschter oder umbenannter Kontakte entfernen.
+/// Rückgabe: ob sich etwas geändert hat.
 pub fn nachfuehren(p: &mut Project, lib: &[SymDef]) -> bool {
     let mut todo: Vec<(SheetRef, u64)> = vec![];
     for (ai, a) in p.anlagen.iter().enumerate() {
@@ -201,9 +216,9 @@ pub fn nachfuehren(p: &mut Project, lib: &[SymDef]) -> bool {
     let mut changed = false;
     for (r, id) in todo {
         let Some(s) = p.sheet(r) else { continue };
-        let y = start_y(s);
         let Some(Kind::Spiegel { owner, rows, auto, .. }) = s.objects.iter().find(|o| o.id == id).map(|o| &o.kind) else { continue };
         let (owner, auto) = (*owner, *auto);
+        let spule_x = s.objects.iter().find(|o| o.id == owner && owner != 0).and_then(|o| if let Kind::Symbol { pos, .. } = &o.kind { Some(pos.x) } else { None });
         let mut neu = rows.clone();
         // Zeilen gelöschter Kontakte entfallen (Zeilen ohne Kontakt im Projekt, z. B. aus dem .epr, bleiben)
         neu.retain(|z| z.referenz == 0 || p.find_obj(z.referenz).is_some());
@@ -218,12 +233,38 @@ pub fn nachfuehren(p: &mut Project, lib: &[SymDef]) -> bool {
         }
         if let Some(o) = p.sheet_mut(r).and_then(|s| s.objects.iter_mut().find(|o| o.id == id)) {
             if let Kind::Spiegel { pos, rows, .. } = &mut o.kind {
-                if (pos.y - y).abs() > 0.01 {
-                    pos.y = y;
+                if let Some(x) = spule_x.filter(|x| (pos.x - x).abs() > 0.01) {
+                    pos.x = x;
                     changed = true;
                 }
                 if *rows != neu {
                     *rows = neu;
+                    changed = true;
+                }
+            }
+        }
+    }
+    // Y nach den neuen Zeilen: die größte Höhe aller Spiegel des Blattes bestimmt die Lage
+    changed |= y_setzen(p);
+    changed
+}
+
+/// Y-Lage aller Kontaktspiegel nach `start_y` setzen; Rückgabe: ob sich etwas geändert hat.
+fn y_setzen(p: &mut Project) -> bool {
+    let mut neu: Vec<(SheetRef, f32)> = vec![];
+    for (ai, a) in p.anlagen.iter().enumerate() {
+        for (si, s) in a.sheets.iter().enumerate() {
+            if s.objects.iter().any(|o| matches!(o.kind, Kind::Spiegel { .. })) {
+                neu.push((SheetRef { anlage: ai, sheet: si }, start_y(p, s)));
+            }
+        }
+    }
+    let mut changed = false;
+    for (r, y) in neu {
+        for o in p.sheet_mut(r).into_iter().flat_map(|s| s.objects.iter_mut()) {
+            if let Kind::Spiegel { pos, .. } = &mut o.kind {
+                if (pos.y - y).abs() > 0.01 {
+                    pos.y = y;
                     changed = true;
                 }
             }
@@ -238,6 +279,7 @@ pub fn draw(dc: &DrawCtx, pos: P, rows: &[Zeile], stroke: Stroke) {
     let xf = dc.xf;
     let z = xf.z;
     let tc = stroke.color;
+    let hier = crate::eigentuemer::blatt_des_dc(dc);
     for (row, y) in rows.iter().zip(zeilen_y(pos.y, rows)) {
         for (x0, y0, x1, y1) in zeichen(row.art) {
             p.line_segment([xf.s(P::new(pos.x + x0, y + y0)), xf.s(P::new(pos.x + x1, y + y1))], stroke);
@@ -254,11 +296,12 @@ pub fn draw(dc: &DrawCtx, pos: P, rows: &[Zeile], stroke: Stroke) {
         for (i, (dx, dy, al)) in nummern_lage(row.art).into_iter().enumerate().take(n) {
             let t = if row.felder[i].trim().is_empty() { auto.get(i).cloned().unwrap_or_default() } else { row.felder[i].clone() };
             if !t.is_empty() {
-                p.text(xf.s(P::new(pos.x + dx, y + dy)), al, t, times(1.8 * z), tc);
+                p.text(xf.s(P::new(pos.x + dx, y + dy)), al, t, times(SCHRIFT * z), tc);
             }
         }
-        if let Some(l) = lage(dc.project, row.referenz).filter(|_| row.referenz != 0) {
-            p.text(xf.s(P::new(pos.x + 7.0, y)), Align2::LEFT_CENTER, l, times(2.0 * z), tc);
+        // Lage des Kontakts: „/Pfad“ auf dem Blatt des Spiegels, sonst „Blatt/Pfad“
+        if let Some(l) = crate::eigentuemer::lage_von(dc.project, row.referenz, hier).filter(|_| row.referenz != 0) {
+            p.text(xf.s(P::new(pos.x + LAGE_X, y)), Align2::LEFT_CENTER, l, times(SCHRIFT * z), tc);
         }
     }
 }
@@ -275,8 +318,8 @@ fn id_at(d: &[u8], at: usize) -> u64 {
     d.get(at..at + 8).map(|b| u64::from_le_bytes(b.try_into().unwrap())).unwrap_or(0)
 }
 
-/// Kontaktspiegel aus einem OBJ-Block lesen; Spule und Kontakte verknüpft `verknuepfen` nach dem Einlesen.
-pub fn lesen(k: &Block, sheet: &Sheet) -> Kind {
+/// Kontaktspiegel aus einem OBJ-Block lesen; Spule, Kontakte und Y-Lage setzt `verknuepfen` nach dem Einlesen.
+pub fn lesen(k: &Block) -> Kind {
     let rows = k
         .kids_of("STB")
         .map(|b| {
@@ -299,7 +342,7 @@ pub fn lesen(k: &Block, sheet: &Sheet) -> Kind {
             z
         })
         .collect();
-    Kind::Spiegel { pos: P::new(k.i32(6) as f32 / 10.0, start_y(sheet)), owner: 0, rows, auto: false }
+    Kind::Spiegel { pos: P::new(k.i32(6) as f32 / 10.0, 0.0), owner: 0, rows, auto: false }
 }
 
 /// Kennung eines Symbols im Original (VSY Byte 96).
@@ -331,6 +374,15 @@ pub fn verknuepfen(p: &mut Project) {
                         z.referenz = *i;
                     }
                 }
+            }
+        }
+    }
+    // Y-Lage wie beim Zeichnen im Original (BLT Feld 24 wird dabei neu berechnet), in beiden Formen
+    y_setzen(p);
+    for o in p.anlagen.iter_mut().flat_map(|a| &mut a.sheets).flat_map(|s| &mut s.objects) {
+        if let (Kind::Spiegel { pos, .. }, Some(raw)) = (&o.kind, o.raw.as_deref_mut()) {
+            if let Kind::Spiegel { pos: rp, .. } = &mut raw.kind {
+                rp.y = pos.y;
             }
         }
     }
@@ -399,25 +451,10 @@ pub fn referenz_setzen(d: &mut SpiegelDlg, zeile: usize, id: u64, art: u8) -> bo
     true
 }
 
-/// Beim Übernehmen wird die Spule Eigentümer der referenzierten Kontakte (Original 0x4995ac): Kontakte mit anderer
-/// Kennzeichnung übernehmen Kennzeichnung und Zähler der Spule wie bei „Eigentümer › Setzen“.
+/// Beim Übernehmen wird die Spule Eigentümer der referenzierten Kontakte (Original 0x4995ac): VSY › OWR, die
+/// Kontakte zeigen danach die Kennzeichnung der Spule und darunter ihre Lage (`eigentuemer.rs`).
 pub fn eigentuemer_setzen(p: &mut Project, owner: u64, ids: &[u64]) -> bool {
-    let Some(ziel) = bmk_von(p, owner) else { return false };
-    let Some(Kind::Symbol { bmk, ext, .. }) = p.find_obj(owner).map(|(_, o)| o.kind.clone()) else { return false };
-    let mut changed = false;
-    for &id in ids {
-        if id == owner || bmk_von(p, id).is_none_or(|b| b == ziel) {
-            continue;
-        }
-        if let Some(o) = p.anlagen.iter_mut().flat_map(|a| &mut a.sheets).flat_map(|s| &mut s.objects).find(|o| o.id == id) {
-            if let Kind::Symbol { bmk: b, ext: e, .. } = &mut o.kind {
-                *b = bmk.clone();
-                e.counter = ext.counter;
-                changed = true;
-            }
-        }
-    }
-    changed
+    crate::eigentuemer::setzen(p, owner, ids)
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -605,7 +642,7 @@ impl App {
             }
             None => {
                 let x = if let Kind::Symbol { pos, .. } = owner.kind { pos.x } else { 0.0 };
-                let y = self.project.sheet(r).map(start_y).unwrap_or(180.0);
+                let y = self.project.sheet(r).map(|s| start_y(&self.project, s)).unwrap_or(180.0);
                 let id = self.project.alloc_id();
                 if let Some(s) = self.project.sheet_mut(r) {
                     s.objects.push(Obj { id, kind: Kind::Spiegel { pos: P::new(x, y), owner: d.owner, rows, auto: d.auto }, pen: 0, fixed: false, group: None, raw: None });
@@ -646,7 +683,8 @@ mod tests {
         assert!(nachfuehren(&mut p, &[]));
         let rows = |p: &Project| if let Some((_, Obj { kind: Kind::Spiegel { rows, pos, .. }, .. })) = p.find_obj(9) { (rows.clone(), pos.y) } else { panic!() };
         let (r, y) = rows(&p);
-        assert_eq!((r.len(), r[0].referenz, y), (1, 2, 180.0));
+        // über dem Schriftfeld: 210 − 5 − 15 − 3 mm (eine Zeile)
+        assert_eq!((r.len(), r[0].referenz, y), (1, 2, 187.0));
         assert_eq!(lage(&p, 2).as_deref(), Some("1/4"));
         // neuer Kontakt gleicher Kennzeichnung wird aufgenommen, umbenannter entfernt
         p.anlagen[0].sheets[0].objects.push(sym(4, "-K1", 200.0));
@@ -674,6 +712,39 @@ mod tests {
         p.anlagen[0].sheets[0].objects.remove(0);
         nachfuehren(&mut p, &[]);
         assert!(p.find_obj(9).is_some());
+    }
+
+    /// Lage wie in der Aufnahme des Originals (Gegenprobe Blatt 6 „Sicherung -F7“): Schließer + Wechsler, Höhe 85,
+    /// erste Zeile 181,5 mm (gemessen 181,4), Wechsler 186,5 mm, Unterkante 190 mm = Oberkante Schriftfeld.
+    #[test]
+    fn lage_ueber_dem_schriftfeld() {
+        let mut p = Project::new_default();
+        let s = &mut p.anlagen[0].sheets[0];
+        s.objects.push(sym(1, "-K1", 64.0));
+        s.objects.push(sym(2, "-K1", 120.0));
+        let rows = vec![Zeile { art: 0, referenz: 2, ..Default::default() }, Zeile { art: 2, ..Default::default() }];
+        s.objects.push(Obj { id: 9, kind: Kind::Spiegel { pos: P::new(10.0, 0.0), owner: 1, rows: rows.clone(), auto: false }, pen: 0, fixed: false, group: None, raw: None });
+        assert_eq!(hoehe(&rows), 85);
+        assert_eq!(start_y(&p, &p.anlagen[0].sheets[0]), 181.5);
+        assert_eq!(zeilen_y(181.5, &rows), vec![181.5, 186.5]);
+        // ein zweiter, kleinerer Spiegel: die größte Höhe zählt (Original: Maximum von Feld 14)
+        p.anlagen[0].sheets[0].objects.push(Obj { id: 10, kind: Kind::Spiegel { pos: P::new(200.0, 0.0), owner: 0, rows: vec![Zeile::default()], auto: false }, pen: 0, fixed: false, group: None, raw: None });
+        assert!(nachfuehren(&mut p, &[]));
+        let lage = |p: &Project, id| if let Kind::Spiegel { pos, .. } = p.find_obj(id).unwrap().1.kind { pos } else { panic!() };
+        // X folgt der Spule, ohne Spule bleibt sie stehen
+        assert_eq!((lage(&p, 9), lage(&p, 10)), (P::new(64.0, 181.5), P::new(200.0, 181.5)));
+        if let Kind::Symbol { pos, .. } = &mut p.anlagen[0].sheets[0].objects[0].kind {
+            pos.x = 80.0;
+        }
+        assert!(nachfuehren(&mut p, &[]));
+        assert_eq!(lage(&p, 9).x, 80.0);
+        assert!(!nachfuehren(&mut p, &[]));
+        // Schriftfeldhöhe des Projekts und Hochformat
+        p.tb_hoehe = 25.0;
+        assert_eq!(start_y(&p, &p.anlagen[0].sheets[0]), 171.5);
+        p.tb_hoehe = 0.0;
+        p.anlagen[0].sheets[0].portrait = true;
+        assert_eq!(start_y(&p, &p.anlagen[0].sheets[0]), 268.5);
     }
 
     #[test]
@@ -719,7 +790,7 @@ mod tests {
         assert_eq!((b.i32(6), id_at(&b.data, 0), id_at(&b.data, 0x20), b.data[0x2c] & 1, b.i32(14)), (400, 77, 1000, 1, 30));
         let stb = b.kid("STB").unwrap();
         assert_eq!((stb.data.len(), id_at(&stb.data, 0), id_at(&stb.data, 8), id_at(&stb.data, 16), stb.data[0x18]), (0x1c, 2000, 5, 6, 2));
-        let Kind::Spiegel { rows, pos, .. } = lesen(&b, &p.anlagen[0].sheets[0]) else { panic!() };
+        let Kind::Spiegel { rows, pos, .. } = lesen(&b) else { panic!() };
         assert_eq!((rows[0].art, rows[0].felder[0].as_str(), rows[0].felder[1].as_str(), rows[0].kennung[0], pos.x), (2, "11", "", 2000, 40.0));
         assert_eq!(rows[0].felder[2], "14");
     }

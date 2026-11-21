@@ -913,8 +913,9 @@ impl App {
         self.info = "Eigentümer wählen: Symbol anklicken, auch auf einem anderen Blatt (Esc = Abbruch)".into();
     }
 
-    /// Klick im Modus „Eigentümer setzen“: die gemerkten Symbole übernehmen Kennzeichnung (Vorlage) und Zähler
-    /// des angeklickten Symbols – beides bestimmt die angezeigte BMK. Kein Symbol oder eines der Ziele → weiter warten.
+    /// Klick im Modus „Eigentümer setzen“: das angeklickte Symbol wird Eigentümer der gemerkten Symbole (VSY › OWR);
+    /// sie zeigen danach dessen Kennzeichnung und Lage (`eigentuemer.rs`), ihre eigene Vorlage bleibt stehen.
+    /// Kein Symbol oder eines der Ziele → weiter warten.
     pub fn owner_picked(&mut self, owner_id: u64) {
         let Some((tref, targets)) = self.owner_pick.clone() else { return };
         if self.cur() == Some(tref) && targets.contains(&owner_id) {
@@ -927,7 +928,7 @@ impl App {
         let changes = self
             .project
             .sheet(tref)
-            .map(|s| s.objects.iter().filter(|o| targets.contains(&o.id)).any(|o| matches!(&o.kind, Kind::Symbol { bmk: b, ext: e, .. } if *b != bmk || e.counter != counter)))
+            .map(|s| s.objects.iter().filter(|o| targets.contains(&o.id)).any(|o| matches!(&o.kind, Kind::Symbol { ext: e, .. } if e.eigentuemer != owner_id)))
             .unwrap_or(false);
         let shown = self.sheet().zip(self.cur()).and_then(|(s, r)| self.project.anlagen.get(r.anlage).map(|a| symbols::display_bmk(&bmk, counter, &canvas::bmk_ctx(a, s))));
         let shown = shown.unwrap_or_else(|| bmk.clone());
@@ -936,14 +937,7 @@ impl App {
             return;
         }
         self.checkpoint();
-        if let Some(s) = self.project.sheet_mut(tref) {
-            for o in s.objects.iter_mut().filter(|o| targets.contains(&o.id)) {
-                if let Kind::Symbol { bmk: b, ext: e, .. } = &mut o.kind {
-                    *b = bmk.clone();
-                    e.counter = counter;
-                }
-            }
-        }
+        crate::eigentuemer::setzen(&mut self.project, owner_id, &targets);
         if self.cur() == Some(tref) {
             self.selection = targets;
         }

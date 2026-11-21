@@ -13,6 +13,7 @@ pub mod dialoge;
 pub mod dialoge3;
 pub mod druck;
 pub mod dxf;
+pub mod eigentuemer;
 pub mod epr;
 pub mod epr_neu;
 pub mod epr_projekt;

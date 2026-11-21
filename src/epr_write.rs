@@ -229,10 +229,11 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
         put_str(&mut blk.data, 0, 40, &s.name);
         let old = blk.i32(23);
         blk.set_i32(23, (old & !0x00ff_ffff) | s.subindex as i32 | ((s.number as i32) << 8));
-        // Format: Feld 24 = Rahmenhöhe in 0,1 mm (hoch 2770, quer 1800…1900), Feld 32 = 7 hoch / 6 quer (aus W2.epr)
+        // Format: Feld 24 = Unterkante der Zeichenfläche in 0,1 mm (hoch 2770, quer 1900 bei 15 mm Schriftfeld; das
+        // Original berechnet es beim Zeichnen neu), Feld 32 = 7 hoch / 6 quer (aus W2.epr)
         let portrait_now = blk.i32(24) > 2400;
         if s.raw.is_none() || portrait_now != s.portrait {
-            let h = if s.portrait { 2770 } else if s.frame_h > 50.0 { (s.frame_h * 10.0).round() as i32 } else { 1800 };
+            let h = if s.portrait { 2770 } else if s.frame_h > 50.0 { (s.frame_h * 10.0).round() as i32 } else { 1900 };
             blk.set_i32(24, h);
             blk.set_i32(32, if s.portrait { 7 } else { 6 });
         }

@@ -767,6 +767,13 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             if let Some(def) = symbols::find(dc.lib, key) {
                 draw_symbol_full(p, xf, def, *pos, *rot, *mirror_h, *mirror_v, *scale, *option, *flags, ext.alt, &ext.params, &ext.texts, stroke);
                 let (mn, mx) = obj_bounds(o, dc.lib);
+                // Symbol mit Eigentümer (OWR): Kennzeichnung des Eigentümers, darunter seine Lage (eigentuemer.rs)
+                let (owner_bmk, qv) = if ext.eigentuemer != 0 {
+                    (crate::eigentuemer::kennzeichnung(dc.project, o), crate::eigentuemer::querverweis(dc.project, o, crate::eigentuemer::blatt_des_dc(dc)))
+                } else {
+                    (None, None)
+                };
+                let bmk = owner_bmk.as_ref().unwrap_or(bmk);
                 if let Some((off, vert)) = title {
                     // Lage aus der Projektdatei (Titel X/Y bzw. Wert X/Y im Eigenschaftendialog), Ausrichtung Links/Mittig/Rechts
                     let place = |txt: &str, at: P, align: u8, size: f32| {
@@ -778,9 +785,14 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                         } else {
                             p.galley(xf.s(mn), g, tc);
                         }
+                        (mn, mx)
                     };
                     if !bmk.is_empty() {
-                        place(&symbols::display_bmk(bmk, ext.counter, &dc.bmk), pos.add(*off), ext.title_align, 2.5);
+                        let shown = if owner_bmk.is_some() { bmk.clone() } else { symbols::display_bmk(bmk, ext.counter, &dc.bmk) };
+                        let (a, b) = place(&shown, pos.add(*off), ext.title_align, 2.5);
+                        if let Some(q) = &qv {
+                            crate::eigentuemer::zeichne_querverweis(dc, q, a, b, *vert, tc);
+                        }
                     }
                     if !value.is_empty() {
                         let shown = dc.project.expand_placeholders(value);
@@ -794,7 +806,11 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                         _ => P::new(mn.x - 1.0, (mn.y + mx.y) / 2.0),
                     };
                     if !bmk.is_empty() {
-                        p.text(xf.s(P::new(anchor.x, anchor.y - if value.is_empty() { 0.0 } else { 1.4 })), Align2::RIGHT_CENTER, bmk, times(2.6 * z), tc);
+                        let at = P::new(anchor.x, anchor.y - if value.is_empty() { 0.0 } else { 1.4 });
+                        p.text(xf.s(at), Align2::RIGHT_CENTER, bmk, times(2.6 * z), tc);
+                        if let Some(q) = &qv {
+                            crate::eigentuemer::zeichne_querverweis_rechts(dc, q, bmk, at, 2.6, tc);
+                        }
                     }
                     if !value.is_empty() {
                         p.text(xf.s(P::new(anchor.x, anchor.y + 1.6)), Align2::RIGHT_CENTER, value, times(2.2 * z), tc);

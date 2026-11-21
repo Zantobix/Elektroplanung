@@ -80,9 +80,11 @@ fn neuer_kontaktspiegel_in_w2() {
         .expect("W2 hat Symbole mit gleicher Kennzeichnung");
     let rows: Vec<kontaktspiegel::Zeile> = k.iter().enumerate().map(|(i, (id, _))| kontaktspiegel::Zeile { art: (i % 3) as u8, referenz: *id, felder: if i == 0 { ["13".into(), "14".into(), String::new()] } else { Default::default() }, ..Default::default() }).collect();
     let x = bmk_pos(&p, owner).1.x;
-    let y = kontaktspiegel::start_y(p.sheet(r).unwrap());
     let id = p.alloc_id();
-    p.sheet_mut(r).unwrap().objects.push(Obj { id, kind: Kind::Spiegel { pos: P::new(x, y), owner, rows: rows.clone(), auto: false }, pen: 0, fixed: false, group: None, raw: None });
+    p.sheet_mut(r).unwrap().objects.push(Obj { id, kind: Kind::Spiegel { pos: P::new(x, 0.0), owner, rows: rows.clone(), auto: false }, pen: 0, fixed: false, group: None, raw: None });
+    // Y über dem Schriftfeld: Unterkante der Zeichenfläche − Höhe des Spiegels
+    let y = kontaktspiegel::start_y(&p, p.sheet(r).unwrap());
+    assert_eq!(y, kontaktspiegel::zeichen_unterkante(&p, p.sheet(r).unwrap()) - kontaktspiegel::hoehe(&rows) as f32 / 10.0);
     let (back, f) = reload(&p);
 
     // Block: Art 5, X, Spule, Zeilen mit Kontakt-, Blatt- und Anlagenkennung

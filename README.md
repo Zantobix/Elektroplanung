@@ -194,13 +194,18 @@ nicht. Gemessen werden stattdessen:
   8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken. Folgeblätter: direkt folgende
   Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
 - Inhaltsverzeichnis, Querverweise (1–3 Tabellen) und Artikelliste (Summenliste, Summe+BMK, Einzelliste) als
-  Blattart: Spaltenköpfe, Spaltenbreiten, Ränder und Zeilenhöhe wie in Bildschirmaufnahmen des Originals; den
-  Rahmen der Listenblätter zeichnet das Original 10 mm unter der Blattkante, der Nachbau nach der Rahmenhöhe.
+  Blattart: Spaltenköpfe, Spaltenbreiten, Ränder und Zeilenhöhe wie in Bildschirmaufnahmen des Originals; der
+  Rahmen beginnt wie bei allen Querblättern 10 mm unter der Blattkante (oberer Rand der Anlage).
 - Kontaktspiegel: verknüpftes Objekt unter der Spule (Lage der Kontakte, neue/gelöschte Kontakte). Wie im
-  Original (Dekompilat) bleibt er beim Verschieben der Spule stehen und beim Löschen der Spule erhalten und wird
-  nicht mitkopiert; Feld 14 = Höhe. Die Schaltzeichen sind eigene Zeichnung (das Original nimmt drei
-  Bibliothekssymbole aus den Programmeinstellungen), Schriftgrößen und Abstände geschätzt; im Original geöffnet
-  ist ein im Nachbau angelegter Spiegel noch nicht geprüft (`cargo run --example gegenprobe_plaene`).
+  Original (Dekompilat) steht er unmittelbar über dem Schriftfeld (Unterkante der Zeichenfläche minus größte
+  Spiegelhöhe, Feld 14), folgt der X-Lage der Spule, bleibt beim Löschen der Spule erhalten und wird nicht
+  mitkopiert. Die Schaltzeichen sind eigene Zeichnung (das Original nimmt drei Bibliothekssymbole aus den
+  Programmeinstellungen) in den an einer Aufnahme des Originals gemessenen Maßen; Lage „/Pfad“ auf demselben
+  Blatt, sonst „Blatt/Pfad“ (`cargo run --example gegenprobe_plaene`).
+- Eigentümer (VSY › OWR): ein Kontakt mit Eigentümer zeigt dessen Kennzeichnung und darunter klein die Lage der
+  Spule (Ausdruck Seite 10: „-K1“ mit „/5“); ob die Freigabe „Querverweise“ den Verweis abschaltet, ist nicht
+  belegt (der Nachbau richtet sich nach der Freigabe des Kontakts). Die Querverweisliste (Blattart 2) und der
+  Klemmplan für im Nachbau gesetzte Eigentümer nutzen noch die eigene Kennzeichnung bzw. nur das gelesene OWR.
 - Mehrzeilige große Texte (Raumnamen der Installationspläne) stehen bis etwa 0,5 mm tiefer als im
   Original-Ausdruck, der Zeilenabstand ist etwas größer (Schriftmaße der egui-Schrift).
 - Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
