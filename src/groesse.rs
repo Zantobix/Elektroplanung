@@ -226,7 +226,7 @@ mod tests {
         assert!(eck_faktor(0, mn, mx, P::new(50.0, 50.0)).1 > 0.0);
         // Rahmen: einzelnes Symbol mit Rand, einzelne Klemmstelle ohne Rahmen
         assert!(proportional(&[obj(sym(P::new(0.0, 0.0)))]));
-        assert!(rahmen(&[obj(Kind::Terminal { pos: P::default(), leiste: "X".into(), nr: 1, level: 0, text_off: None, tpl: String::new() })], &[]).is_none());
+        assert!(rahmen(&[obj(Kind::Terminal { pos: P::default(), leiste: "X".into(), nr: 1, level: 0, text_off: None, tpl: String::new(), opt: Default::default() })], &[]).is_none());
     }
 
     #[test]

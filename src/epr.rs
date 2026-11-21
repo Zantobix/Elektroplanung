@@ -182,15 +182,9 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
             name: if name.is_empty() { format!("Anlage {}", p.anlagen.len() + 1) } else { name },
             sheets: vec![],
             sammelschienen: a.kids_of("SMS").map(|s| s.kid("TIT").map(|t| txt(&t.data)).unwrap_or_else(|| txt_at(&s.data, 0, 20))).collect(),
-            klemmleisten: a.kids_of("KLM").map(|k| txt_at(&k.data, 0, 20)).collect(),
-            klemmen: a
-                .kids_of("KLM")
-                .map(|k| KlemmInfo {
-                    id: k.i32(13),
-                    name: k.kid("TIT").map(|t| txt(&t.data)).unwrap_or_else(|| txt_at(&k.data, 0, 20)),
-                    nrs: k.kids_of("KFO").map(|f| f.i32(4).max(0) as u32).collect(),
-                })
-                .collect(),
+            // Klemmleisten unter ihrem Titel (%O der Klemmstellen), Einzelheiten in `klemmen`
+            klemmleisten: a.kids_of("KLM").map(|k| crate::klemmen::klemm_info(k).name).collect(),
+            klemmen: a.kids_of("KLM").map(crate::klemmen::klemm_info).collect(),
             set: AnlSettings {
                 kurz: txt_at(&a.data, 55, 66),
                 von: txt_at(&a.data, 66, 112),
@@ -213,9 +207,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
             .kids_of("KLM")
             .map(|k| (k.i32(13), (k.kid("TIT").map(|t| txt(&t.data)).unwrap_or_else(|| txt_at(&k.data, 0, 20)), k.i32(15))))
             .collect();
-        if anl.klemmleisten.is_empty() {
-            anl.klemmleisten.push("Klemme 1".into());
-        }
+        // Anlagen ohne Klemmleiste bleiben ohne (eine neue Leiste würde sonst beim Speichern als KLM-Block entstehen)
         for b in a.kids_of("BLT") {
             let mut sh = Sheet::new(((b.i32(23) >> 8) & 0xffff).max(1) as u32);
             sh.name = txt_at(&b.data, 0, 40);
@@ -252,7 +244,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
                     }
                 } else if k.is("OBJ") {
                     match k.kid("TIT") {
-                        _ if k.i32(4) == 0x2ffff => Some((terminal(k, &klm), 0)),
+                        _ if crate::klemmen::is_terminal(k) => Some((terminal(k, &klm), 0)),
                         Some(t) => Some((verweis(k, txt(&t.data)), 0)),
                         // Sammelschiene (Feld 4 = 0xFFFF) bzw. Verweis ohne eigenen Text (nur Pfeil, z. B. im Schriftfeld)
                         None if k.i32(4) == 0xffff => busbar(k, &sms_names).map(|b| (b, 0)),
@@ -414,6 +406,7 @@ fn terminal(k: &Block, klm: &std::collections::HashMap<i32, (String, i32)>) -> K
         level: if levels > 1 { lv } else { 0 },
         text_off: Some(P::new(mm(k.i32(2)), mm(k.i32(3)))),
         tpl: k.kid("TIT").map(|t| txt(&t.data)).unwrap_or_default(),
+        opt: crate::klemmen::read_opt(k),
     }
 }
 

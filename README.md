@@ -158,8 +158,7 @@ nicht. Gemessen werden stattdessen:
 
 ## Bekannte Grenzen
 
-- Klemmstellen, die im Nachbau **neu** angelegt werden, kann das `.epr`-Format des Nachbaus noch nicht schreiben
-  (vorhandene bleiben erhalten); der Nachbau meldet sie beim Speichern. Neue Textboxen, Tabellen, Bilder (samt
+- Neue Klemmstellen und Klemmleisten werden geschrieben (OBJ, KLM mit KFO-Einträgen, `src/klemmen.rs`). Neue Textboxen, Tabellen, Bilder (samt
   Projektbild), Verweise und Sammelschienen werden geschrieben (`src/epr_neu.rs`); ihr Aufbau folgt der
   Speicherroutine des Originals, im Original geöffnet ist das Ergebnis noch nicht geprüft
   (`cargo run --example neu_objekte` erzeugt eine Testdatei).
@@ -179,14 +178,16 @@ nicht. Gemessen werden stattdessen:
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
   neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
-- Klemmplan: "Von Ziel"/"Nach Ziel" und Brücken werden aus den Verbindungen verfolgt (Regeln in
-  `src/klemmplan.rs`); bei Klemmen mit mehr als zwei Zielen wählt das Original nach einer nicht geklärten
-  Reihenfolge, der Nachbau nach der Lage der Anschlüsse (oben vor rechts vor unten). Die Spalte "Funktion"
-  bleibt leer (Klemmenfunktion wird noch nicht aus dem .epr gelesen); "Alter Klemmenplan" zeigt die
-  8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken.
+- Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",
+  Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); die Brücken mehrstöckiger Leisten fasst der
+  Nachbau zu Gruppen zusammen, wo das Original einzelne Ketten zeichnet. "Alter Klemmenplan" zeigt die
+  8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken. Folgeblätter: direkt folgende
+  Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
+- Inhaltsverzeichnis und Artikelliste (Summenliste) als Blattart: Spalten der Artikelliste wie im Original,
+  Maße und Spalten des Inhaltsverzeichnisses ohne Vorlage; Querverweis-Blätter bleiben leer.
 - Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
-  Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift) und
-  Klemmleisten, Blattart, Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Nur im
+  Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift), Blattart
+  (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Nur im
   eigenen Format (.epj) bleiben: Bauteile samt Zuordnung, Platzhaltergruppen, Projektstatus, "Alter Klemmenplan",
   Schriftfeld "Absolut", Schalter der Sammelschienen (Querverweise, Pfeile …), Tabellenkopf fett, Bildausrichtung,
   Verbindungsoptionen und Schriftnamen je Text – ihre Ablage im .epr ist noch unbekannt; der Nachbau nennt sie

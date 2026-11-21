@@ -575,7 +575,7 @@ fn write_anlage(project: &Project, a: &Anlage, blk: &mut Block, pots: &std::coll
         put_str(&mut blk.data, 116, 20, &znr);
     }
     write_schienen(a, blk, pots);
-    write_klemmleisten(a, blk);
+    // Klemmleisten (KLM › KFO) schreibt klemmen::sync_klm beim Aufbau der Anlage
     let blt: Vec<usize> = blk.kids.iter().enumerate().filter(|(_, k)| k.is("BLT")).map(|(i, _)| i).collect();
     for (s, &ki) in a.sheets.iter().zip(&blt) {
         write_blatt(a, s, &mut blk.kids[ki]);
@@ -632,54 +632,12 @@ fn write_schienen(a: &Anlage, blk: &mut Block, pots: &std::collections::HashMap<
     set_group(blk, "SMS", list, &[]);
 }
 
-fn write_klemmleisten(a: &Anlage, blk: &mut Block) {
-    let blocks: Vec<Block> = blk.kids_of("KLM").cloned().collect();
-    let refs: Vec<&Block> = blocks.iter().collect();
-    let names = &a.klemmleisten;
-    // "Klemme 1" ergänzt der Import (und eine neue Anlage) als Vorgabe, wenn die Anlage keine Leiste hat
-    if blocks.is_empty() && names.len() == 1 && names[0] == "Klemme 1" {
-        return;
-    }
-    let m = zuordnen(names.len(), &refs, |i, b| txt(&b.data, 0, 20) == names[i], |_| true);
-    let mut next = blocks.iter().map(|b| b.i32(13)).max().unwrap_or(0).max(0) + 1;
-    let list = names
-        .iter()
-        .enumerate()
-        .map(|(i, name)| {
-            let mut b = match m[i] {
-                Some(j) => blocks[j].clone(),
-                None => {
-                    // neue Leiste nach dem Muster von W2.epr (Feld 11 = −50, 14/16/17 = −1, 15 = 1 Etage)
-                    let mut b = Block::new("KLM", vec![0; 80]);
-                    for (f, v) in [(11, -50), (13, next), (14, -1), (15, 1), (16, -1), (17, -1)] {
-                        b.set_i32(f, v);
-                    }
-                    next += 1;
-                    b
-                }
-            };
-            if txt(&b.data, 0, 20) != *name {
-                put_str(&mut b.data, 0, 20, name);
-            }
-            // TIT = Bezeichnung auf dem Blatt (z. B. "-X1" zur Leiste "Klemme 1"); nur bei neuen Leisten setzen
-            if b.kid("TIT").is_none() {
-                b.kids.insert(0, text_block("TIT", name));
-            }
-            b
-        })
-        .collect();
-    set_group(blk, "KLM", list, &["SMS"]);
-}
-
 fn write_blatt(a: &Anlage, s: &Sheet, b: &mut Block) {
     let _ = a;
     if b.data.len() < 140 {
         return;
     }
-    if s.art != 0 && (b.i32(22) & 0xff) as u8 != s.art {
-        let v = b.i32(22) & !0xff;
-        b.set_i32(22, v | s.art as i32);
-    }
+    // Blattart (Feld 22) und Klemmleiste (Feld 32 ab Bit 8) schreibt klemmen::patch_blt
     if txt(&b.data, 51, 71) != s.ort {
         put_str(&mut b.data, 51, 20, &s.ort);
     }
@@ -692,9 +650,6 @@ fn write_blatt(a: &Anlage, s: &Sheet, b: &mut Block) {
     let mut v = f32_;
     if (v & 0x10 != 0) != s.pfad_linien {
         v ^= 0x10;
-    }
-    if s.art == 4 && (v >> 8) != s.klm {
-        v = (v & 0xff) | (s.klm << 8);
     }
     if v != f32_ {
         b.set_i32(32, v);

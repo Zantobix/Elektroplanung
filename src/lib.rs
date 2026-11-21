@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod bauteil_darstellung;
+pub mod berechnet;
 pub mod bildexport;
 pub mod blattnummer;
 pub mod canvas;
@@ -19,9 +20,11 @@ pub mod groesse;
 pub mod grafik;
 pub mod icons;
 pub mod inhalt;
+pub mod klemmen;
 pub mod klemmplan;
 pub mod kuerzel;
 pub mod leitung_stift;
+pub mod listen;
 pub mod mcp;
 pub mod mcp_symbol;
 pub mod mehrfach;
