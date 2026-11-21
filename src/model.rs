@@ -145,6 +145,13 @@ pub enum Kind {
         xin: String,
         #[serde(default)]
         xout: String,
+        /// Lage (OBJ Feld 15 Byte 0): Bit 0 = von unten gestapelt („Unten“), Bit 1 = feste Lage (ohne „Auto“);
+        /// siehe `sammelschiene_lage.rs`
+        #[serde(default)]
+        lage: u8,
+        /// Y-Versatz in mm gegenüber der automatischen Lage (OBJ Feld 11 Wort 0, 0,1 mm mit Vorzeichen)
+        #[serde(default)]
+        versatz: f32,
     },
     /// Klemmstelle. Aus .epr (OBJ mit Feld 4 = 0x2FFFF): Feld 6/7 Lage, 8 Klemmleiste (KLM Feld 13), 9 Nummer,
     /// 11 Byte 0 Etage (A, B, C … bei mehrstöckigen Leisten), 2/3 Textversatz, TIT = Vorlage "%O%B.%C"

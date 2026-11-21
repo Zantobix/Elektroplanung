@@ -147,14 +147,16 @@ impl App {
         let Some(o) = self.project.sheet(r).and_then(|s| s.objects.iter().find(|o| o.id == id)).cloned() else { return false };
         let anl = &self.project.anlagen[r.anlage];
         self.dlg3 = Some(match &o.kind {
-            Kind::Busbar { a, x2, name, label, .. } => {
+            Kind::Busbar { a, x2, name, label, lage, versatz, .. } => {
                 let mut sliste: Vec<String> = anl.sammelschienen.clone();
                 if !sliste.contains(name) {
                     sliste.push(name.clone());
                 }
                 let sel = sliste.iter().position(|s| s == name).unwrap_or(0);
                 let set = anl.schienen.get(name).cloned().unwrap_or_default();
-                Dlg3::BusbarObj { id, sliste, sel, einsp: set.einspeisung, auto: false, unten: false, offset: "5".into(), tx: f1(label.x), ty: f1(label.y), px: f1(a.x), py: f1(a.y), laenge: f1(x2 - a.x) }
+                // Positionierung aus OBJ Feld 15 (Bit 1 fest = kein Auto, Bit 0 Unten) und Feld 11 (Y Offset)
+                let (auto, unten) = (lage & crate::sammelschiene_lage::FEST == 0, lage & crate::sammelschiene_lage::UNTEN != 0);
+                Dlg3::BusbarObj { id, sliste, sel, einsp: set.einspeisung, auto, unten, offset: f1(*versatz), tx: f1(label.x), ty: f1(label.y), px: f1(a.x), py: f1(a.y), laenge: f1(x2 - a.x) }
             }
             Kind::Wire { leitung, bez, opts, .. } => Dlg3::Verbindung {
                 id,
@@ -916,24 +918,27 @@ impl App {
                 if let Some(r) = r {
                     self.project.anlagen[r.anlage].schienen.entry(name.clone()).or_default().einspeisung = einsp;
                 }
-                let off = num(&offset).unwrap_or(5.0);
+                let off = num(&offset).unwrap_or(0.0);
+                let abstand = self.opt.sms_abstand;
+                let schriftfeld = self.project.title_h();
+                let pfad = r.and_then(|r| self.project.anlagen.get(r.anlage)).map(|a| a.set.pfad_hoehe as f32 / 10.0).unwrap_or(COLUMN_BAR_H);
                 self.with_sheet(|s, _| {
-                    // Auto: unter (bzw. über) die anderen Sammelschienen des Blattes im Abstand "Y Offset"
-                    let others: Vec<f32> = s.objects.iter().filter(|o| o.id != id).filter_map(|o| if let Kind::Busbar { a, .. } = &o.kind { Some(a.y) } else { None }).collect();
                     if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
-                        if let Kind::Busbar { a, x2, name: n, label, .. } = &mut o.kind {
+                        if let Kind::Busbar { a, x2, name: n, label, lage, versatz, .. } = &mut o.kind {
                             *n = name.clone();
                             *label = P::new(num(&tx).unwrap_or(label.x), num(&ty).unwrap_or(label.y));
                             a.x = num(&px).unwrap_or(a.x);
                             a.y = num(&py).unwrap_or(a.y);
-                            if auto {
-                                let y = if unten { others.iter().cloned().fold(f32::MIN, f32::max) + off } else { others.iter().cloned().fold(f32::MAX, f32::min) - off };
-                                if y.is_finite() && y.abs() < 1000.0 {
-                                    a.y = y;
-                                }
-                            }
                             *x2 = a.x + num(&laenge).unwrap_or(*x2 - a.x).max(1.0);
+                            // Positionierung wie im Original: Auto = Stapel des Blattes (sammelschiene_lage.rs)
+                            *lage = (*lage & !3) | if auto { 0 } else { crate::sammelschiene_lage::FEST } | if unten { crate::sammelschiene_lage::UNTEN } else { 0 };
+                            *versatz = off;
                         }
+                    }
+                    if auto {
+                        let (oben, unten) = crate::sammelschiene_lage::stapel_anfang(s, pfad, schriftfeld);
+                        let lagen = crate::sammelschiene_lage::stapeln(s, abstand, oben, unten);
+                        crate::sammelschiene_lage::anwenden(s, &lagen);
                     }
                 });
                 crate::epr::update_busbar_xrefs(&mut self.project);

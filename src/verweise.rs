@@ -250,7 +250,7 @@ mod tests {
     }
 
     fn bus(x: f32, sms: u64, xin: &str, xout: &str) -> Kind {
-        Kind::Busbar { a: P::new(x, 40.0), x2: x + 100.0, name: "N".into(), label: P::default(), style: 0, sms, xin: xin.into(), xout: xout.into() }
+        Kind::Busbar { a: P::new(x, 40.0), x2: x + 100.0, name: "N".into(), label: P::default(), style: 0, sms, xin: xin.into(), xout: xout.into(), lage: 0, versatz: 0.0 }
     }
 
     fn projekt() -> Project {

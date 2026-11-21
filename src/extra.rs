@@ -844,21 +844,6 @@ impl App {
         self.selection = vec![id1, id2];
     }
 
-    /// Markierte Sammelschiene (waagerechte Leitung) an den unteren Rand über dem Schriftfeld legen.
-    pub fn busbar_down(&mut self) {
-        let Some((_, _, _, fy1)) = self.sheet().map(|s| s.frame()) else { return };
-        let target = self.snap(P::new(0.0, fy1 - TITLE_H - 5.0)).y;
-        let sel = self.selection.clone();
-        self.checkpoint();
-        self.with_sheet(|s, _| {
-            for o in s.objects.iter_mut().filter(|o| sel.contains(&o.id)) {
-                if let Kind::Wire { pts, .. } = &mut o.kind {
-                    let dy = target - pts[0].y;
-                    pts.iter_mut().for_each(|p| p.y += dy);
-                }
-            }
-        });
-    }
 
     /// Textgenerator: Betriebsmittelkennzeichnungen je Präfix neu nummerieren (Blatt, dann Strompfad, dann Höhe).
     pub fn regenerate_bmk(&mut self, whole_project: bool) {

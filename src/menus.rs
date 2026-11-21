@@ -61,10 +61,17 @@ impl App {
                         }
                     });
                 }
+                // Beschriftung je Lage wie im Original („Nach Oben“ bei einer unten gestapelten Schiene)
                 Eintrag::Sammelschiene => {
+                    let lage = match obj.as_ref().map(|o| &o.kind) {
+                        Some(Kind::Busbar { lage, .. }) => *lage,
+                        _ => 0,
+                    };
                     ui.menu_button("Sammelschiene", |ui| {
-                        if ui.button("Nach Unten").clicked() {
-                            self.busbar_down();
+                        if ui.button(crate::sammelschiene_lage::beschriftung(lage)).clicked() {
+                            if let Some(id) = ziel.id() {
+                                self.sammelschiene_umschalten(id);
+                            }
                             ui.close();
                         }
                     });

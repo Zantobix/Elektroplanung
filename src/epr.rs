@@ -403,6 +403,8 @@ fn busbar(k: &Block, names: &std::collections::HashMap<u64, String>) -> Option<K
         sms,
         xin: String::new(),
         xout: String::new(),
+        lage: k.data.get(0x3c).copied().unwrap_or(0) & 3,
+        versatz: k.data.get(0x2c..0x2e).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 10.0).unwrap_or(0.0),
     })
 }
 
