@@ -154,7 +154,26 @@ pub enum Kind {
     },
     /// Verweis (OBJ im Original): gefülltes Dreieck an `pos`, Spitze in Richtung `dir` (Grad, 0 = rechts,
     /// 90 = oben), Text an `text_pos`; `vertical` = Text hochkant.
-    Verweis { pos: P, text_pos: P, text: String, dir: u16, vertical: bool },
+    /// `ziel` = Sprungziel (OBJ Feld 8–13, Dialog "Ziel setzen").
+    Verweis {
+        pos: P,
+        text_pos: P,
+        text: String,
+        dir: u16,
+        vertical: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ziel: Option<VerweisZiel>,
+    },
+}
+
+/// Ziel eines Verweises wie im Original (OBJ Feld 8/9 Anlage, 10/11 Blatt, 12/13 Gegenverweis, jeweils als
+/// Kennung): hier über den Namen der Anlage, die Blattnummer und die Objekt-Id des Gegenverweises (0 = nur Blatt).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct VerweisZiel {
+    pub anlage: String,
+    pub blatt: u32,
+    #[serde(default)]
+    pub obj: u64,
 }
 
 /// Einstellungen eines Textes wie im Eigenschaftendialog des Originals (TTextbox).
@@ -667,6 +686,26 @@ impl Project {
 
     pub fn total_sheets(&self) -> usize {
         self.anlagen.iter().map(|a| a.sheets.len()).sum()
+    }
+
+    /// Blatt und Objekt mit der Id `id` (projektweit eindeutig).
+    pub fn find_obj(&self, id: u64) -> Option<(SheetRef, &Obj)> {
+        self.anlagen.iter().enumerate().find_map(|(ai, a)| {
+            a.sheets.iter().enumerate().find_map(|(si, s)| s.objects.iter().find(|o| o.id == id).map(|o| (SheetRef { anlage: ai, sheet: si }, o)))
+        })
+    }
+
+    /// Sprungziel eines Verweises: zuerst der Gegenverweis (Objekt-Id), sonst Anlage (Name) und Blatt (Nummer).
+    /// Rückgabe: Blatt und – falls vorhanden – Objekt-Id des Gegenverweises.
+    pub fn resolve_ziel(&self, z: &VerweisZiel) -> Option<(SheetRef, Option<u64>)> {
+        if z.obj != 0 {
+            if let Some((r, _)) = self.find_obj(z.obj) {
+                return Some((r, Some(z.obj)));
+            }
+        }
+        let ai = self.anlagen.iter().position(|a| a.name == z.anlage)?;
+        let si = self.anlagen[ai].sheets.iter().position(|s| s.number == z.blatt)?;
+        Some((SheetRef { anlage: ai, sheet: si }, None))
     }
 }
 

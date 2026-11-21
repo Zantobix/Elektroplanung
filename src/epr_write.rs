@@ -269,7 +269,7 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
             let created = crate::epr::delphi_from_text(&s.erstellt).unwrap_or(today);
             blk.data[112..120].copy_from_slice(&created.to_le_bytes());
             // Kennung des Blattes (Zeitstempel) neu vergeben
-            let stamp = crate::epr::delphi_from_text(&crate::model::today()).unwrap_or(0.0) + (s.number as f64) / 86_400.0;
+            let stamp = new_sheet_id(s);
             blk.data[72..80].copy_from_slice(&stamp.to_le_bytes());
         }
         if changed {
@@ -309,6 +309,11 @@ pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
         }
         let mut b = r.block.clone();
         patch(&mut b, &r.kind, &o.kind, o.pen);
+        if let (Kind::Verweis { ziel: alt, .. }, Kind::Verweis { ziel, .. }) = (&r.kind, &o.kind) {
+            if alt != ziel {
+                write_ziel(project, &mut b, ziel.as_ref());
+            }
+        }
         if b.is("ZCN") {
             let v = b.i32(15);
             b.set_i32(15, if o.fixed { v | 0x1_0000 } else { v & !0x1_0000 });
@@ -506,7 +511,7 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
             b.set_i32(3, to01(label.y));
             return;
         }
-        if let Kind::Verweis { pos, text_pos, text, dir, vertical } = new {
+        if let Kind::Verweis { pos, text_pos, text, dir, vertical, .. } = new {
             b.set_i32(6, to01(pos.x));
             b.set_i32(7, to01(pos.y));
             b.set_i32(2, to01(text_pos.x) - to01(pos.x));
@@ -515,17 +520,64 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
                 if ot != text {
                     set_child_text(b, "TIT", text);
                 }
-                if od != dir || ov != vertical {
-                    // Umkehrung der Import-Regel (crate::epr::verweis)
-                    let cross = b.i32(4) == 0x0101_ffff;
-                    let a = if cross { (*dir as i32 + 90) % 360 } else if *vertical { (*dir as i32 + 270) % 360 } else { *dir as i32 };
-                    b.set_i32(14, a * 10);
+                if od != dir || ov != vertical || ot.is_empty() != text.is_empty() {
+                    let (a, bit) = verweis_winkel(b.i32(4) == 0x0101_ffff, text.is_empty(), *dir, *vertical);
+                    b.set_i32(14, a);
                     let f = b.i32(15);
-                    b.set_i32(15, if *vertical && !cross { f | 1 } else { f & !1 });
+                    b.set_i32(15, if bit { f | 1 } else { f & !1 });
                 }
             }
         }
     }
+}
+
+/// Richtung eines Verweises für OBJ Feld 14 (0,1°) und Feld 15 Bit 0 – Umkehrung von `crate::epr::verweis`.
+pub fn verweis_winkel(cross: bool, ohne_text: bool, dir: u16, vertical: bool) -> (i32, bool) {
+    let d = dir as i32 % 360;
+    if ohne_text {
+        return ((d + 180) % 360 * 10, vertical);
+    }
+    if cross {
+        let a = (d + 90) % 360;
+        return (a * 10, vertical ^ (a == 180));
+    }
+    let a = if vertical { (d + 270) % 360 } else { d };
+    (a * 10, vertical)
+}
+
+/// Ziel eines Verweises in OBJ Feld 8–13 (Kennungen von Anlage, Blatt, Gegenverweis) und Feld 15 Byte 1
+/// (Ziel gesetzt) schreiben. Kennungen gibt es nur für Teile, die aus der .epr stammen (bzw. für neue Blätter
+/// die beim Speichern vergebene); was sich nicht auflösen lässt, bleibt 0.
+fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::VerweisZiel>) {
+    let id = |blk: &Block, at: usize| blk.data.get(at..at + 8).map(|d| u64::from_le_bytes(d.try_into().unwrap())).unwrap_or(0);
+    let mut ids = [0u64; 3];
+    if let Some(z) = ziel {
+        if let Some(a) = project.anlagen.iter().find(|a| a.name == z.anlage) {
+            ids[0] = a.raw.as_deref().map(|(blk, _)| id(blk, crate::epr::ANL_ID_AT)).unwrap_or(0);
+            if let Some(s) = a.sheets.iter().find(|s| s.number == z.blatt) {
+                ids[1] = match s.raw.as_deref() {
+                    Some(r) => id(&r.block, crate::epr::BLT_ID_AT),
+                    None => new_sheet_id(s).to_bits(),
+                };
+            }
+        }
+        if let Some((_, o)) = project.find_obj(z.obj).filter(|_| z.obj != 0) {
+            ids[2] = o.raw.as_deref().filter(|r| r.block.is("OBJ")).map(|r| id(&r.block, 0)).unwrap_or(0);
+        }
+    }
+    if b.data.len() < 64 {
+        b.data.resize(64, 0);
+    }
+    for (i, v) in ids.iter().enumerate() {
+        b.data[0x20 + i * 8..0x28 + i * 8].copy_from_slice(&v.to_le_bytes());
+    }
+    let f = b.i32(15) & !0xff00;
+    b.set_i32(15, f | if ids[0] != 0 { 0x100 } else { 0 });
+}
+
+/// Kennung eines neuen Blattes (Zeitstempel wie im Original, je Blattnummer eine Sekunde später).
+fn new_sheet_id(s: &Sheet) -> f64 {
+    crate::epr::delphi_from_text(&crate::model::today()).unwrap_or(0.0) + (s.number as f64) / 86_400.0
 }
 
 /// Texteinstellungen in ein Textelement (ZCN Typ 11) schreiben; unbekannte Bits bleiben erhalten.

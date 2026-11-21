@@ -1164,7 +1164,13 @@ impl App {
         }
 
         if inside && dbl && self.tool == Tool::Select {
-            if let Some(id) = self.hit_top(m, tol) {
+            // Verweis / Querverweis einer Sammelschiene: zum Ziel springen (Option "Doppelklick auf Verweise")
+            let top = self.hit_top(m, tol);
+            if self.verweis_doppelklick(top, m, tol) {
+                self.drag = Drag::None;
+                return;
+            }
+            if let Some(id) = top {
                 // mehrere markiert: gemeinsame Eigenschaften (Stift, Fixierung, Text)
                 self.props_command(id);
                 self.drag = Drag::None;

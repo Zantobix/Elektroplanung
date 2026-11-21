@@ -12,6 +12,15 @@ pub struct Page {
     pub z: f32,
     pub w_mm: f32,
     pub h_mm: f32,
+    /// Verknüpfungen (Verweise, Querverweise der Sammelschienen): Fläche in mm und Zielseite (Index in den Seiten)
+    pub links: Vec<Link>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Link {
+    pub mn: crate::model::P,
+    pub mx: crate::model::P,
+    pub page: usize,
 }
 
 /// Formen einer unsichtbaren Ebene einsammeln, die `draw` in diesem Bild gezeichnet hat.
@@ -42,6 +51,14 @@ pub fn render_sheets(
     let z = 10.0;
     let mut pages = vec![];
     let mut n = 0usize;
+    // ausgegebene Blätter in Seitenreihenfolge (Ziele der Verknüpfungen)
+    let refs: Vec<crate::model::SheetRef> = project
+        .anlagen
+        .iter()
+        .enumerate()
+        .flat_map(|(ai, a)| (0..a.sheets.len()).map(move |si| crate::model::SheetRef { anlage: ai, sheet: si }))
+        .filter(|r| take(*r))
+        .collect();
     for (ai, anlage) in project.anlagen.iter().enumerate() {
         for (si, sheet) in anlage.sheets.iter().enumerate() {
             if !take(crate::model::SheetRef { anlage: ai, sheet: si }) {
@@ -61,7 +78,14 @@ pub fn render_sheets(
             for j in canvas::junctions(sheet) {
                 painter.circle_filled(xf.s(j), 0.6 * z, Color32::BLACK);
             }
-            pages.push(Page { shapes: collect(ctx, layer), origin, z, w_mm: sw, h_mm: sh });
+            let links = crate::verweise::flaechen(project, crate::model::SheetRef { anlage: ai, sheet: si }, lib)
+                .into_iter()
+                .filter_map(|f| {
+                    let ziel = f.ziel.ok()?.blatt;
+                    Some(Link { mn: f.mn, mx: f.mx, page: refs.iter().position(|r| *r == ziel)? })
+                })
+                .collect();
+            pages.push(Page { shapes: collect(ctx, layer), origin, z, w_mm: sw, h_mm: sh, links });
             n += 1;
         }
     }
@@ -254,6 +278,9 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
             .fold("<<".to_string(), |a, b| a + " " + &b)
             + " >>",
     );
+    // Verknüpfungen als eigene Objekte hinter allen Seiten (Nummern ab 4 + 2n)
+    let mut annot_nr = 4 + 2 * n;
+    let mut annots: Vec<String> = vec![];
     for (i, pg) in pages.iter().enumerate() {
         let mut w = W { s: String::from("1 J 1 j\n"), page: pg };
         let page_rect = Rect::from_min_max(pg.origin, Pos2::new(pg.origin.x + pg.w_mm * pg.z, pg.origin.y + pg.h_mm * pg.z));
@@ -274,14 +301,24 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
             }
         }
         let content = w.s;
+        let mut refs = vec![];
+        for l in pg.links.iter().filter(|l| l.page < n) {
+            let (x0, x1) = (l.mn.x * PT_PER_MM, l.mx.x * PT_PER_MM);
+            let (y0, y1) = ((pg.h_mm - l.mx.y) * PT_PER_MM, (pg.h_mm - l.mn.y) * PT_PER_MM);
+            annots.push(format!("<< /Type /Annot /Subtype /Link /Rect [{x0:.2} {y0:.2} {x1:.2} {y1:.2}] /Border [0 0 0] /Dest [{} 0 R /Fit] >>", 4 + l.page * 2));
+            refs.push(format!("{annot_nr} 0 R"));
+            annot_nr += 1;
+        }
+        let annots_entry = if refs.is_empty() { String::new() } else { format!(" /Annots [{}]", refs.join(" ")) };
         objs.push(format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font 3 0 R >> /Contents {} 0 R >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font 3 0 R >> /Contents {} 0 R{annots_entry} >>",
             pg.w_mm * PT_PER_MM,
             pg.h_mm * PT_PER_MM,
             5 + i * 2
         ));
         objs.push(format!("<< /Length {} >>\nstream\n{}endstream", content.len(), content));
     }
+    objs.extend(annots);
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec();
     let mut offsets = vec![];
     for (i, o) in objs.iter().enumerate() {

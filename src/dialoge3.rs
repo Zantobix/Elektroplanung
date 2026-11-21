@@ -129,6 +129,14 @@ pub fn order_key(p: P, dir: usize) -> f32 {
     }
 }
 
+/// Verweise eines Blattes (Objekt-Id, Text) für die Auswahl "Verweislink".
+fn verweis_links(project: &Project, r: SheetRef) -> Vec<(u64, String)> {
+    project
+        .sheet(r)
+        .map(|s| s.objects.iter().filter_map(|o| if let Kind::Verweis { text, .. } = &o.kind { Some((o.id, text.clone())) } else { None }).filter(|(_, t)| !t.is_empty()).collect())
+        .unwrap_or_default()
+}
+
 impl App {
     /// Eigenschaften der Objektarten ohne eigenen Dialog in props.rs; true = Dialog geöffnet.
     pub fn open_props3(&mut self, id: u64) -> bool {
@@ -184,15 +192,20 @@ impl App {
                     ziel_wechsel: false,
                 }
             }
-            Kind::Verweis { text, dir, .. } => Dlg3::Verweis {
-                id,
-                anlagen: self.project.anlagen.iter().map(|a| a.name.clone()).collect(),
-                anlage: r.anlage,
-                blatt: r.sheet,
-                link: 0,
-                zu: *dir == 0 || *dir == 270,
-                titel: text.clone(),
-            },
+            Kind::Verweis { text, dir, ziel, .. } => {
+                // gesetztes Ziel vorwählen (Anlage, Blatt, Gegenverweis), sonst das eigene Blatt
+                let (blatt_ref, gegen) = ziel.as_ref().and_then(|z| self.project.resolve_ziel(z)).unwrap_or((r, None));
+                let link = gegen.and_then(|g| verweis_links(&self.project, blatt_ref).iter().position(|(i, _)| *i == g)).map(|i| i + 1).unwrap_or(0);
+                Dlg3::Verweis {
+                    id,
+                    anlagen: self.project.anlagen.iter().map(|a| a.name.clone()).collect(),
+                    anlage: blatt_ref.anlage,
+                    blatt: blatt_ref.sheet,
+                    link,
+                    zu: *dir == 0 || *dir == 270,
+                    titel: text.clone(),
+                }
+            }
             Kind::Image { a, b, path, mode, frame } => {
                 let mut grafiken: Vec<String> = self.project.bilder.iter().map(|b| format!("bld:{}", b.nr)).collect();
                 if !grafiken.contains(path) && !path.is_empty() {
@@ -572,24 +585,26 @@ impl App {
                 }
                 Dlg3::Verweis { anlagen, anlage, blatt, link, zu, titel, .. } => {
                     let blaetter: Vec<String> = self.project.anlagen.get(*anlage).map(|a| a.sheets.iter().map(|s| format!("[{}] {}", s.number, s.name)).collect()).unwrap_or_default();
-                    let links: Vec<String> = self
-                        .project
-                        .anlagen
-                        .get(*anlage)
-                        .and_then(|a| a.sheets.get(*blatt))
-                        .map(|s| s.objects.iter().filter_map(|o| if let Kind::Verweis { text, .. } = &o.kind { Some(text.clone()) } else { None }).filter(|t| !t.is_empty()).collect())
-                        .unwrap_or_default();
+                    // Eintrag 0 = nur das Blatt, danach die Verweise des Zielblattes
+                    let links: Vec<String> = std::iter::once("(nur Blatt)".to_string())
+                        .chain(verweis_links(&self.project, SheetRef { anlage: *anlage, sheet: *blatt }).into_iter().map(|(_, t)| t))
+                        .collect();
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Anlage");
-                        combo(ui, "vwanl", anlagen, anlage, 170.0);
+                        if combo(ui, "vwanl", anlagen, anlage, 170.0) {
+                            *blatt = 0;
+                            *link = 0;
+                        }
                     });
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Blatt");
-                        combo(ui, "vwblt", &blaetter, blatt, 170.0);
+                        if combo(ui, "vwblt", &blaetter, blatt, 170.0) {
+                            *link = 0;
+                        }
                     });
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Verweislink");
-                        if combo(ui, "vwlink", &links, link, 170.0) {
+                        if combo(ui, "vwlink", &links, link, 170.0) && *link > 0 {
                             if let Some(t) = links.get(*link) {
                                 *titel = t.clone();
                             }
@@ -1066,7 +1081,16 @@ impl App {
                     }
                 });
             }
-            Dlg3::Verweis { id, zu, titel, .. } => {
+            Dlg3::Verweis { id, anlage, blatt, link, zu, titel, .. } => {
+                // Ziel setzen; mit Verweislink wird der Gegenverweis wie im Original zurückverknüpft
+                let ziel_ref = SheetRef { anlage, sheet: blatt };
+                let gegen = link.checked_sub(1).and_then(|i| verweis_links(&self.project, ziel_ref).get(i).map(|(g, _)| *g));
+                if self.project.sheet(ziel_ref).is_some() {
+                    let msg = crate::verweise::verknuepfen(&mut self.project, id, ziel_ref, gegen);
+                    if let Some(m) = msg {
+                        self.info = m;
+                    }
+                }
                 self.with_sheet(|s, _| {
                     if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
                         if let Kind::Verweis { text, dir, .. } = &mut o.kind {

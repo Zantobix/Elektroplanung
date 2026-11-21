@@ -248,10 +248,16 @@ pub fn obj_bounds(o: &Obj, lib: &[SymDef]) -> (P, P) {
             None => (P::new(pos.x - 3.0, pos.y - 3.0), P::new(pos.x + 3.0, pos.y + 3.0)),
         },
         Kind::Terminal { pos, .. } => (P::new(pos.x - 1.2, pos.y - 1.2), P::new(pos.x + 1.2, pos.y + 1.2)),
-        Kind::Verweis { pos, text_pos, text, vertical, .. } => {
+        Kind::Verweis { pos, text_pos, text, dir, vertical, .. } => {
+            // Pfeil (in jeder Drehung ganz) und – falls vorhanden – Text
+            let (ta, tb) = pts_bounds(&verweis_triangle(*pos, *dir));
+            let (ta, tb) = (P::new(ta.x.min(pos.x - 0.5) - 0.3, ta.y.min(pos.y - 0.5) - 0.3), P::new(tb.x.max(pos.x + 0.5) + 0.3, tb.y.max(pos.y + 0.5) + 0.3));
+            if text.is_empty() {
+                return (ta, tb);
+            }
             let t = Obj { id: 0, kind: Kind::Text { pos: *text_pos, text: text.clone(), size: VERWEIS_TEXT, align: Align::Center, vertical: *vertical, style: Default::default() }, pen: 0, fixed: false, group: None, raw: None };
             let (a, b) = obj_bounds(&t, lib);
-            (P::new(a.x.min(pos.x - 1.0), a.y.min(pos.y - 1.0)), P::new(b.x.max(pos.x + 1.0), b.y.max(pos.y + 1.0)))
+            (P::new(a.x.min(ta.x), a.y.min(ta.y)), P::new(b.x.max(tb.x), b.y.max(tb.y)))
         }
     }
 }
@@ -611,7 +617,7 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             styled_line(p, &sp(&[t[0], t[1], t[2], t[0]]), stroke, style, z);
         }
         Kind::Circle { a, b } => styled_line(p, &sp(&ellipse(*a, *b, 64)), stroke, style, z),
-        Kind::Verweis { pos, text_pos, text, dir, vertical } => {
+        Kind::Verweis { pos, text_pos, text, dir, vertical, .. } => {
             let tri: Vec<Pos2> = verweis_triangle(*pos, *dir).iter().map(|q| xf.s(*q)).collect();
             p.add(Shape::convex_polygon(tri, tc, Stroke::NONE));
             let shown = dc.project.expand_placeholders(text);
