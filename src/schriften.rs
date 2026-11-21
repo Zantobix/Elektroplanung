@@ -97,6 +97,7 @@ fn ersatz(name: &str) -> &'static [&'static str] {
         "courier new" | "courier" | "consolas" | "lucida console" => &["liberation mono", "cousine", "dejavu sans mono", "courier new"],
         "calibri" => &["carlito", "liberation sans"],
         "cambria" => &["caladea", "liberation serif"],
+        "times new roman" | "times" => &["liberation serif", "tinos", "dejavu serif"],
         _ => &[],
     }
 }

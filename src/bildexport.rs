@@ -40,7 +40,7 @@ pub fn pixel_groesse(sheet: &Sheet, dpi: u32) -> (usize, usize) {
 }
 
 /// Bild eines Bildobjekts laden (Projektbild "bld:<Nummer>" oder Datei), wie die Zeichenfläche.
-fn bild_laden(project: &Project, path: &str) -> Option<ColorImage> {
+pub(crate) fn bild_laden(project: &Project, path: &str) -> Option<ColorImage> {
     let img = match path.strip_prefix("bld:").and_then(|n| n.parse::<i32>().ok()) {
         Some(nr) => project.bilder.iter().find(|b| b.nr == nr).and_then(|b| image::load_from_memory(&b.jpeg).ok()),
         None => image::open(path).ok(),
