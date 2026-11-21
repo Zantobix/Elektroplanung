@@ -184,8 +184,12 @@ nicht. Gemessen werden stattdessen:
   Reihenfolge, der Nachbau nach der Lage der Anschlüsse (oben vor rechts vor unten). Die Spalte "Funktion"
   bleibt leer (Klemmenfunktion wird noch nicht aus dem .epr gelesen); "Alter Klemmenplan" zeigt die
   8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken.
-- Neue Einstellungen der Dialoge (Tabellenkopf fett, Bildausrichtung, Verbindungsoptionen, Sammelschienen-
-  Einstellungen, Begrenzungslinien, Schriftfeldhöhe) speichert der Nachbau im eigenen Format (.epj); ihre
-  Ablage im .epr ist noch unbekannt.
+- Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
+  Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift) und
+  Klemmleisten, Blattart, Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Nur im
+  eigenen Format (.epj) bleiben: Bauteile samt Zuordnung, Platzhaltergruppen, Projektstatus, "Alter Klemmenplan",
+  Schriftfeld "Absolut", Schalter der Sammelschienen (Querverweise, Pfeile …), Tabellenkopf fett, Bildausrichtung,
+  Verbindungsoptionen und Schriftnamen je Text – ihre Ablage im .epr ist noch unbekannt; der Nachbau nennt sie
+  beim Speichern als .epr.
 - Querverweise auf andere Anlagen: Pfeilrichtung aus zwei Beispielen abgeleitet (siehe MECHANICS.md).
 - Hilfsprogramme zur Formatanalyse: `cargo run --example dump|vsy|sym|obj -- <datei.epr> …`.

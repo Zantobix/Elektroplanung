@@ -129,8 +129,8 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
             prj.kids.push(anlage_block(project, a, tpl_prj)?);
         }
     }
-    sync_names(&mut prj, "POT", &project.potentiale, tpl_prj);
-    sync_names(&mut prj, "LTG", &project.leitungen.iter().map(|l| l.name.clone()).collect::<Vec<_>>(), tpl_prj);
+    // Projekt-, Anlagen- und Blattwerte (Leitungen, Potentiale, Stifte, Schriftfeld, Strompfade …)
+    crate::epr_projekt::write(project, &mut prj);
     crate::epr_neu::nachbereiten(&mut prj);
     *out.root_mut("PRJ").unwrap() = prj;
     Ok(out)
@@ -159,31 +159,6 @@ fn edited_sym(project: &Project, k: &Block) -> Option<Block> {
         }
     }
     Some(nb)
-}
-
-/// Namenslisten (Potentiale, Leitungen) nachführen: vorhandene Blöcke umbenennen, fehlende anhängen,
-/// überzählige entfernen. Unveränderte Listen bleiben byteidentisch.
-fn sync_names(prj: &mut Block, tag: &str, names: &[String], tpl: &Block) {
-    let idx: Vec<usize> = prj.kids.iter().enumerate().filter(|(_, k)| k.is(tag)).map(|(i, _)| i).collect();
-    let template = prj.kids_of(tag).next().cloned().or_else(|| tpl.kids_of(tag).next().cloned());
-    let Some(template) = template else { return };
-    for (n, &i) in idx.iter().enumerate() {
-        if let Some(name) = names.get(n) {
-            if crate::epr::name20(&prj.kids[i]) != *name {
-                put_str(&mut prj.kids[i].data, 0, 20, name);
-            }
-        }
-    }
-    for &i in idx.iter().skip(names.len()).rev() {
-        prj.kids.remove(i);
-    }
-    let mut at = idx.last().map(|i| i + 1).unwrap_or(0).min(prj.kids.len());
-    for name in names.iter().skip(idx.len()) {
-        let mut b = Block { kids: vec![], ..template.clone() };
-        put_str(&mut b.data, 0, 20, name);
-        prj.kids.insert(at, b);
-        at += 1;
-    }
 }
 
 fn anlage_block(project: &Project, a: &Anlage, tpl_prj: &Block) -> Result<Block, String> {
@@ -307,6 +282,12 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
 
 /// Block für ein Objekt: Original unverändert, verschoben oder aus den Daten neu erzeugt.
 pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
+    let mut b = object_block_raw(project, o)?;
+    crate::epr_projekt::leitung_setzen(project, o, &mut b);
+    Some(b)
+}
+
+fn object_block_raw(project: &Project, o: &Obj) -> Option<Block> {
     if let Some(r) = o.raw.as_deref() {
         if r.kind == o.kind && r.pen == o.pen && r.fixed == o.fixed {
             return Some(r.block.clone());

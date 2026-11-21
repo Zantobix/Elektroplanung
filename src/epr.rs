@@ -194,7 +194,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
             set: AnlSettings {
                 kurz: txt_at(&a.data, 55, 66),
                 von: txt_at(&a.data, 66, 112),
-                znr: String::new(),
+                znr: txt_at(&a.data, 116, 136),
                 format: (a.i32(38), a.i32(39)),
                 raender: [a.i32(40), a.i32(41), a.i32(42), a.i32(43)],
                 pfade: a.i32(44),
@@ -289,6 +289,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
         }
     }
     p.next_id = next_id + 10;
+    crate::epr_projekt::import(prj, &mut p);
     Ok(p)
 }
 
@@ -300,7 +301,8 @@ fn drawing(k: &Block) -> Option<(Kind, usize)> {
     }
     let v = |i: usize| i32_at(e, i * 4);
     let pt = |i: usize| P::new(mm(v(2 * i)), mm(v(2 * i + 1)));
-    let pen = v(16).clamp(0, 3) as usize;
+    // Stift: 0–3 fest eingebaut, ab 4 eigene Stifte (PRJ › SIT Feld 8)
+    let pen = v(16).clamp(0, 255) as usize;
     let kind = match e[0x3c] {
         1 => Kind::Line { a: pt(0), b: pt(1) },
         2 => Kind::Curve { a: pt(0), c1: pt(1), c2: pt(2), b: pt(3) },
@@ -637,7 +639,7 @@ pub fn anl_settings(a: &Block) -> AnlSettings {
     AnlSettings {
         kurz: txt_at(&a.data, 55, 66),
         von: txt_at(&a.data, 66, 112),
-        znr: String::new(),
+        znr: txt_at(&a.data, 116, 136),
         format: (a.i32(38), a.i32(39)),
         raender: [a.i32(40), a.i32(41), a.i32(42), a.i32(43)],
         pfade: a.i32(44),
