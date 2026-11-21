@@ -158,10 +158,13 @@ nicht. Gemessen werden stattdessen:
 
 ## Bekannte Grenzen
 
-- Textboxen, Tabellen, Bilder und Klemmstellen, die im Nachbau **neu** angelegt werden, kann das `.epr`-Format
-  des Nachbaus noch nicht schreiben (vorhandene bleiben erhalten); der Nachbau meldet sie beim Speichern.
-- Eigene Schriftarten pro Text: Schnitt, Grad, Farbe und Unterstreichung werden geschrieben, der Schriftname
-  (Original: Zeiger in Feld 9) noch nicht; gezeichnet wird in Times wie die Projektschrift.
+- Klemmstellen, die im Nachbau **neu** angelegt werden, kann das `.epr`-Format des Nachbaus noch nicht schreiben
+  (vorhandene bleiben erhalten); der Nachbau meldet sie beim Speichern. Neue Textboxen, Tabellen, Bilder (samt
+  Projektbild), Verweise und Sammelschienen werden geschrieben (`src/epr_neu.rs`); ihr Aufbau folgt der
+  Speicherroutine des Originals, im Original geöffnet ist das Ergebnis noch nicht geprüft
+  (`cargo run --example neu_objekte` erzeugt eine Testdatei).
+- Eigene Schriftarten pro Text: Schnitt, Grad, Farbe, Unterstreichung und Schriftname (STR nach dem STL) werden
+  gelesen und geschrieben; gezeichnet wird aber in Times wie die Projektschrift.
 - Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
   füllt das Original zur Laufzeit – der Nachbau listet die markierten Objekte.
 - Symboleditor: Parameter (PRA) werden nicht bearbeitet; Freigaben eines Symbols gelten als Vorgabe für neu

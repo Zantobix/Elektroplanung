@@ -345,19 +345,22 @@ fn drawing(k: &Block) -> Option<(Kind, usize)> {
                 underline: (v(7) >> 8) & 0xff != 0,
                 color: if (0..=0xff_ffff).contains(&col) { [(col & 0xff) as u8, ((col >> 8) & 0xff) as u8, ((col >> 16) & 0xff) as u8] } else { [0, 0, 0] },
                 rotation: v(5) as i16,
-                wrap: false,
+                wrap: e[0x3c] == 11 && crate::epr_neu::text_extras(k).0,
                 rect: Some((mn, mx)),
-                font: String::new(),
+                font: if e[0x3c] == 11 { crate::epr_neu::text_extras(k).1 } else { String::new() },
             };
             let pos = text_anchor(mn, mx, align, vertical);
-            Kind::Text { pos, text, size, align, vertical, style }
+            crate::epr_neu::als_textbox(Kind::Text { pos, text, size, align, vertical, style })
         }
         // Tabelle: Feld 0–3 Rechteck, 4 Spalten, 5 Zeilen, Zellen zeilenweise im STR-Unterblock (0-getrennt)
         13 => {
             let (mn, mx) = crate::canvas::norm_rect(pt(0), pt(1));
             let cells: Vec<String> = k.kid("STR").map(|n| table_cells(&n.data)).unwrap_or_default();
-            Kind::Table { a: mn, b: mx, rows: v(5).clamp(1, 500) as usize, cols: v(4).clamp(1, 50) as usize, cells, header: false, fixed_w: false }
+            let (header, fixed_w) = crate::epr_neu::tabelle_flags(k);
+            Kind::Table { a: mn, b: mx, rows: v(5).clamp(1, 500) as usize, cols: v(4).clamp(1, 50) as usize, cells, header, fixed_w }
         }
+        // Bild: Projektbild Feld 4, Rahmen/Ausrichtung Feld 5 (siehe epr_neu)
+        12 => crate::epr_neu::bild_lesen(k),
         _ => return None,
     };
     Some((kind, pen))

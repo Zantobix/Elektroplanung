@@ -205,3 +205,19 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Querverweis (Feld 4 = 0x0101FFFF): hochkant = Bit 0 XOR (Feld 14 = 1800); ohne Text gilt Bit 0 unverändert.
   Drehen (R) um die Pfeilspitze: Richtung −90°, Text wechselt waagerecht/hochkant.
 - PDF: Verweise und Sammelschienen-Querverweise sind Verknüpfungen (/Link, /Dest auf die Zielseite).
+
+## Nachtrag 21.11.2026 (2) – neue Blattobjekte im .epr (aus der Speicherroutine 0x424b8f ff. und dem Eigenschaftendialog)
+- Speichern je Blattelement: ZCN (immer 0x50 Byte), dann Typ 11: STL (Text als TStringList, Zeilen mit CR LF) und –
+  falls ein eigener Schriftname gesetzt ist – **STR = Schriftname** (Feld 9 = Zeiger darauf zur Laufzeit);
+  Typ 13: STR (Zellen, je 0-terminiert); Typ 6: STR (Text). **Typ 12 = Bild** ohne Unterblöcke. Jeder Unterblock mit END.
+- Werkzeuge (Knopf-Tag = Elementtyp): Textbox = 11 (2 Klicks), Bild = 12, Tabelle = 13; im Symboleditor wird aus
+  Klemmstelle 7 und Textbox 8 (Anschluss, Text).
+- Text (Typ 11): Feld 6 Byte 1 = Umbruch (Dialog TTextbox: Rahmen +0x1a, Umbruch +0x19, Ausrichtung +0x18, Drehung +0x14).
+- Bild (Typ 12): Feld 0–3 Rechteck, Feld 4 = Nummer des Projektbildes (BLD Feld 5), Feld 5 Byte 0 Rahmen,
+  Byte 1 Ausrichtung (0 Zentriert, 1 Eingepasst, 2 Gestreckt), Feld 15 Bit 16 Fixiert.
+- Tabelle (Typ 13): Feld 6 „Ab“, Feld 9 Byte 0 Überschrift, Byte 1 Autobreite, Byte 2 Art (Benutzerdaten/Inhaltsverzeichnis).
+- OBJ (0x40 Byte): Feld 4 Wort 0 = 0xFFFF, Byte 2 Art (0 Sammelschiene, 1 Verweis, 2 Klemmstelle), Byte 3 = 1 Ziel in
+  anderer Anlage; Feld 5 Byte 0 (1 Sammelschiene, 2 Verweis); Verweis-Vorgabe Textversatz (0, −6 mm). Unterblock TIT = Text.
+- VBG: Feld 2/3 und 6/7 = Kennungen der verbundenen Objekte, 10/11 eigene Kennung (fortlaufende Zeitstempel), 13 Leitung.
+  BZD (44 Byte): 0/1 Versatz, 3/4 und 5/6 Punkt, 9/10 meist 80/2 (Bedeutung offen).
+- Neue Kennungen (OBJ, VBG, SMS, ANL Byte 0x88) vergibt der Nachbau als Delphi-Zeitstempel im Millisekundenabstand.

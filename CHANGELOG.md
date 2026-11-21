@@ -9,6 +9,16 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Neu:
+- .epr: neu angelegte Textboxen, Tabellen (Überschrift/Autobreite), Bilder (Bilddatei wird Projektbild, über
+  64 KB geteilt), Verweise samt Ziel und Gegenverweis sowie Sammelschienen (neue Schiene in der Anlage) werden
+  geschrieben; neue Verbindungen mit Leitung und Verbindungsbezeichnungen, neue Symbole mit Zähler,
+  Alternativtexten und Parametern, neue Zeichenelemente mit „Fixiert“
+- .epr: Schriftname und Umbruch von Texten, Bilder auf dem Blatt (Typ 12) und Tabelleneinstellungen werden gelesen
+
+Behoben:
+- .epr: Verschieben eines Textes oder einer Tabelle veränderte Schriftgrad bzw. Spalten/Zeilen im Originalblock
+
 ## [0.1.2]
 
 Neu:

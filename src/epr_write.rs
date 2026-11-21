@@ -91,6 +91,8 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
         }
     }
     SYM_IDS.with(|m| *m.borrow_mut() = ids);
+    // Kennungen, Projektbilder und Schienen für neue Blattobjekte (epr_neu)
+    crate::epr_neu::vorbereiten(project, &base);
 
     // Unterblöcke des Projekts in Originalreihenfolge; Anlagen an der Stelle der ersten Anlage
     let mut anl_done = false;
@@ -129,6 +131,7 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
     }
     sync_names(&mut prj, "POT", &project.potentiale, tpl_prj);
     sync_names(&mut prj, "LTG", &project.leitungen.iter().map(|l| l.name.clone()).collect::<Vec<_>>(), tpl_prj);
+    crate::epr_neu::nachbereiten(&mut prj);
     *out.root_mut("PRJ").unwrap() = prj;
     Ok(out)
 }
@@ -314,13 +317,16 @@ pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
                 write_ziel(project, &mut b, ziel.as_ref());
             }
         }
+        crate::epr_neu::patch_more(project, o, &r.kind, &mut b);
         if b.is("ZCN") {
             let v = b.i32(15);
             b.set_i32(15, if o.fixed { v | 0x1_0000 } else { v & !0x1_0000 });
         }
         return Some(b);
     }
-    new_block(project, o)
+    let mut b = new_block(project, o)?;
+    crate::epr_neu::nachfuehren(project, o, &mut b);
+    Some(b)
 }
 
 /// Verschiebung zwischen zwei Formen gleicher Art, falls sich nur die Lage geändert hat.
@@ -355,7 +361,9 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
     let shift = pure_shift(old, new);
     if b.is("ZCN") {
         if let Some(d) = shift {
-            for i in 0..8 {
+            // Texte, Bilder und Tabellen haben nur zwei Punkte (Feld 4–7 sind Schrift, Spalten …)
+            let n = if matches!(b.data.get(0x3c), Some(6 | 11 | 12 | 13)) { 4 } else { 8 };
+            for i in 0..n {
                 let v = b.i32(i);
                 b.set_i32(i, v + if i % 2 == 0 { to01(d.x) } else { to01(d.y) });
             }
@@ -548,12 +556,12 @@ pub fn verweis_winkel(cross: bool, ohne_text: bool, dir: u16, vertical: bool) ->
 /// Ziel eines Verweises in OBJ Feld 8–13 (Kennungen von Anlage, Blatt, Gegenverweis) und Feld 15 Byte 1
 /// (Ziel gesetzt) schreiben. Kennungen gibt es nur für Teile, die aus der .epr stammen (bzw. für neue Blätter
 /// die beim Speichern vergebene); was sich nicht auflösen lässt, bleibt 0.
-fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::VerweisZiel>) {
+pub(crate) fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::VerweisZiel>) {
     let id = |blk: &Block, at: usize| blk.data.get(at..at + 8).map(|d| u64::from_le_bytes(d.try_into().unwrap())).unwrap_or(0);
     let mut ids = [0u64; 3];
     if let Some(z) = ziel {
         if let Some(a) = project.anlagen.iter().find(|a| a.name == z.anlage) {
-            ids[0] = a.raw.as_deref().map(|(blk, _)| id(blk, crate::epr::ANL_ID_AT)).unwrap_or(0);
+            ids[0] = a.raw.as_deref().map(|(blk, _)| id(blk, crate::epr::ANL_ID_AT)).unwrap_or_else(|| crate::epr_neu::anlage_kennung(project, a));
             if let Some(s) = a.sheets.iter().find(|s| s.number == z.blatt) {
                 ids[1] = match s.raw.as_deref() {
                     Some(r) => id(&r.block, crate::epr::BLT_ID_AT),
@@ -562,7 +570,7 @@ fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::Verw
             }
         }
         if let Some((_, o)) = project.find_obj(z.obj).filter(|_| z.obj != 0) {
-            ids[2] = o.raw.as_deref().filter(|r| r.block.is("OBJ")).map(|r| id(&r.block, 0)).unwrap_or(0);
+            ids[2] = crate::epr_neu::kennung(o);
         }
     }
     if b.data.len() < 64 {
@@ -722,8 +730,8 @@ fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             b.set_i32(16, o.pen as i32);
             Some(b)
         }
-        // Textbox, Tabelle, Bild und Klemmstelle haben im Original eigene Formate, die der Nachbau noch nicht schreibt
-        _ => None,
+        // Textbox, Tabelle, Bild, Verweis, Sammelschiene (Klemmstelle: noch nicht)
+        _ => crate::epr_neu::new_block(project, o),
     }
 }
 
