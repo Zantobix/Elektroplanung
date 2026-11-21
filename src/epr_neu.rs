@@ -372,6 +372,7 @@ pub fn nachfuehren(project: &Project, o: &Obj, b: &mut Block) {
             b.data[40..48].copy_from_slice(&kennung(o).to_le_bytes());
             b.set_i32(13, leitung_id(project, *leitung));
             bezeichnungen(b, bez);
+            verweis_enden(project, o, b);
         }
     }
     if b.is("VSY") {
@@ -384,6 +385,36 @@ pub fn nachfuehren(project: &Project, o: &Obj, b: &mut Block) {
             b.set_i32(38, ext.counter);
             // ALT/SPA neu aufbauen (ersetzt vorhandene, z. B. schon vom Patch geschriebene – nie doppelt)
             crate::parameter::sync_vsy_kids(b, &ext.params, &ext.texts);
+        }
+    }
+}
+
+/// VBG-Feld der Kennung am Anfang (Feld 2/3, Anschlussnummer Feld 4) bzw. Ende (Feld 6/7, Anschluss Feld 8).
+pub const VBG_ENDEN: [usize; 2] = [2, 6];
+
+/// Leitungsenden an der Pfeilspitze eines Verweises: Kennung des Verweises (OBJ Feld 0/1) in VBG Feld 2/3 bzw.
+/// 6/7, Anschluss 0 in Feld 4 bzw. 8 – so verweisen die Verbindungen in W2 auf Klemmstellen und Sammelschienen
+/// (ebenfalls OBJ-Blöcke). Ein Ende, das einen Verweis dieses Blattes verlassen hat, verliert die Kennung.
+fn verweis_enden(project: &Project, o: &Obj, b: &mut Block) {
+    let Kind::Wire { pts, .. } = &o.kind else { return };
+    let Some(sheet) = project.find_obj(o.id).and_then(|(r, _)| project.sheet(r)) else { return };
+    let verweise: Vec<(P, u64)> = sheet.objects.iter().filter_map(|v| if let Kind::Verweis { pos, .. } = &v.kind { Some((*pos, kennung(v))) } else { None }).collect();
+    for (ende, feld) in [pts.first(), pts.last()].into_iter().zip(VBG_ENDEN) {
+        let Some(p) = ende else { continue };
+        let at = feld * 4;
+        if b.data.len() < at + 12 {
+            continue;
+        }
+        match verweise.iter().find(|(q, k)| *k != 0 && q.dist(*p) <= 0.05) {
+            Some((_, k)) => {
+                b.data[at..at + 8].copy_from_slice(&k.to_le_bytes());
+                b.set_i32(feld + 2, 0);
+            }
+            None if verweise.iter().any(|(_, k)| *k != 0 && *k == id_at(b, at)) => {
+                b.data[at..at + 8].fill(0);
+                b.set_i32(feld + 2, 0);
+            }
+            None => {}
         }
     }
 }
@@ -457,12 +488,15 @@ pub fn patch_more(project: &Project, o: &Obj, old: &Kind, b: &mut Block) {
         }
     }
     if b.is("VBG") {
-        if let (Kind::Wire { leitung, bez, .. }, Kind::Wire { leitung: ol, bez: ob, .. }) = (&o.kind, old) {
+        if let (Kind::Wire { leitung, bez, pts, .. }, Kind::Wire { leitung: ol, bez: ob, pts: op, .. }) = (&o.kind, old) {
             if leitung != ol {
                 b.set_i32(13, leitung_id(project, *leitung));
             }
             if bez != ob {
                 bezeichnungen(b, bez);
+            }
+            if (pts.first(), pts.last()) != (op.first(), op.last()) {
+                verweis_enden(project, o, b);
             }
         }
     }

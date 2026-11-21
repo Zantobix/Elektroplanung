@@ -194,7 +194,8 @@ pub fn obj_pins(o: &Obj, lib: &[SymDef]) -> Vec<P> {
                     .collect()
             })
             .unwrap_or_default(),
-        Kind::Terminal { pos, .. } => vec![*pos],
+        // Verweis: Anschluss an der Pfeilspitze (im Original lassen sich Leitungen anschließen)
+        Kind::Terminal { pos, .. } | Kind::Verweis { pos, .. } => vec![*pos],
         Kind::Wire { pts, .. } => {
             let mut v = vec![];
             if let Some(f) = pts.first() {
@@ -220,22 +221,8 @@ pub fn obj_bounds(o: &Obj, lib: &[SymDef]) -> (P, P) {
         }
         Kind::Wire { pts, .. } => pts_bounds(pts),
         Kind::Busbar { a, x2, .. } => (P::new(a.x, a.y - 0.6), P::new(*x2, a.y + 0.6)),
-        Kind::Text { pos, text, size, align, vertical, .. } => {
-            let longest = text.lines().map(|l| l.chars().count()).max().unwrap_or(1).max(1) as f32;
-            let w = longest * size * 0.5;
-            let h = text.lines().count().max(1) as f32 * size * 1.15;
-            let (w, h) = if *vertical { (h, w) } else { (w, h) };
-            let x0 = match align {
-                Align::Left => pos.x,
-                Align::Center => pos.x - w / 2.0,
-                Align::Right => pos.x - w,
-            };
-            if *vertical {
-                (P::new(pos.x - w / 2.0, pos.y - h), P::new(pos.x + w / 2.0, pos.y))
-            } else {
-                (P::new(x0, pos.y - h / 2.0), P::new(x0 + w, pos.y + h / 2.0))
-            }
-        }
+        // so groß, wie der Text gezeichnet wird (Schriftmaße der Times, Textbox), siehe textmass.rs
+        Kind::Text { pos, text, size, align, vertical, style } => crate::textmass::text_umriss(*pos, text, *size, *align, *vertical, style),
         Kind::Poly { pts } => pts_bounds(pts),
         Kind::Symbol { pos, ext: SymExt { bounds: Some((a, b)), .. }, .. } => (pos.add(*a), pos.add(*b)),
         Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, .. } => match symbols::find(lib, key) {

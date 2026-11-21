@@ -205,7 +205,7 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   anzeigen / Eigenschaften. Der Nachbau springt ebenso bei Doppelklick auf die Querverweistexte der Sammelschienen
   ("Blatt/Pfad", vorige/nächste Stelle der Schiene) – dafür gibt es im Original keinen Beleg.
 - Querverweis (Feld 4 = 0x0101FFFF): hochkant = Bit 0 XOR (Feld 14 = 1800); ohne Text gilt Bit 0 unverändert.
-  Drehen (R) um die Pfeilspitze: Richtung −90°, Text wechselt waagerecht/hochkant.
+  Drehen (R) um die Pfeilspitze: Richtung −90°, der Text bleibt an seiner Stelle (siehe Nachtrag (3)).
 - PDF: Verweise und Sammelschienen-Querverweise sind Verknüpfungen (/Link, /Dest auf die Zielseite).
 
 ## Nachtrag 21.11.2026 – Klemmstellen, Klemmleisten, Klemmplan
@@ -250,3 +250,18 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - VBG: Feld 2/3 und 6/7 = Kennungen der verbundenen Objekte, 10/11 eigene Kennung (fortlaufende Zeitstempel), 13 Leitung.
   BZD (44 Byte): 0/1 Versatz, 3/4 und 5/6 Punkt, 9/10 meist 80/2 (Bedeutung offen).
 - Neue Kennungen (OBJ, VBG, SMS, ANL Byte 0x88) vergibt der Nachbau als Delphi-Zeitstempel im Millisekundenabstand.
+
+## Nachtrag 21.11.2026 (3) – Vormarkierung, Zeiger, Textmaße, Leitungen an Verweisen
+- VBG Feld 2/3 (Anfang) und 6/7 (Ende) = Kennung des verbundenen Objekts: VSY Byte 96 bei Symbolen, OBJ Feld 0/1
+  bei Klemmstellen und Sammelschienen; Feld 4 bzw. 8 = Anschlussnummer (Klemmstelle 0), −1 = Ende auf einer anderen
+  Leitung (W2: 364 Verbindungen an OBJ-Blöcken). In W2 hängt keine Leitung an einem Verweis; der Nachbau schreibt
+  für Enden an der Pfeilspitze eines Verweises dessen OBJ-Kennung und Anschluss 0 (`epr_neu::verweis_enden`).
+- Verweis drehen: nur die Richtung (Feld 14) ändert sich, der Text bleibt an seiner Stelle (Feld 2/3 relativ zur
+  Pfeilspitze, die beim Drehen stehen bleibt).
+- Symbol vergrößern (VSY Feld 19): Titel (10/11) und Wert (13/14) bleiben auf dem Blatt stehen, ihr Versatz zur
+  Lage wird angepasst. Text vergrößern: Schriftgrad (ZCN Feld 4) und Textbox (Feld 0–3) wachsen gemeinsam.
+- Textmaße (`textmass.rs`): egui 0.37 setzt die Schriftgröße = Geviert, Zeilenhöhe = (Ober- + Unterlänge +
+  Zeilenabstand) ≈ 1,15 Geviert bei Times New Roman; Breiten aus der Times-Metrik. Umriss = Textbox ∪ Schrift.
+- Vormarkierung (`hover.rs`): gestricheltes Rechteck um das Objekt unter der Maus, Zeiger Pfeil + Verschiebekreuz
+  bzw. Pfeil + „A“ (Bildschirmfotos des Originals); Reihenfolge wie beim Drücken (Griffe, Ecken, Titel/Wert,
+  Anschluss, Sammelschienen-Querverweis, oberstes Objekt).
