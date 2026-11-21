@@ -784,15 +784,16 @@ impl App {
         });
     }
 
-    /// Rahmen zur Größenänderung um die Markierung: bei mindestens zwei Objekten oder einem Symbol/Text
-    /// (einzelne Zeichenelemente behalten ihre Eckgriffe). Umriss (min, max) in mm.
+    /// Rahmen zur Größenänderung um eine Mehrfachmarkierung, die Zeichenelemente enthält (einzelne
+    /// Zeichenelemente behalten ihre Eckgriffe; Symbole, Texte, Klemmstellen und Verweise allein bekommen
+    /// keinen Rahmen – ihre Größe ändert man über die Eigenschaften). Umriss (min, max) in mm.
     pub fn sel_frame(&self) -> Option<(P, P)> {
         if !self.size_frame || self.tool != Tool::Select || self.placing.is_some() {
             return None;
         }
         let objs = self.selected_objs();
-        let single = objs.len() == 1 && matches!(objs[0].kind, Kind::Symbol { .. } | Kind::Text { .. });
-        if objs.len() < 2 && !single {
+        let drawing = |o: &Obj| !matches!(o.kind, Kind::Symbol { .. } | Kind::Text { .. } | Kind::Terminal { .. } | Kind::Verweis { .. });
+        if objs.len() < 2 || !objs.iter().any(drawing) {
             return None;
         }
         let pts: Vec<P> = objs.iter().flat_map(|o| { let (a, b) = canvas::obj_bounds(o, &self.lib); [a, b] }).collect();
