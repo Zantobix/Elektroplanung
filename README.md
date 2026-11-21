@@ -165,14 +165,19 @@ nicht. Gemessen werden stattdessen:
   (`cargo run --example neu_objekte` erzeugt eine Testdatei).
 - Schriftname je Text (STR nach dem STL, sonst die Standardschrift des Projekts): Zeichenfläche und Bildexport
   zeichnen mit der installierten Schrift (gesucht über die Namenstabelle der Schriftdateien in den Schriftordnern
-  des Systems, unter Linux mit metrisch gleichen Ersatzschriften wie Liberation; fehlt sie, Times). Das PDF bettet
+  des Systems – Windows: Fonts und Benutzerschriften; Linux: XDG-Ordner wie /usr/share/fonts und
+  ~/.local/share/fonts, ohne fontconfig, mit metrisch gleichen Ersatzschriften wie Liberation; macOS:
+  /System/Library/Fonts, /Library/Fonts, ~/Library/Fonts). Fehlt die Schrift, wird Times gezeichnet. Das PDF bettet
   keine Schrift ein, sondern nimmt die Standardschriften Times, Helvetica (Arial, Segoe UI, Tahoma …) und
   Courier (Courier New, Consolas …).
 - Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
   füllt das Original zur Laufzeit – der Nachbau listet die markierten Objekte.
 - Symboleditor: Stifte des Symbols (SIT, Nummer ab 4) lassen sich anlegen, ändern, löschen und Elementen
-  zuweisen und werden ins `.epr` geschrieben; Freigaben eines Symbols gelten als Vorgabe für neu gesetzte
-  Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
+  zuweisen und werden ins `.epr` geschrieben. Die Freigaben eines Symbols (Querverweise, Sicherungsübersicht,
+  SYM Byte 112, Bit 0/1, an W2.epr ermittelt) werden gelesen und geschrieben und gelten als Vorgabe für neu
+  gesetzte Symbole; in der Symbolbibliothek (Symbole.tfi) ist ihre Ablage noch unbekannt.
+- Schriftfeld bearbeiten: Linien, Texte (bis 8 Zeilen) und Logo werden grafisch bearbeitet und ins `.epr`
+  geschrieben (FUS › GRS/STR); unbekannte Elementarten des Originals bleiben angehängt erhalten.
 - Symboleigenschaften: Die Rackposition wird nur im eigenen Format (`.epj`) gespeichert; ihr Ablageort im
   VSY-Block ist unbekannt (SPA enthält die Parameterwerte).
 - Tabelle › Daten „Inhaltsverzeichnis“ füllt die Tabelle beim Bearbeiten mit den Blättern der Anlage; sie wird
