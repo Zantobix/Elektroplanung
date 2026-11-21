@@ -62,7 +62,10 @@ fn drehen_und_ziel_ins_originalformat() {
     for schritt in 1..=4 {
         let mut erwartet = vec![];
         for o in p.anlagen.iter_mut().flat_map(|a| a.sheets.iter_mut()).flat_map(|s| s.objects.iter_mut()).filter(|o| ids.contains(&o.id)) {
+            let vorher = matches!(o.kind, Kind::Verweis { vertical: true, .. });
             verweise::drehen(&mut o.kind, 1);
+            // der Text dreht nicht mit (bleibt waagerecht bzw. hochkant wie zuvor)
+            assert_eq!(matches!(o.kind, Kind::Verweis { vertical: true, .. }), vorher);
             if o.id == ids[0] {
                 if let Kind::Verweis { ziel, .. } = &mut o.kind {
                     *ziel = Some(neu_ziel.clone());
@@ -79,7 +82,7 @@ fn drehen_und_ziel_ins_originalformat() {
             // Lage, Richtung, Hochkant und Ziel überstehen Speichern + Laden (Objekt-Ids werden neu vergeben)
             let gleich = |a: &Kind, b: &Kind| match (a, b) {
                 (Kind::Verweis { pos, text_pos, text, dir, vertical, ziel }, Kind::Verweis { pos: p2, text_pos: t2, text: x2, dir: d2, vertical: v2, ziel: z2 }) => {
-                    pos.dist(*p2) < 0.01 && text_pos.dist(*t2) < 0.06 && text == x2 && dir == d2 && (vertical == v2 || text.is_empty()) && ziel.as_ref().map(|z| (&z.anlage, z.blatt)) == z2.as_ref().map(|z| (&z.anlage, z.blatt))
+                    pos.dist(*p2) < 0.01 && text_pos.dist(*t2) < 0.06 && text == x2 && dir == d2 && vertical == v2 && ziel.as_ref().map(|z| (&z.anlage, z.blatt)) == z2.as_ref().map(|z| (&z.anlage, z.blatt))
                 }
                 _ => false,
             };

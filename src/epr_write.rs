@@ -387,7 +387,13 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
         return;
     }
     if b.is("VSY") {
-        if let Kind::Symbol { pos, rot, mirror_h, mirror_v, bmk, value, scale, option, title, flags, ext, .. } = new {
+        if let Kind::Symbol { key, pos, rot, mirror_h, mirror_v, bmk, value, scale, option, title, flags, ext } = new {
+            // auf eine andere Symboldefinition umgestellt ("Nur dieses" im Symboleditor): Kennung des SYM-Blocks
+            if matches!(old, Kind::Symbol { key: ok, .. } if ok != key) && b.data.len() >= 112 {
+                if let Some(id) = SYM_IDS.with(|m| m.borrow().get(key).copied()) {
+                    b.data[104..112].copy_from_slice(&id.to_le_bytes());
+                }
+            }
             b.set_i32(23, *flags as i32);
             let old_ext = if let Kind::Symbol { ext, .. } = old { Some(ext.clone()) } else { None };
             if old_ext.as_ref() != Some(ext) {

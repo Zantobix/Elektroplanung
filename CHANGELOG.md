@@ -26,11 +26,18 @@ Neu:
 - Sammelschienenassistent wie im Original (L1, L2, L3, N, PE, vorhandene Schienen werden wiederverwendet)
 - Bauteil zuordnen: neues Bauteil direkt aus dem Dialog anlegen
 - Variantenrad beim Setzen von Symbolen mit mehreren Bildern (wie im Original; abschaltbar in den Optionen)
-- Querverweise: Doppelklick springt zum Ziel (auch Querverweistexte von Sammelschienen), Verweise lassen sich
-  drehen, das Ziel wird gespeichert; im PDF sind Querverweise anklickbar
+- Querverweise: Strg+Klick (Hand als Mauszeiger) bzw. Doppelklick springt zum Ziel (auch Querverweistexte von
+  Sammelschienen), Verweise lassen sich drehen (der Text bleibt waagerecht), das Ziel wird gespeichert; im PDF
+  sind Querverweise anklickbar
 - Option „Rasterdarstellung“: Stärke des Rasters (Hell, Mittel, Kräftig oder eigene Farbe)
+- Symbole und Texte lassen sich mit dem Rahmen proportional vergrößern/verkleinern (einzeln über Eckgriffe)
+- Titel (BMK) und Wert eines markierten Symbols lassen sich einzeln mit der Maus verschieben
+- Symbol bearbeiten: Änderung auf alle Symbole dieses Typs oder nur auf das bearbeitete übernehmen (eigene Kopie)
 
 Behoben / geändert wie im Original:
+- Variantenrad: Bilder gleichmäßig auf dem Ring, auf die Ringbreite verkleinert und um ihre Mitte zentriert
+  (auch bei bis zu 12 Bildern ohne Überlappung); im Loch das gewählte Bild
+- Rasterfang: der Gitterknopf schaltet den Rasterfang ein/aus; „Kein“ entfällt in der Rasterauswahl
 - Strompfadausrichtung richtet Symbole beim Setzen und Verschieben auf die Mitte des Strompfads aus
 - Automatische Verbindungen ziehen Leitungen von freien Anschlüssen; Symbole auf einer Leitung trennen sie auf
 - Gedrückt halten von S/A kehrt Strompfadausrichtung/automatische Verbindungen vorübergehend um, Umschalt
