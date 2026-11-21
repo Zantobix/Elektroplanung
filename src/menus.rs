@@ -276,7 +276,8 @@ impl App {
                 let hat = ext.eigentuemer != 0;
                 ui.menu_button("Eigentümer", |ui| {
                     if ui.button("Eigenschaften").clicked() {
-                        self.edit_props(id);
+                        // wie Eigentmer1Click: Auswahl des Eigentümers (TSOwner)
+                        self.open_eigentuemer_dialog(id);
                         ui.close();
                     }
                     let any_sym = self.selected_objs().iter().any(|o| matches!(o.kind, Kind::Symbol { .. }));
