@@ -470,6 +470,7 @@ impl Server {
                 let mut warnings = vec![];
                 if fmt == "epr" {
                     warnings = crate::epr_write::unsupported(&self.project);
+                    warnings.extend(crate::epr_projekt::nicht_gespeichert(&self.project));
                     crate::epr_write::save(&self.project, &path)?;
                 } else {
                     let s = serde_json::to_string_pretty(&self.project).map_err(|e| e.to_string())?;

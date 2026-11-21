@@ -7,6 +7,7 @@ pub mod dialoge;
 pub mod dialoge3;
 pub mod dxf;
 pub mod epr;
+pub mod epr_projekt;
 pub mod epr_write;
 pub mod eprfile;
 pub mod extra;

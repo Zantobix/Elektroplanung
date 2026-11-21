@@ -1215,6 +1215,8 @@ impl App {
                 let _ = std::fs::copy(&p, &bak);
             }
             skipped = crate::epr_write::unsupported(&self.project);
+            // Projekt-/Anlagenangaben, deren Ablage im Originalformat unbekannt ist
+            skipped.extend(crate::epr_projekt::nicht_gespeichert(&self.project));
             crate::epr_write::save(&self.project, &p)
         } else {
             serde_json::to_string_pretty(&self.project).map_err(|e| e.to_string()).and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string()))
@@ -1225,7 +1227,7 @@ impl App {
                 self.info = format!("Gespeichert: {}", p.display());
                 if !skipped.is_empty() {
                     self.dialog = Some(Dialog::Message(format!(
-                        "Gespeichert. Folgende Objekte kann das Originalformat (.epr) noch nicht aufnehmen und wurden nicht geschrieben:\n{}\n\nZum vollständigen Speichern zusätzlich als .epj sichern.",
+                        "Gespeichert. Folgendes kann das Originalformat (.epr) noch nicht aufnehmen und wurde nicht geschrieben:\n{}\n\nZum vollständigen Speichern zusätzlich als .epj sichern.",
                         skipped.join("\n")
                     )));
                 }
