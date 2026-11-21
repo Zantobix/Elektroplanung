@@ -163,7 +163,11 @@ fn warnt_vor_nicht_speicherbarem() {
     p.abgeschlossen = true;
     p.tb_absolut = true;
     p.stifte[0].color = [255, 0, 0];
+    // Bauteile, Platzhalter, Projektstatus und Schriftfeld „Absolut“ schreibt epr_zusatz; es bleibt der Stift
     let w = epr_projekt::nicht_gespeichert(&p);
-    assert_eq!(w.len(), 5, "{w:?}");
-    assert!(w[0].starts_with("Bauteile (1)"));
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("Stift"));
+    // zu lange Suchtexte meldet das Speichern
+    p.platzhalter[0].werte.push(("ZuLangerText".into(), "x".into()));
+    assert_eq!(epr_projekt::nicht_gespeichert(&p).len(), 2);
 }

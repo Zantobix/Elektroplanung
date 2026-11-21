@@ -95,6 +95,8 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
     SYM_IDS.with(|m| *m.borrow_mut() = ids);
     // Kennungen, Projektbilder und Schienen für neue Blattobjekte (epr_neu)
     crate::epr_neu::vorbereiten(project, &base);
+    // Bauteile und Platzhaltergruppen (epr_zusatz)
+    crate::epr_zusatz::vorbereiten(project, &base);
 
     // Unterblöcke des Projekts in Originalreihenfolge; Anlagen an der Stelle der ersten Anlage
     let mut anl_done = false;
@@ -134,6 +136,7 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
     // Projekt-, Anlagen- und Blattwerte (Leitungen, Potentiale, Stifte, Schriftfeld, Strompfade …)
     crate::epr_projekt::write(project, &mut prj);
     crate::epr_neu::nachbereiten(&mut prj);
+    crate::epr_zusatz::nachbereiten(project, &mut prj);
     *out.root_mut("PRJ").unwrap() = prj;
     Ok(out)
 }
@@ -288,6 +291,7 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
 pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
     let mut b = object_block_raw(project, o)?;
     crate::epr_projekt::leitung_setzen(project, o, &mut b);
+    crate::epr_zusatz::objekt(project, o, &mut b);
     Some(b)
 }
 

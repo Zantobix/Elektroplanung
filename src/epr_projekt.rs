@@ -225,7 +225,8 @@ pub fn import(prj: &Block, p: &mut Project) {
     for (a, ab) in p.anlagen.iter_mut().zip(prj.kids_of("ANL")) {
         for s in ab.kids_of("SMS") {
             // SMS Name 0–20 ("Schiene L1") bleibt unberührt; der Nachbau führt die Schiene unter ihrem Kürzel (TIT)
-            let set = SchieneSet { potential: pots.get(&s.i32(11)).cloned().unwrap_or_default(), stift: s.i32(18).clamp(0, 255) as usize, ..Default::default() };
+            let mut set = SchieneSet { potential: pots.get(&s.i32(11)).cloned().unwrap_or_default(), stift: s.i32(18).clamp(0, 255) as usize, ..Default::default() };
+            crate::epr_zusatz::schiene_lesen(s, &mut set);
             a.schienen.entry(sms_name(s)).or_insert(set);
         }
         for (s, b) in a.sheets.iter_mut().zip(ab.kids_of("BLT")) {
@@ -626,6 +627,7 @@ fn write_schienen(a: &Anlage, blk: &mut Block, pots: &std::collections::HashMap<
             if b.i32(18) != set.stift as i32 {
                 b.set_i32(18, set.stift as i32);
             }
+            crate::epr_zusatz::schiene_schreiben(&set, &mut b);
             b
         })
         .collect();
@@ -669,25 +671,11 @@ fn write_blatt(a: &Anlage, s: &Sheet, b: &mut Block) {
 /// Angaben des Projekts, die das Originalformat (.epr) nach heutigem Stand nicht aufnehmen kann (Ablage unbekannt);
 /// sie bleiben nur im eigenen Format (.epj) erhalten. Leere Liste = nichts geht verloren.
 pub fn nicht_gespeichert(project: &Project) -> Vec<String> {
-    let mut v = vec![];
-    if !project.bauteile.is_empty() {
-        v.push(format!("Bauteile ({}) und ihre Zuordnung zu Symbolen (BTL/IDL: Aufbau unbekannt)", project.bauteile.len()));
-    }
-    if !project.platzhalter.is_empty() {
-        let n: Vec<&str> = project.platzhalter.iter().map(|p| p.name.as_str()).collect();
-        v.push(format!("Platzhaltergruppen {} (ERS/TLI: Aufbau der Einträge unbekannt)", n.join(", ")));
-    }
-    if project.abgeschlossen {
-        v.push("Projektstatus \u{201e}Projekt ist abgeschlossen\u{201c}".into());
-    }
-    if project.alter_klemmenplan {
-        v.push("Projekteinstellung \u{201e}Alter Klemmenplan\u{201c}".into());
-    }
+    // Bauteile, Platzhalter, Projektstatus, Alter Klemmenplan, Schriftfeld absolut, Schienen-Schalter und
+    // Verbindungsoptionen schreibt epr_zusatz; von dort kommen nur Sonderfälle (zu lange Texte, unbekannte Gruppen)
+    let mut v = crate::epr_zusatz::nicht_gespeichert(project);
     if !project.ort.trim().is_empty() {
         v.push("Ort des Projekts (das Original kennt den Ort nur je Blatt)".into());
-    }
-    if project.tb_absolut {
-        v.push("Schriftfeld: Maßangaben \u{201e}Absolut\u{201c}".into());
     }
     let std = Project::new_default().stifte;
     for (i, s) in project.stifte.iter().enumerate().take(FESTE_STIFTE) {
@@ -700,30 +688,14 @@ pub fn nicht_gespeichert(project: &Project) -> Vec<String> {
             v.push(format!("Potential {name}: Nennspannung/-strom ist keine Zahl"));
         }
     }
-    let d = SchieneSet::default();
     for a in &project.anlagen {
         for (name, s) in &a.schienen {
+            // Der Nachbau führt die Schiene unter ihrem Kürzel (SMS › TIT); ein abweichendes zweites Kürzel hat im
+            // Original kein Gegenstück (dort ist SMS Byte 0–20 der freie Name, das Kürzel ist der TIT)
             if !s.kurz.trim().is_empty() && s.kurz != *name {
                 v.push(format!("{}: Kürzel \u{201e}{}\u{201c} der Sammelschiene {name}", a.name, s.kurz));
             }
-            if (s.quer, s.pfeile, s.klemmen, s.schleife, s.autoende, s.einspeisung) != (d.quer, d.pfeile, d.klemmen, d.schleife, d.autoende, d.einspeisung) {
-                v.push(format!("{}: Sammelschiene {name} – Querverweise/Pfeile/Klemmen/Durchschleifung/Autoende/Einspeisung", a.name));
-            }
         }
-    }
-    // Objekteinstellungen der Dialoge, deren Ablage im .epr noch unbekannt ist (Tabellenkopf/Autobreite,
-    // Bildrahmen/-art und Schriftname schreibt epr_neu)
-    let mut opts = 0;
-    for o in project.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects) {
-        let alt = o.raw.as_deref().map(|r| &r.kind);
-        if let Kind::Wire { opts: n, .. } = &o.kind {
-            if *n != alt.map(|k| if let Kind::Wire { opts, .. } = k { *opts } else { 0 }).unwrap_or(0) {
-                opts += 1;
-            }
-        }
-    }
-    if opts > 0 {
-        v.push(format!("Verbindungsoptionen (Ziel, Brücke, Hochkant, Markierung …) bei {opts} Objekt(en)"));
     }
     v
 }
