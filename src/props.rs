@@ -917,24 +917,25 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
 
 fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
     ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
-    let row = |ui: &mut egui::Ui, l: &str, v: &mut String, w: f32| {
+    // Höchstlängen wie die TIn-Felder von TSAnlage (MaxLength)
+    let row = |ui: &mut egui::Ui, l: &str, v: &mut String, w: f32, max: usize| {
         ui.horizontal(|ui| {
             label(ui, 84.0, l, true);
-            ui.add_sized([w, 20.0], egui::TextEdit::singleline(v));
+            ui.add_sized([w, 20.0], egui::TextEdit::singleline(v).char_limit(max));
         });
     };
-    row(ui, "Anlagenname", &mut a.name, 190.0);
-    row(ui, "Kurzform", &mut a.t[0], 110.0);
-    row(ui, "Erstellt von", &mut a.t[1], 190.0);
-    row(ui, "Zeichnugs Nr", &mut a.t[2], 190.0);
+    row(ui, "Anlagenname", &mut a.name, 190.0, 54);
+    row(ui, "Kurzform", &mut a.t[0], 110.0, 10);
+    row(ui, "Erstellt von", &mut a.t[1], 190.0, 49);
+    row(ui, "Zeichnugs Nr", &mut a.t[2], 190.0, 19);
     egui::Frame::group(ui.style()).inner_margin(egui::Margin::symmetric(4, 2)).show(ui, |ui| {
         ui.set_width(270.0);
         ui.label(RichText::new("Strompfade").size(11.0));
         ui.horizontal(|ui| {
             ui.label(bt("Anzahl"));
-            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[3]));
+            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[3]).char_limit(2));
             ui.label(bt("Höhe"));
-            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[4]));
+            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[4]).char_limit(6));
             ui.label(bt("mm"));
             ui.checkbox(&mut a.s.ab_null, bt("Ab '0'"));
         });
@@ -945,7 +946,7 @@ fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
         egui::Grid::new("anl_sz").num_columns(4).show(ui, |ui| {
             for (i, (l, j)) in [("Titel", 5), ("Verbindungen", 7), ("Wert", 6), ("Pfadbezeichnung", 8)].iter().enumerate() {
                 label(ui, if i % 2 == 0 { 40.0 } else { 104.0 }, l, true);
-                ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[*j]));
+                ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[*j]).char_limit(3));
                 if i % 2 == 1 {
                     ui.end_row();
                 }
@@ -960,8 +961,9 @@ fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
                 ui.selectable_value(&mut a.s.format, *f, *n);
             }
         });
-        // Benutzermaße (TUserdat): eigene Breite/Höhe in mm
-        ui.menu_button("Benutzermaße", |ui| {
+        // Bildknopf „Bearbeiten“ (Anlage1EditClick): Benutzermaße (TUserdat), eigene Breite/Höhe in mm
+        ui.menu_image_button(crate::icons::image(crate::icons::Icon::EditBlatt, 16.0), |ui| {
+            ui.label(RichText::new("Benutzermaße").strong());
             let mut b = format!("{}", a.s.format.0 as f32 / 10.0);
             let mut h = format!("{}", a.s.format.1 as f32 / 10.0);
             ui.horizontal(|ui| {
@@ -982,7 +984,9 @@ fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
                 }
                 ui.label("mm");
             });
-        });
+        })
+        .response
+        .on_hover_text("Bearbeiten");
     });
     egui::Frame::group(ui.style()).inner_margin(egui::Margin::symmetric(4, 2)).show(ui, |ui| {
         ui.set_width(270.0);

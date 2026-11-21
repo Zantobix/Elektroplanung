@@ -234,7 +234,7 @@ ICONS = {f'obj_{k}': f() for k, f in OBJ.items()}
 for k in ['projekt', 'blatt', 'potential', 'sammelschiene', 'leitung', 'klemmleiste', 'stift', 'seite', 'option']:
     ICONS[f'new_{k}'] = OBJ[k]() + badge_neu()
 # „Bearbeiten“: Grund-Icon + Stift
-for k in ['sammelschiene', 'bauteil', 'symbol']:
+for k in ['sammelschiene', 'bauteil', 'symbol', 'blatt']:
     ICONS[f'edit_{k}'] = OBJ[k]() + badge_bearbeiten()
 # „Entfernen“: Grund-Icon + rotes Minus
 ICONS['del_zeile'] = tabelle() + badge_entfernen()
@@ -359,6 +359,7 @@ VERWENDUNG = {
     'edit_sammelschiene': 'Dialog Sammelschiene: „Bearbeiten“ (Schiene)',
     'edit_bauteil': 'Dialoge Symbol und Klemme: „Bearbeiten“ (Bauteil)',
     'edit_symbol': 'Symboleditor: „Symboleigenschaften“',
+    'edit_blatt': 'Anlageneigenschaften: „Bearbeiten“ (Benutzermaße des Blattformats)',
     'edit_drucker': 'Dialog Drucken: „Druckereinstellung“',
     'del_zeile': 'Tabellen- und Platzhalterdialog: „Zeile löschen“',
     'open': 'Werkzeugleiste oben: „Projekt laden“; Tabellen- und Platzhalterdialog: „Liste laden“',
