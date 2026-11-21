@@ -381,7 +381,7 @@ pub fn load_db(dir: &Path) -> Result<Vec<SymDef>, String> {
             alt_sets,
             options: el.options,
             raw: data[1..].to_vec(),
-            frg: (true, false),
+            frg: crate::symbol_freigaben::aus_tfi_kopf(hdr).unwrap_or(crate::symbol_freigaben::VORGABE),
             params: vec![],
             value_pos: el.value_pos,
             text_mode: el.text_mode,
