@@ -518,38 +518,38 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
             b.set_i32(3, to01(label.y));
             return;
         }
-        if let Kind::Verweis { pos, text_pos, text, dir, vertical, .. } = new {
+        if let Kind::Verweis { pos, text_pos, text, dir, vertical, spitze, .. } = new {
             b.set_i32(6, to01(pos.x));
             b.set_i32(7, to01(pos.y));
             b.set_i32(2, to01(text_pos.x) - to01(pos.x));
             b.set_i32(3, to01(text_pos.y) - to01(pos.y));
-            if let Kind::Verweis { text: ot, dir: od, vertical: ov, .. } = old {
+            if let Kind::Verweis { text: ot, dir: od, vertical: ov, spitze: os, .. } = old {
                 if ot != text {
                     set_child_text(b, "TIT", text);
                 }
-                if od != dir || ov != vertical || ot.is_empty() != text.is_empty() {
-                    let (a, bit) = verweis_winkel(b.i32(4) == 0x0101_ffff, text.is_empty(), *dir, *vertical);
-                    b.set_i32(14, a);
+                if od != dir || os != spitze {
+                    b.set_i32(14, verweis_winkel(*dir, *spitze));
                     let f = b.i32(15);
-                    b.set_i32(15, if bit { f | 1 } else { f & !1 });
+                    b.set_i32(15, if *spitze { f | 1 } else { f & !1 });
+                }
+                if ov != vertical {
+                    b.set_i32(4, verweis_feld4(b.i32(4), *vertical));
                 }
             }
         }
     }
 }
 
-/// Richtung eines Verweises für OBJ Feld 14 (0,1°) und Feld 15 Bit 0 – Umkehrung von `crate::epr::verweis`.
-pub fn verweis_winkel(cross: bool, ohne_text: bool, dir: u16, vertical: bool) -> (i32, bool) {
+/// OBJ Feld 14 eines Verweises (0,1°) – Umkehrung von `crate::epr::verweis`: mit Spitze an der Lage zählt
+/// das Original die Gegenrichtung.
+pub fn verweis_winkel(dir: u16, spitze: bool) -> i32 {
     let d = dir as i32 % 360;
-    if ohne_text {
-        return ((d + 180) % 360 * 10, vertical);
-    }
-    if cross {
-        let a = (d + 90) % 360;
-        return (a * 10, vertical ^ (a == 180));
-    }
-    let a = if vertical { (d + 270) % 360 } else { d };
-    (a * 10, vertical)
+    (if spitze { (d + 180) % 360 } else { d }) * 10
+}
+
+/// OBJ Feld 4 eines Verweises mit Byte 3 = Text hochkant.
+pub fn verweis_feld4(f: i32, vertical: bool) -> i32 {
+    (f & 0x00ff_ffff) | ((vertical as i32) << 24)
 }
 
 /// Ziel eines Verweises in OBJ Feld 8–13 (Kennungen von Anlage, Blatt, Gegenverweis) und Feld 15 Byte 1

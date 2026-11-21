@@ -162,15 +162,18 @@ pub enum Kind {
         #[serde(default)]
         opt: crate::klemmen::KlemmOpt,
     },
-    /// Verweis (OBJ im Original): gefülltes Dreieck an `pos`, Spitze in Richtung `dir` (Grad, 0 = rechts,
-    /// 90 = oben), Text an `text_pos`; `vertical` = Text hochkant.
-    /// `ziel` = Sprungziel (OBJ Feld 8–13, Dialog "Ziel setzen").
+    /// Verweis (OBJ im Original): gefülltes Dreieck (2,4 mm lang) an `pos`, Spitze in Richtung `dir` (Grad,
+    /// 0 = rechts, 90 = oben): mit `spitze` liegt die Spitze an `pos`, sonst die Grundseite. Text an `text_pos`
+    /// (Mitte der Textoberkante); `vertical` = Text hochkant. `ziel` = Sprungziel (OBJ Feld 8–13, "Ziel setzen").
     Verweis {
         pos: P,
         text_pos: P,
         text: String,
         dir: u16,
         vertical: bool,
+        /// Spitze an der Lage (OBJ Feld 15 Bit 0; Feld 14 zählt dann die Gegenrichtung)
+        #[serde(default)]
+        spitze: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         ziel: Option<VerweisZiel>,
     },

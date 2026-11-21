@@ -133,7 +133,7 @@ fn leitung_an_verweis_neues_projekt() {
     let mut p = Project::new_default();
     let v = P::new(100.0, 60.0);
     let s = &mut p.anlagen[0].sheets[0];
-    s.objects.push(Obj { id: 1, kind: Kind::Verweis { pos: v, text_pos: P::new(104.0, 60.0), text: "=A".into(), dir: 0, vertical: false, ziel: None }, pen: 0, fixed: false, group: None, raw: None });
+    s.objects.push(Obj { id: 1, kind: Kind::Verweis { pos: v, text_pos: P::new(104.0, 60.0), text: "=A".into(), dir: 0, vertical: false, spitze: false, ziel: None }, pen: 0, fixed: false, group: None, raw: None });
     s.objects.push(Obj { id: 2, kind: Kind::Wire { pts: vec![P::new(60.0, 60.0), v], leitung: 0, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
     p.next_id = 3;
     let bytes = epr_write::to_bytes(&p).unwrap();

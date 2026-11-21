@@ -309,21 +309,18 @@ pub fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             set_fixed(&mut b, o.fixed);
             Some(b)
         }
-        Kind::Verweis { pos, text_pos, text, dir, vertical, ziel } => {
+        Kind::Verweis { pos, text_pos, text, dir, vertical, spitze, ziel } => {
             let mut b = Block::new("OBJ", vec![0; 0x40]);
             b.data[0..8].copy_from_slice(&kennung(o).to_le_bytes());
             b.set_i32(2, to01(text_pos.x) - to01(pos.x));
             b.set_i32(3, to01(text_pos.y) - to01(pos.y));
-            // Querverweis, wenn das Ziel in einer anderen Anlage liegt
-            let eigene = project.find_obj(o.id).and_then(|(r, _)| project.anlagen.get(r.anlage)).map(|a| a.name.clone());
-            let cross = matches!((ziel, &eigene), (Some(z), Some(n)) if !z.anlage.is_empty() && &z.anlage != n);
-            b.set_i32(4, if cross { 0x0101_ffff } else { 0x1_ffff });
+            // Byte 3 = Text hochkant (siehe `crate::epr::verweis`)
+            b.set_i32(4, crate::epr_write::verweis_feld4(0x1_ffff, *vertical));
             b.set_i32(5, 2);
             b.set_i32(6, to01(pos.x));
             b.set_i32(7, to01(pos.y));
-            let (ang, bit) = crate::epr_write::verweis_winkel(cross, text.is_empty(), *dir, *vertical);
-            b.set_i32(14, ang);
-            b.set_i32(15, bit as i32);
+            b.set_i32(14, crate::epr_write::verweis_winkel(*dir, *spitze));
+            b.set_i32(15, *spitze as i32);
             crate::epr_write::write_ziel(project, &mut b, ziel.as_ref());
             if !text.is_empty() {
                 b.kids.push(Block::new("TIT", cstr_bytes(text)));

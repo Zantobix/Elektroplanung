@@ -20,6 +20,7 @@
 //!   (Ausdruck Seite 13: "-K1" statt "-Q1+W2").
 //! - Funktion = Funktion der Klemme (Klemmen-Dialog), sonst die Pfadbeschreibung ihres Strompfades (Anleitung 4.2.4).
 //! - Reihenfolge der Zeilen: Position in der Klemmleiste, dann Etage (wie das Original: Position · 10 + Etage).
+//! - Brücken als Ketten in Spuren (`ketten`), nicht als zusammenhängende Gruppen.
 //! - Folgeseiten: direkt aufeinander folgende Klemmplan-Blätter derselben Leiste setzen die Liste fort
 //!   (Anleitung 4.2: „Zusammenhängende Blätter ergeben eine zusammenhängende … Liste“).
 //! - Pfad = Blattnummer / Strompfad der Symbollage (bei Sammelschienen: ihres Anfangs).
@@ -384,47 +385,49 @@ pub fn plan(anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
     }
     plan.zeilen.sort_by_key(|z| (z.pos, z.level, z.nr));
     plan.etagen = plan.zeilen.iter().map(|z| z.level).max().unwrap_or(0);
-    // Brücken: zusammenhängende Gruppen von Zeilen
-    let idx = |plan: &Plan, k: (u32, u8)| plan.zeilen.iter().position(|z| (z.nr, z.level) == k);
-    let mut group: Vec<usize> = (0..plan.zeilen.len()).collect();
-    fn root(g: &mut [usize], mut i: usize) -> usize {
-        while g[i] != i {
-            g[i] = g[g[i]];
-            i = g[i];
-        }
-        i
-    }
-    for (a, b) in links {
-        if let (Some(a), Some(b)) = (idx(&plan, a), idx(&plan, b)) {
-            let (ra, rb) = (root(&mut group, a), root(&mut group, b));
-            group[ra.max(rb)] = ra.min(rb);
-        }
-    }
-    let roots: Vec<usize> = (0..plan.zeilen.len()).map(|r| root(&mut group, r)).collect();
-    let mut groups: Vec<Vec<usize>> = vec![];
-    for r in 0..plan.zeilen.len() {
-        match groups.iter_mut().find(|v| roots[v[0]] == roots[r]) {
-            Some(v) => v.push(r),
-            None => groups.push(vec![r]),
-        }
-    }
-    groups.retain(|g| g.len() > 1);
-    groups.sort_by_key(|g| g[0]);
-    // Spuren wie im Original-Ausdruck: überlappende Brücken nebeneinander
-    let mut lane_end: Vec<usize> = vec![];
-    for rows in groups {
-        let (lo, hi) = (rows[0], *rows.last().unwrap());
-        let lane = match lane_end.iter().position(|e| *e < lo) {
-            Some(l) => l,
-            None => {
-                lane_end.push(0);
-                lane_end.len() - 1
-            }
-        };
-        lane_end[lane] = hi;
-        plan.bruecken.push(Bruecke { lane, rows });
-    }
+    plan.bruecken = ketten(&plan, &links);
     plan
+}
+
+/// Brücken als Ketten wie im Original (Klemmplan-Routine 0x4830a8 sammelt je Brückenverbindung das Paar
+/// Klemme/Gegenklemme, 0x49a86c ordnet die Paare zu Ketten): jede Brücke ist eine Strecke zwischen zwei Zeilen.
+/// Die Strecken werden nach ihrer oberen Zeile abgearbeitet und kommen in die erste Spur, deren letzte Kette eine
+/// ihrer beiden Klemmen enthält (dann wird die Kette verlängert) oder schon darüber endet (dann beginnt dort eine
+/// neue Kette). Eine Klemme kann so Ende einer Kette und Anfang einer anderen in einer zweiten Spur sein – so
+/// zeigt es der Original-Ausdruck des Beispielprojekts (Klemmplan -X2 der Heizungssteuerung: 4A–7A in der
+/// zweiten, 7A–12A in der ersten Spur), wo eine Zusammenfassung zu Gruppen eine einzige Linie 4A–12A ergäbe;
+/// Klemmplan -X1 (Seite 12): Brücken 3–5 und 4–5 bilden eine Kette 3, 4, 5. Abgeleitet aus beiden Ausdrucken,
+/// die Routine 0x49a86c selbst ist nur teilweise entschlüsselt.
+pub fn ketten(plan: &Plan, links: &[((u32, u8), (u32, u8))]) -> Vec<Bruecke> {
+    let idx = |k: (u32, u8)| plan.zeilen.iter().position(|z| (z.nr, z.level) == k);
+    let mut strecken: Vec<(usize, usize)> = links
+        .iter()
+        .filter_map(|(a, b)| Some((idx(*a)?, idx(*b)?)))
+        .filter(|(a, b)| a != b)
+        .map(|(a, b)| (a.min(b), a.max(b)))
+        .collect();
+    strecken.sort();
+    strecken.dedup();
+    // je Spur die Ketten (Zeilen aufsteigend); die letzte Kette einer Spur bestimmt, ob die Spur frei ist
+    let mut spuren: Vec<Vec<Vec<usize>>> = vec![];
+    for (oben, unten) in strecken {
+        // Spur frei (letzte Kette endet über der Strecke) oder letzte Kette enthält eine ihrer Klemmen
+        let teilt = |sp: &Vec<Vec<usize>>| sp.last().map(|k| k.contains(&oben) || k.contains(&unten)).unwrap_or(false);
+        let frei = |sp: &Vec<Vec<usize>>| sp.last().and_then(|k| k.last()).map(|e| *e < oben).unwrap_or(true);
+        match spuren.iter().position(|sp| teilt(sp) || frei(sp)) {
+            Some(l) if teilt(&spuren[l]) => {
+                let k = spuren[l].last_mut().unwrap();
+                k.extend([oben, unten]);
+                k.sort();
+                k.dedup();
+            }
+            Some(l) => spuren[l].push(vec![oben, unten]),
+            None => spuren.push(vec![vec![oben, unten]]),
+        }
+    }
+    let mut v: Vec<Bruecke> = spuren.into_iter().enumerate().flat_map(|(lane, ks)| ks.into_iter().map(move |rows| Bruecke { lane, rows })).collect();
+    v.sort_by_key(|b| (b.rows[0], b.lane));
+    v
 }
 
 /// Folgeseite eines berechneten Blattes: Anzahl der unmittelbar vorangehenden Blätter derselben Art (beim
@@ -612,5 +615,37 @@ mod tests {
         assert!(z1.nach.is_none());
         assert_eq!(plan.zeilen[1].von.as_ref().map(|z| z.kl.as_str()), Some("8"));
         assert_eq!(plan.bruecken, vec![Bruecke { lane: 0, rows: vec![0, 1] }]);
+    }
+
+    /// Ketten wie im Original-Ausdruck (Klemmplan -X2, zweistöckig): 1A–2A, 2B–4B–6B, 7A–…–12A in der ersten,
+    /// 4A–7A, 7B–8B, 10B–12B in der zweiten Spur.
+    #[test]
+    fn bruecken_als_ketten_mehrstoeckig() {
+        let mut plan = Plan::default();
+        for nr in 1..=12 {
+            for level in 1..=2 {
+                plan.zeilen.push(Zeile { nr, level, pos: nr, ..Default::default() });
+            }
+        }
+        let a = |n: u32| (n, 1u8);
+        let b = |n: u32| (n, 2u8);
+        let mut links = vec![(a(2), a(1)), (b(4), b(2)), (b(6), b(4)), (b(7), b(8)), (b(8), b(7)), (b(12), b(10))];
+        links.extend((5..=12).map(|n| (a(n), a(n - 1))));
+        let k: Vec<(usize, Vec<usize>)> = ketten(&plan, &links).into_iter().map(|b| (b.lane, b.rows)).collect();
+        // Zeile = (Nr − 1) · 2 + Etage − 1
+        assert_eq!(k, vec![(0, vec![0, 2]), (0, vec![3, 7, 11]), (1, vec![6, 8, 10, 12]), (0, vec![12, 14, 16, 18, 20, 22]), (1, vec![13, 15]), (1, vec![19, 23])]);
+        // einstöckig: eine Kette wird verlängert, wo sie endet; überlappende Brücken liegen nebeneinander
+        let mut p1 = Plan::default();
+        for nr in 1..=6 {
+            p1.zeilen.push(Zeile { nr, pos: nr, ..Default::default() });
+        }
+        let e = |n: u32| (n, 0u8);
+        let k: Vec<(usize, Vec<usize>)> = ketten(&p1, &[(e(1), e(2)), (e(2), e(3)), (e(2), e(4)), (e(3), e(5))]).into_iter().map(|b| (b.lane, b.rows)).collect();
+        assert_eq!(k, vec![(0, vec![0, 1, 2, 3, 4])]);
+        // Seite 12: 3–5 und 4–5 eine Kette; 3–5 und 4–6 nebeneinander
+        let k: Vec<(usize, Vec<usize>)> = ketten(&p1, &[(e(1), e(3)), (e(2), e(3)), (e(4), e(6)), (e(5), e(6))]).into_iter().map(|b| (b.lane, b.rows)).collect();
+        assert_eq!(k, vec![(0, vec![0, 1, 2]), (0, vec![3, 4, 5])]);
+        let k: Vec<(usize, Vec<usize>)> = ketten(&p1, &[(e(1), e(3)), (e(2), e(4))]).into_iter().map(|b| (b.lane, b.rows)).collect();
+        assert_eq!(k, vec![(0, vec![0, 2]), (1, vec![1, 3])]);
     }
 }

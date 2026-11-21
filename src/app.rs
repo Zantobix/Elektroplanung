@@ -874,7 +874,8 @@ impl App {
     }
 
     pub fn copy(&mut self) {
-        let objs = self.selected_objs();
+        // Kontaktspiegel kopiert das Original nicht mit (kontaktspiegel.rs)
+        let objs: Vec<Obj> = self.selected_objs().into_iter().filter(|o| !matches!(o.kind, Kind::Spiegel { .. })).collect();
         if !objs.is_empty() {
             self.clipboard = objs;
         }

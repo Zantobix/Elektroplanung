@@ -190,14 +190,20 @@ nicht. Gemessen werden stattdessen:
   neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
 - Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",
-  Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); die Brücken mehrstöckiger Leisten fasst der
-  Nachbau zu Gruppen zusammen, wo das Original einzelne Ketten zeichnet. "Alter Klemmenplan" zeigt die
+  Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); Brücken als Ketten in Spuren wie in den
+  Original-Ausdrucken (Seiten 12 und 39), die Ordnungsroutine des Originals ist nur teilweise entschlüsselt.
+  "Alter Klemmenplan" zeigt die
   8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken. Folgeblätter: direkt folgende
   Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
 - Inhaltsverzeichnis, Querverweise (1–3 Tabellen) und Artikelliste (Summenliste, Summe+BMK, Einzelliste) als
   Blattart: Spaltenköpfe wie im Original, Maße und Spaltenbreiten ohne Vorlage (kein Ausdruck vorhanden).
-- Kontaktspiegel: verknüpftes Objekt unter der Spule (Lage der Kontakte, neue/gelöschte Kontakte, folgt der
-  Spule); die Schaltzeichen sind eigene Zeichnung, Schriftgrößen und Abstände geschätzt.
+- Kontaktspiegel: verknüpftes Objekt unter der Spule (Lage der Kontakte, neue/gelöschte Kontakte). Wie im
+  Original (Dekompilat) bleibt er beim Verschieben der Spule stehen und beim Löschen der Spule erhalten und wird
+  nicht mitkopiert; Feld 14 = Höhe. Die Schaltzeichen sind eigene Zeichnung (das Original nimmt drei
+  Bibliothekssymbole aus den Programmeinstellungen), Schriftgrößen und Abstände geschätzt; im Original geöffnet
+  ist ein im Nachbau angelegter Spiegel noch nicht geprüft (`cargo run --example gegenprobe_plaene`).
+- Mehrzeilige große Texte (Raumnamen der Installationspläne) stehen bis etwa 0,5 mm tiefer als im
+  Original-Ausdruck, der Zeilenabstand ist etwas größer (Schriftmaße der egui-Schrift).
 - Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
   Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift), Blattart
   (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Weitere Angaben (`src/epr_zusatz.rs`): Bauteile samt

@@ -135,9 +135,11 @@ Quelle: Elektroplanung.exe über REA (`execute_rizin_command`), Kennungstabelle 
   Quer: Rahmen oben = 205 − Höhe − 5 mm (Altbau EG: 1900 → 10 mm, wie im Original-Ausdruck).
 - VSY Feld 23 = Zusatzoptionen (Bitmaske) des Symbols; Symbolelemente mit Feld 0x48 = n sind nur sichtbar, wenn Bit n−1 gesetzt ist.
   Namen in GRD › OPT (Feld 1 = Nummer, STR = Name), z. B. Steckdose: 1 = "Ports" (hochgestellte Anzahl), 2 = "SPD".
-- OBJ (Verweis): Feld 6/7 Pfeilspitze, 2/3 Versatz zur **Textmitte** (0,1 mm), 14 Richtung in 0,1° (0 ►, 900 ▲, 1800 ◄, 2700 ▼),
-  15 Bit 0 hochkant. Feld 4 = 0x0101FFFF (Querverweis auf andere Anlage): Richtung um 270° versetzt, bei 180° hochkant
-  (nur zwei Beispiele: "=S1+W2", "=UV3+W2" – geschätzt).
+- OBJ (Verweis): Feld 6/7 Lage, 2/3 Versatz zur **Mitte der Textoberkante** (0,1 mm), 14 Richtung in 0,1° (0 ►, 900 ▲,
+  1800 ◄, 2700 ▼), 15 Bit 0 = Spitze an der Lage, Feld 4 Byte 3 = Text hochkant. Das Dreieck (2,4 mm lang, 1,7 mm
+  breit) liegt zwischen der Lage und 2,4 mm in Richtung Feld 14; ohne Bit 0 zeigt die Spitze dorthin, mit Bit 0 liegt
+  sie an der Lage und zeigt zurück. Vermessen an allen 13 Verweisen der Installationspläne (Ausdruck Seiten 1–4,
+  Stand 21.11.2026; die frühere Deutung „Bit 0 hochkant, 0x0101FFFF = Querverweis mit versetzter Richtung“ ist ersetzt).
 - Werkzeugleisten-Bilder: eigene Vektor-Icons (resources/icons, erzeugt mit tools/icons_erzeugen.py); Reihenfolge der Knöpfe wie in TFORM1
   (z. B. 0 Auswahl, 14 Neues Projekt, 15 Laden, 38 Gitter, 42/43 Gruppieren/Auflösen).
 - Menü Datei des Originals: … Schriftfeld speichern | Export › PDF (Beta), Bitmapexport, DXF Import | Beenden (Menü-IDs über Win32 ausgelesen).
@@ -171,7 +173,7 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 
 ## Nachtrag 20.11.2026 – vollständiger Import, Symboltexte (geprüft gegen "Elektroplanung Wohnung 2.pdf")
 - OBJ Feld 4 unterscheidet: 0x1FFFF Verweis (ohne TIT = nur Pfeil, z. B. im Schriftfeld; Feld 14 = 900 → ▼,
-  1800 → ►), 0x0101FFFF Querverweis auf andere Anlage, **0xFFFF Sammelschiene**, **0x2FFFF Klemmstelle**.
+  1800 → ►, jeweils mit Bit 0), 0x0101FFFF Verweis mit hochkant stehendem Text, **0xFFFF Sammelschiene**, **0x2FFFF Klemmstelle**.
 - Sammelschiene (OBJ 0xFFFF): Feld 6/7 Anfang, 10 Ende x, 2/3 Lage des Namens (linke obere Ecke) relativ zum
   Anfang, 8/9 Kennung der SMS (SMS Feld 8/9, Name in SMS › TIT), 15 Byte 0 = 1 strichpunktiert (PE).
   Querverweise "Blatt/Pfad" werden berechnet: am Anfang das vorige, am Ende das nächste Vorkommen derselben
@@ -205,8 +207,8 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Anklicken: Das Original springt per **Doppelklick** zum Ziel – Option (TForm4) "Doppelklick auf Verweise =" Ziel
   anzeigen / Eigenschaften. Der Nachbau springt ebenso bei Doppelklick auf die Querverweistexte der Sammelschienen
   ("Blatt/Pfad", vorige/nächste Stelle der Schiene) – dafür gibt es im Original keinen Beleg.
-- Querverweis (Feld 4 = 0x0101FFFF): hochkant = Bit 0 XOR (Feld 14 = 1800); ohne Text gilt Bit 0 unverändert.
-  Drehen (R) um die Pfeilspitze: Richtung −90°, der Text bleibt an seiner Stelle (siehe Nachtrag (3)).
+- Feld 4 Byte 3 = Text hochkant (nicht „andere Anlage“: "Raum 7" auf "Altbau EG" zeigt in dieselbe Anlage).
+  Drehen (R) um die Lage: Richtung −90°, der Text bleibt an seiner Stelle (siehe Nachtrag (3)).
 - PDF: Verweise und Sammelschienen-Querverweise sind Verknüpfungen (/Link, /Dest auf die Zielseite).
 
 ## Nachtrag 21.11.2026 – Klemmstellen, Klemmleisten, Klemmplan
@@ -243,11 +245,18 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Kontaktspiegel (OBJ, Byte 0x14 = 5): Feld 6 X in 0,1 mm, Feld 8/9 Kennung der Spule (VSY Byte 96), Byte 0x2c
   Bit 0 = Zeilen vorhanden; je Zeile STB (0x1c Byte: Kennung Kontakt, Blatt (BLT Byte 72), Anlage (ANL Byte 0x88),
   Byte 0x18 Art 0 Schließer/1 Öffner/2 Wechsler) mit ALT (Feld 0 = Nummer 1–3) + STR je Anschlussnummer.
-  Y = Rahmenhöhe des Blattes, Zeilen 3 mm (Wechsler +2 mm davor, +0,5 mm danach). Details in `src/kontaktspiegel.rs`.
+  Y = Rahmenhöhe des Blattes, Zeilen 3 mm (Wechsler +2 mm davor, +0,5 mm danach). ALT Feld 0 = Spalte 1–3, Feld 1 = 0
+  (Übernehmen hört bei der ersten leeren Spalte auf); Feld 14 = Höhe in 0,1 mm (30 je Zeile, +25 vor einem Wechsler
+  außer in Zeile 1, mindestens 30). Der Spiegel folgt der Spule nicht und wird mit ihr nicht gelöscht (keine Stelle im
+  Dekompilat; W2 hat einen Spiegel ohne Spule), „Alles markieren“ und Kopieren lassen ihn aus.
+  Details in `src/kontaktspiegel.rs`.
+- Klemmplan-Brücken: je Brückenverbindung ein Paar Klemme/Gegenklemme (0x4830a8), geordnet zu Ketten (0x49a86c);
+  gezeichnet in Spuren: erste Spur, deren letzte Kette eine der Klemmen enthält oder darüber endet (aus den
+  Ausdrucken Seite 12 und 39, `klemmplan::ketten`).
 - BLT Feld 32 Byte 1 (0x81) = Zusatz: Deckblatt 0 mit/1 ohne Rahmen, Querverweise 1–3 Tabellen, Artikelliste
   0 Summenliste/1 Summe+BMK/2 Einzelliste (Klemmplan: ab Bit 8 die Leiste).
-- OBJ (0x40 Byte): Feld 4 Wort 0 = 0xFFFF, Byte 2 Art (0 Sammelschiene, 1 Verweis, 2 Klemmstelle), Byte 3 = 1 Ziel in
-  anderer Anlage; Feld 5 Byte 0 (1 Sammelschiene, 2 Verweis); Verweis-Vorgabe Textversatz (0, −6 mm). Unterblock TIT = Text.
+- OBJ (0x40 Byte): Feld 4 Wort 0 = 0xFFFF, Byte 2 Art (0 Sammelschiene, 1 Verweis, 2 Klemmstelle), Byte 3 = 1 Text
+  hochkant (Verweis); Feld 5 Byte 0 (1 Sammelschiene, 2 Verweis); Verweis-Vorgabe Textversatz (0, −6 mm). Unterblock TIT = Text.
 - VBG: Feld 2/3 und 6/7 = Kennungen der verbundenen Objekte, 10/11 eigene Kennung (fortlaufende Zeitstempel), 13 Leitung.
   BZD (44 Byte): 0/1 Versatz, 3/4 und 5/6 Punkt, 9/10 meist 80/2 (Bedeutung offen).
 - Neue Kennungen (OBJ, VBG, SMS, ANL Byte 0x88) vergibt der Nachbau als Delphi-Zeitstempel im Millisekundenabstand.
