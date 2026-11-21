@@ -177,7 +177,7 @@ impl App {
             }
             ui.separator();
             if ui.button("Eigenschaften").clicked() {
-                self.edit_props(id);
+                self.props_command(id);
                 ui.close();
             }
             return;
@@ -213,7 +213,7 @@ impl App {
         }
         if ui.button("Eigenschaften").clicked() {
             if let Some(id) = self.selection.first().copied() {
-                self.edit_props(id);
+                self.props_command(id);
             }
             ui.close();
         }

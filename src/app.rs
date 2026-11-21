@@ -229,6 +229,12 @@ pub struct App {
     pub hold_press: [Option<bool>; 2],
     /// Eigentümer › Setzen: diese Symbole übernehmen die Kennzeichnung des als Nächstes angeklickten Symbols
     pub owner_pick: Option<Vec<u64>>,
+    /// Beim Verschieben mitgezogene Leitungen (Zustand beim Beginn des Ziehens)
+    pub move_follow: Vec<crate::mitziehen::Mitzieh>,
+    /// Eigenschaften mehrerer markierter Objekte (Stift, Fixierung, Textgröße/-stil)
+    pub multi_props: Option<crate::mehrfach::MultiProps>,
+    /// Symbol wird aus der Bibliothek auf das Blatt gezogen (Loslassen außerhalb bricht ab)
+    pub lib_drag: bool,
 }
 
 impl App {
@@ -329,6 +335,9 @@ impl App {
             no_snap: false,
             hold_press: [None, None],
             owner_pick: None,
+            move_follow: vec![],
+            multi_props: None,
+            lib_drag: false,
             lib_dir: None,
             lib_info: String::new(),
         }
