@@ -41,6 +41,8 @@ impl App {
         if let Some(r) = self.cur() {
             if let Some(s) = self.project.sheet_mut(r) {
                 s.geaendert = crate::model::today();
+                // Schriftfeld zeigt „Heute“ (blatt_tasten.rs)
+                self.bt.geaendert.insert(r);
             }
         }
     }

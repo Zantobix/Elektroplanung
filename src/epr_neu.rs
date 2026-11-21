@@ -390,22 +390,32 @@ pub const VBG_ENDEN: [usize; 2] = [2, 6];
 /// Leitungsenden an der Pfeilspitze eines Verweises: Kennung des Verweises (OBJ Feld 0/1) in VBG Feld 2/3 bzw.
 /// 6/7, Anschluss 0 in Feld 4 bzw. 8 – so verweisen die Verbindungen in W2 auf Klemmstellen und Sammelschienen
 /// (ebenfalls OBJ-Blöcke). Ein Ende, das einen Verweis dieses Blattes verlassen hat, verliert die Kennung.
+/// Ebenso Enden an Klemmstellen: die Leitung endet dort (wie alle 111 Klemmstellen in W2) am Kreis, 0,8 mm vom
+/// Mittelpunkt (klemme_leitung.rs).
 fn verweis_enden(project: &Project, o: &Obj, b: &mut Block) {
     let Kind::Wire { pts, .. } = &o.kind else { return };
     let Some(sheet) = project.find_obj(o.id).and_then(|(r, _)| project.sheet(r)) else { return };
-    let verweise: Vec<(P, u64)> = sheet.objects.iter().filter_map(|v| if let Kind::Verweis { pos, .. } = &v.kind { Some((*pos, kennung(v))) } else { None }).collect();
+    let verweise: Vec<(P, u64, f32)> = sheet
+        .objects
+        .iter()
+        .filter_map(|v| match &v.kind {
+            Kind::Verweis { pos, .. } => Some((*pos, kennung(v), 0.05)),
+            Kind::Terminal { pos, .. } => Some((*pos, crate::klemmen::uid(v), crate::klemme_leitung::KLEMME_R + 0.05)),
+            _ => None,
+        })
+        .collect();
     for (ende, feld) in [pts.first(), pts.last()].into_iter().zip(VBG_ENDEN) {
         let Some(p) = ende else { continue };
         let at = feld * 4;
         if b.data.len() < at + 12 {
             continue;
         }
-        match verweise.iter().find(|(q, k)| *k != 0 && q.dist(*p) <= 0.05) {
-            Some((_, k)) => {
+        match verweise.iter().find(|(q, k, r)| *k != 0 && q.dist(*p) <= *r) {
+            Some((_, k, _)) => {
                 b.data[at..at + 8].copy_from_slice(&k.to_le_bytes());
                 b.set_i32(feld + 2, 0);
             }
-            None if verweise.iter().any(|(_, k)| *k != 0 && *k == id_at(b, at)) => {
+            None if verweise.iter().any(|(_, k, _)| *k != 0 && *k == id_at(b, at)) => {
                 b.data[at..at + 8].fill(0);
                 b.set_i32(feld + 2, 0);
             }

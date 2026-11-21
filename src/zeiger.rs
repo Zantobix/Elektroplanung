@@ -12,6 +12,7 @@
 //! - über einem Eckpunkt (Größe ändern): Pfeil mit vier einzelnen Pfeilspitzen; über dem Griff des Rahmens zur
 //!   Größenänderung: Pfeil mit Doppelpfeil
 //! - Klemmstellen und Kontaktspiegel: einfacher Pfeil; fixiertes Objekt bei aktiver Fixierung: Pfeil mit Sperrkreis
+//! - rechte Maustaste auf einem Objekt gedrückt (Kopie ziehen, rechts_ziehen.rs): Pfeil mit Plus
 //! - Werkzeug Klemmstelle: Pfeil mit Klemme (über einer Leitung: Klemme in der Leitung); Zeichenwerkzeuge: Fadenkreuz
 //! - Auswahl eines Symbols (Eigentümer setzen, Referenz): Hand über gültigem Ziel, sonst Sperrzeiger; Lupe: Lupe
 //! - Verweis mit gedrückter Strg-Taste (Nachbau: Strg+Klick springt zum Ziel): Hand
@@ -54,6 +55,8 @@ pub enum Zusatz {
     Klemme,
     /// Klemmstellen-Werkzeug über einer Leitung
     KlemmeInLeitung,
+    /// Plus: Kopie ziehen (rechte Maustaste auf einem Objekt, rechts_ziehen.rs)
+    Kopieren,
 }
 
 /// Gewählter Zeiger: Systemzeiger und Zusatz.
@@ -96,6 +99,8 @@ pub enum Ziehen {
     Leitung { dx: f32, dy: f32 },
     Aufziehen,
     Schieben,
+    /// rechte Maustaste auf einem Objekt gedrückt: Kopie ziehen
+    Kopieren,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -141,6 +146,8 @@ pub fn waehlen(z: &Zustand) -> Zeigerwahl {
             return Zeigerwahl::pfeil(if dx.abs() > 5.0 || dy.abs() > 5.0 { LeitungZiehen { nach_unten: dx < -5.0 || dy < -5.0 } } else { Anschluss });
         }
         Ziehen::Aufziehen => return Zeigerwahl::nur(CursorIcon::Default),
+        // Original: Zeiger 3 (Ressource 5, Pfeil mit Plus), solange die rechte Taste auf einem Objekt gedrückt ist
+        Ziehen::Kopieren => return Zeigerwahl::pfeil(Kopieren),
         Ziehen::Nichts => {}
     }
     match z.werkzeug {
@@ -195,6 +202,8 @@ impl App {
             Drag::Rubber { .. } | Drag::Create { .. } | Drag::Kurve(_) => Ziehen::Aufziehen,
             Drag::KurvenGriff { .. } => Ziehen::Ecke,
             Drag::Pan { .. } => Ziehen::Schieben,
+            Drag::Rechts { kopie: true, .. } => Ziehen::Kopieren,
+            Drag::Rechts { .. } => Ziehen::Nichts,
         };
         let auswahl_frei = werkzeug == Werkzeug::Auswahl && ziehen == Ziehen::Nichts && ziel.is_none();
         let gesperrt = auswahl_frei && self.fix_active && self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.fixed && canvas::hit(o, m, tol, &self.lib)));
@@ -299,6 +308,13 @@ pub fn zusatz(p: &egui::Painter, c: Pos2, z: Zusatz) {
                 p.line_segment([c + Vec2::new(-3.5, 3.5), c + Vec2::new(3.5, -3.5)], st);
             }
         }
+        Zusatz::Kopieren => {
+            // Pluszeichen in einem weißen Kästchen
+            p.rect(egui::Rect::from_center_size(c, Vec2::splat(11.0)), 0.0, Color32::WHITE, Stroke::new(1.0, Color32::BLACK), egui::StrokeKind::Middle);
+            let st = Stroke::new(2.0, Color32::BLACK);
+            p.line_segment([c - x * 3.5, c + x * 3.5], st);
+            p.line_segment([c - y * 3.5, c + y * 3.5], st);
+        }
         Zusatz::Klemme | Zusatz::KlemmeInLeitung => {
             if z == Zusatz::KlemmeInLeitung {
                 zug(p, &[c - x * 8.0, c + x * 8.0]);
@@ -368,6 +384,8 @@ mod tests {
         assert_eq!(waehlen(&s).zusatz, Some(Zusatz::Verschieben));
         s.ziehen = Ziehen::Schieben;
         assert_eq!(waehlen(&s).system, CursorIcon::Move);
+        s.ziehen = Ziehen::Kopieren;
+        assert_eq!(waehlen(&s), Zeigerwahl { system: CursorIcon::Default, zusatz: Some(Zusatz::Kopieren) });
         let mut s = zustand(None);
         s.werkzeug = Werkzeug::Klemmstelle;
         assert_eq!(waehlen(&s).zusatz, Some(Zusatz::Klemme));

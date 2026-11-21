@@ -62,6 +62,9 @@ pub enum Drag {
     /// Titel (`wert` = false) bzw. Wert eines Symbols verschieben: Maus und Lage (relativ zum Symbol) beim Drücken
     Beschriftung { id: u64, wert: bool, start: P, orig: P },
     Pan { last: Pos2 },
+    /// Rechte Maustaste gedrückt (rechts_ziehen.rs): Rasterpunkt und Bildschirmlage beim Drücken; `kopie` = auf
+    /// einem Objekt (Ziehen legt eine Kopie ab), sonst öffnet das Loslassen das Kontextmenü
+    Rechts { start: P, druck: Pos2, kopie: bool },
 }
 
 pub enum TextTarget {
@@ -242,6 +245,8 @@ pub struct App {
     pub no_snap: bool,
     /// Taste S/A gedrückt und noch nicht losgelassen: (Taste, während des Haltens benutzt)
     pub hold_press: [Option<bool>; 2],
+    /// Zustand der Tasten Leertaste/Strg+Tab/Strg+Ziffer und der Anzeige „Heute“ (blatt_tasten.rs)
+    pub bt: crate::blatt_tasten::Stand,
     /// Eigentümer › Setzen: diese Symbole übernehmen die Kennzeichnung des als Nächstes angeklickten Symbols
     /// (Blatt der Ziele, Ziel-Ids) – der Eigentümer darf auf einem anderen Blatt liegen (z. B. Spule zum Kontakt)
     pub owner_pick: Option<(SheetRef, Vec<u64>)>,
@@ -356,6 +361,7 @@ impl App {
             hold_a: false,
             no_snap: false,
             hold_press: [None, None],
+            bt: Default::default(),
             owner_pick: None,
             move_follow: vec![],
             multi_props: None,
@@ -693,9 +699,12 @@ impl App {
         id
     }
 
+    /// Höchste Nummer + 1 der Klemmleiste `leiste` der aktuellen Anlage (Klemmleisten gehören zu einer Anlage; W2
+    /// hat „-X2“ in drei Anlagen). Das Werkzeug Klemmstelle nimmt den Zähler der Leiste, siehe klemme_leitung.rs.
     pub fn next_terminal(&self, leiste: &str) -> u32 {
         let mut max = 0;
-        for a in &self.project.anlagen {
+        let a = self.cur().map(|r| r.anlage).unwrap_or(0);
+        if let Some(a) = self.project.anlagen.get(a) {
             for s in &a.sheets {
                 for o in &s.objects {
                     if let Kind::Terminal { leiste: l, nr, .. } = &o.kind {
@@ -734,7 +743,9 @@ impl App {
     pub fn place_symbol_opt(&mut self, key: String, at: P, option: u16) {
         let Some(def) = symbols::find(&self.lib, &key).cloned() else { return };
         let option = if (option as usize) < def.options.len() { option } else { 0 };
-        let pin0 = def.pins.first().copied().unwrap_or_default();
+        // Drehung per Leertaste beim Platzieren (blatt_tasten.rs)
+        let rot = self.bt.drehung % 4;
+        let pin0 = def.pins.first().map(|q| sym_xform(*q, P::default(), rot, false, false)).unwrap_or_default();
         let mut pos = self.snap(at.add(pin0)).sub(pin0);
         pos = self.align_to_path(pos);
         let bmk = self.new_bmk(&def);
@@ -744,16 +755,16 @@ impl App {
         // BMK-Lage wie das Original sie speichert (VSY Feld 10/11, Ausrichtung Feld 12): rechtsbündig am Titelanker
         // der Bibliothek bzw. links neben dem Symbol. Ohne eigene Lage übernahm der Schreiber die Werte eines
         // Vorlageblocks (hochkant, im Symbol) – das Original zeigte die BMK dann winzig und senkrecht.
-        let (title, title_align) = symbol_title_rot(&def, 0, option);
+        let (title, title_align) = symbol_title_rot(&def, rot, option);
         let ext = SymExt { querverweise: def.frg.0, sicherung: def.frg.1, title_align, ..Default::default() };
-        let id = self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option, title: Some((title, false)), flags: 0, ext });
+        let id = self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option, title: Some((title, false)), flags: 0, ext });
         // nur die Anschlüsse des gewählten Bildes (ohne Zusatzoptionen)
         let wpins: Vec<P> = def
             .pins
             .iter()
             .enumerate()
             .filter(|(i, _)| symbols::visible(option, def.pin_vis.get(*i)) && symbols::flag_visible(0, def.pin_info.get(*i).map(|x| &x.1)))
-            .map(|(_, q)| sym_xform(*q, pos, 0, false, false))
+            .map(|(_, q)| sym_xform(*q, pos, rot, false, false))
             .collect();
         self.insert_into_wire(&wpins);
         if self.auto_conn_eff() {
@@ -1062,6 +1073,7 @@ impl App {
         self.dirty = false;
         self.undo.clear();
         self.redo.clear();
+        self.bt = Default::default();
         self.tabs = vec![SheetRef { anlage: 0, sheet: 0 }];
         self.active = 0;
         self.selection.clear();

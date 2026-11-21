@@ -1014,7 +1014,9 @@ impl App {
         let Some(sheet) = anlage.sheets.get(r.sheet) else { return };
         let dc = DrawCtx { painter: &clip, xf, lib: &self.lib, project: &self.project, images: &self.images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage) };
         let colors = SheetColors { sheet: self.sheet_color, grid: self.grid_color, print: false };
-        canvas::draw_sheet_base(&dc, sheet, anlage, &colors, self.grid.then(|| (self.raster(), self.raster_ursprung(), self.opt.rand_ursprung)));
+        crate::blatt_tasten::mit_heute(self.zeigt_heute(r), || {
+            canvas::draw_sheet_base(&dc, sheet, anlage, &colors, self.grid.then(|| (self.raster(), self.raster_ursprung(), self.opt.rand_ursprung)))
+        });
         // Markierung wie im Original: Symbole mit lila Feld um ihren Umriss (6 px links/oben, 8 px rechts/unten),
         // Texte mit lila Feld und rot gestricheltem Rahmen um die Textbox
         for o in sheet.objects.iter().filter(|o| self.selection.contains(&o.id)) {
@@ -1095,6 +1097,11 @@ impl App {
                     }
                 }
             }
+            Drag::Rechts { .. } => {
+                if let Some(h) = hover {
+                    self.kopie_vorschau(&dc, xf.m(h), h, PREVIEW);
+                }
+            }
             Drag::Wire { f } => {
                 if let Some(h) = hover {
                     let end = self.wire_end(xf.m(h), xf.z);
@@ -1120,9 +1127,10 @@ impl App {
         } else if let (Some(key), Some(h)) = (self.placing.clone(), hover) {
             if area.contains(h) {
                 if let Some(def) = symbols::find(&self.lib, &key) {
-                    let pin0 = def.pins.first().copied().unwrap_or_default();
+                    let rot = self.bt.drehung % 4;
+                    let pin0 = def.pins.first().map(|q| sym_xform(*q, P::default(), rot, false, false)).unwrap_or_default();
                     let pos = self.align_to_path(self.snap(xf.m(h).add(pin0)).sub(pin0));
-                    canvas::draw_symbol(&clip, xf, def, pos, 0, false, false, 1.0, 0, Stroke::new((0.25 * xf.z).max(1.0), PREVIEW));
+                    canvas::draw_symbol(&clip, xf, def, pos, rot, false, false, 1.0, 0, Stroke::new((0.25 * xf.z).max(1.0), PREVIEW));
                 }
             }
         }
@@ -1178,9 +1186,10 @@ impl App {
         let mut ziel: Vec<P> = vec![];
         if let Some(def) = def {
             // Lage wie die Vorschau: erster Anschluss auf dem Raster, Strompfadausrichtung
-            let pin0 = def.pins.first().copied().unwrap_or_default();
+            let rot = self.bt.drehung % 4;
+            let pin0 = def.pins.first().map(|q| sym_xform(*q, P::default(), rot, false, false)).unwrap_or_default();
             let pos = self.align_to_path(self.snap(m.add(pin0)).sub(pin0));
-            for q in def.pins.iter().map(|q| sym_xform(*q, pos, 0, false, false)) {
+            for q in def.pins.iter().map(|q| sym_xform(*q, pos, rot, false, false)) {
                 if let Some(t) = self.pin_near(q, crate::mitziehen::PIN_TOL, &[]) {
                     ziel.push(t);
                 }
@@ -1469,12 +1478,9 @@ impl App {
                         self.drag = Drag::Rubber { start: m };
                     }
                 }
+                // auf einer Leitung: Klemmstelle in die Leitung setzen (klemme_leitung.rs)
                 Tool::Klemmstelle => {
-                    let ks = self.klemmleisten();
-                    let leiste = ks.get(self.klemme).cloned().unwrap_or_else(|| "Klemme 1".into());
-                    let nr = self.next_terminal(&leiste);
-                    let pos = self.snap(m);
-                    self.add_obj(Kind::Terminal { pos, leiste, nr, level: 0, text_off: None, tpl: String::new(), opt: Default::default() });
+                    self.klemmstelle_setzen(m, tol);
                 }
                 Tool::Text => {
                     let pos = self.snap(m);
@@ -1524,6 +1530,10 @@ impl App {
             if let Some(pos) = reference {
                 // Lage vor dem Ziehen = jetzige Lage − bisherige Verschiebung
                 let p0 = pos.sub(applied);
+                // Taste F gehalten wie im Original: Bezugspunkt springt auf den Rasterpunkt der Maus (blatt_tasten.rs)
+                if ui.input(|i| i.key_down(Key::F)) && !ui.ctx().egui_wants_keyboard_input() {
+                    total = self.fang_versatz(p0, m);
+                }
                 let np = self.align_to_path(p0.add(total));
                 total.x = np.x - p0.x;
             }
@@ -1656,8 +1666,19 @@ impl App {
                     }
                 }
             }
+            // Ziehen mit der rechten Taste: Kopie bzw. Menü beim Loslassen (rechts_ziehen.rs)
+            self.rechts_druck(ziel, m, h);
         }
-        resp.context_menu(|ui| {
+        let (released_r, down_r) = ui.input(|i| (i.pointer.button_released(PointerButton::Secondary), i.pointer.button_down(PointerButton::Secondary)));
+        let (mut los_ohne_kopie, mut kopiert) = (false, false);
+        if released_r || !down_r {
+            match self.rechts_los(m, h) {
+                crate::rechts_ziehen::Los::Menue => los_ohne_kopie = released_r,
+                crate::rechts_ziehen::Los::Kopie => kopiert = true,
+                crate::rechts_ziehen::Los::Nichts => {}
+            }
+        }
+        egui::Popup::menu(resp).open_memory(crate::rechts_ziehen::menue_befehl(resp, los_ohne_kopie, kopiert)).at_pointer_fixed().show(|ui| {
             ui.style_mut().override_font_id = Some(FontId::proportional(12.0));
             self.canvas_menu(ui);
         });
@@ -2000,6 +2021,7 @@ impl App {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
+        self.blatt_verfolgen();
         if ctx.egui_wants_keyboard_input() || self.dialog.is_some() || self.xdlg.is_some() || self.opt_dlg.is_some() || self.ask_save.is_some() || self.multi_props.is_some() {
             self.hold_s = false;
             self.hold_a = false;
@@ -2062,6 +2084,14 @@ impl App {
         });
         for id in fired {
             self.run_befehl(id);
+        }
+        // Strg+Tab, Leertaste, Strg+1…9 wie im Original (blatt_tasten.rs); die Leertaste nicht, solange ein
+        // Bedienelement den Tastaturfokus hat (dort löst sie es aus)
+        let fokus = ctx.memory(|m| m.focused().is_some());
+        for t in ctx.input(crate::blatt_tasten::tasten) {
+            if !(t == crate::blatt_tasten::Taste::Leertaste && fokus) {
+                self.blatt_taste(t);
+            }
         }
         // Pfeiltasten gehören dem Projektbaum, solange er zuletzt angeklickt wurde
         let arrows = if crate::baum_klappen::hat_fokus(ctx) { [false; 4] } else { arrows };

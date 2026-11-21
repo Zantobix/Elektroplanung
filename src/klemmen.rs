@@ -242,7 +242,7 @@ fn leiste_id(a: &Anlage, name: &str) -> i32 {
     a.klemmen.iter().find(|k| k.name == name).map(|k| k.id).unwrap_or(0)
 }
 
-fn etagen(a: &Anlage, name: &str) -> i32 {
+pub fn etagen(a: &Anlage, name: &str) -> i32 {
     a.klemmen.iter().find(|k| k.name == name).map(|k| k.etagen).unwrap_or(1).max(1)
 }
 
