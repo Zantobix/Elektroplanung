@@ -82,12 +82,13 @@ pub fn tool_list() -> Vec<Value> {
         tool("add_sheet", "Neues Blatt in einer Anlage anlegen.", json!({"anlage": {"type": "integer"}, "name": {"type": "string"}, "portrait": {"type": "boolean"}}), &["anlage"]),
         tool("set_sheet", "Blatt umbenennen, Nummer oder Format ändern.",
             merge(sheet_props(), json!({"name": {"type":"string"}, "number": {"type":"integer"}, "portrait": {"type":"boolean"}})), &["anlage", "sheet"]),
-        tool("add_object", "Zeichenobjekt einfügen. kind: line|rect|circle|curve|text|wire. points: [[x,y],…] in mm.",
+        tool("add_object", "Zeichenobjekt einfügen. kind: line|rect|circle|curve|text|textbox|wire. points: [[x,y],…] in mm             (textbox: zwei Ecken; Vorgabe wie im Original Rahmen an, Umbruch aus, 8 pt).",
             merge(sheet_props(), json!({
-                "kind": {"type": "string", "enum": ["line", "rect", "circle", "curve", "text", "wire"]},
+                "kind": {"type": "string", "enum": ["line", "rect", "circle", "curve", "text", "textbox", "wire"]},
                 "points": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
                 "text": {"type": "string"}, "size": {"type": "number", "description": "Schrifthöhe in mm"},
-                "vertical": {"type": "boolean"}, "pen": {"type": "integer"}
+                "vertical": {"type": "boolean"}, "pen": {"type": "integer"},
+                "frame": {"type": "boolean", "description": "Rahmen (text, textbox)"}, "wrap": {"type": "boolean", "description": "Umbruch (textbox)"}
             })), &["anlage", "sheet", "kind", "points"]),
         tool("place_symbol", "Symbol aus Projekt oder Bibliothek platzieren (key aus list_symbols).",
             merge(sheet_props(), json!({
@@ -123,15 +124,17 @@ fn obj_json(o: &Obj) -> Value {
         Kind::Curve { a, c1, c2, b } => {
             m.insert("points".into(), json!([p(a), p(c1), p(c2), p(b)]));
         }
-        Kind::Text { pos, text, size, vertical, .. } => {
+        Kind::Text { pos, text, size, vertical, style, .. } => {
             m.insert("points".into(), json!([p(pos)]));
             m.insert("text".into(), json!(text));
             m.insert("size".into(), json!(size));
             m.insert("vertical".into(), json!(vertical));
-        }
-        Kind::TextBox { a, b, text, .. } => {
-            m.insert("points".into(), json!([p(a), p(b)]));
-            m.insert("text".into(), json!(text));
+            // Textbox (ZCN 11): Box, Rahmen, Umbruch
+            if let Some((a, b)) = &style.rect {
+                m.insert("box".into(), json!([p(a), p(b)]));
+                m.insert("frame".into(), json!(style.frame));
+                m.insert("wrap".into(), json!(style.wrap));
+            }
         }
         Kind::Busbar { a, x2, name, .. } => {
             m.insert("points".into(), json!([p(a), [x2, a.y]]));
@@ -377,6 +380,17 @@ impl Server {
                             },
                         }
                     }
+                    "textbox" => {
+                        need(2)?;
+                        let flag = |k: &str| a.get(k).and_then(Value::as_bool);
+                        let mut k = crate::textbox::neu(pts[0], pts[1], arg_str(a, "text").unwrap_or("Text"));
+                        if let Kind::Text { size, style, .. } = &mut k {
+                            *size = arg_f32(a, "size").unwrap_or(*size);
+                            style.frame = flag("frame").unwrap_or(style.frame);
+                            style.wrap = flag("wrap").unwrap_or(style.wrap);
+                        }
+                        k
+                    }
                     k => return Err(format!("unbekannte Art '{k}'")),
                 };
                 let pen = a.get("pen").and_then(Value::as_u64).unwrap_or(0) as usize;
@@ -424,7 +438,7 @@ impl Server {
                     o.kind.translate(P::new(dx, dy));
                 }
                 match &mut o.kind {
-                    Kind::Text { text, .. } | Kind::TextBox { text, .. } | Kind::Verweis { text, .. } => {
+                    Kind::Text { text, .. } | Kind::Verweis { text, .. } => {
                         if let Some(t) = arg_str(a, "text") {
                             *text = t.into();
                         }

@@ -33,7 +33,7 @@ fn gemeinsam<T: PartialEq + Copy>(mut it: impl Iterator<Item = T>) -> Option<T> 
 
 fn text_size(k: &Kind) -> Option<f32> {
     match k {
-        Kind::Text { size, .. } | Kind::TextBox { size, .. } => Some(*size),
+        Kind::Text { size, .. } => Some(*size),
         _ => None,
     }
 }
@@ -84,7 +84,7 @@ impl MultiProps {
                 o.fixed = f;
             }
             if self.texts {
-                if let (Some(v), Kind::Text { size, .. } | Kind::TextBox { size, .. }) = (size, &mut o.kind) {
+                if let (Some(v), Kind::Text { size, .. }) = (size, &mut o.kind) {
                     *size = v;
                 }
             }

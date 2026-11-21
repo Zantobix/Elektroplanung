@@ -69,7 +69,6 @@ pub enum Kind {
         #[serde(default)]
         style: TextStyle,
     },
-    TextBox { a: P, b: P, text: String, size: f32 },
     /// Tabelle (TSTab): `header` = erste Zeile fett ("Überschrift"), `fixed_w` = gleiche Spaltenbreiten statt "Autobreite"
     Table {
         a: P,
@@ -294,6 +293,8 @@ fn one() -> f32 {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Obj {
     pub id: u64,
+    /// Liest auch die frühere Art `TextBox` älterer .epj-Dateien (wird zur Textbox = Text mit Box)
+    #[serde(deserialize_with = "crate::textbox::kind_lesen")]
     pub kind: Kind,
     #[serde(default)]
     pub pen: usize,
@@ -811,7 +812,7 @@ impl Kind {
                 mv(c2);
                 mv(b)
             }
-            Kind::TextBox { a, b, .. } | Kind::Table { a, b, .. } | Kind::Image { a, b, .. } => {
+            Kind::Table { a, b, .. } | Kind::Image { a, b, .. } => {
                 mv(a);
                 mv(b)
             }
@@ -839,7 +840,7 @@ impl Kind {
     }
 
     /// Rahmen zur Größenänderung: Objekt um `anchor` mit den Faktoren `sx`/`sy` strecken. Punktbasierte Objekte
-    /// (Linien, Verbindungen, Rechtecke, Kreise, Kurven, Dreiecke, Textboxen, Tabellen, Bilder, Polygone,
+    /// (Linien, Verbindungen, Rechtecke, Kreise, Kurven, Dreiecke, Tabellen, Bilder, Polygone,
     /// Sammelschienen) werden gestreckt; Symbole, Texte, Klemmstellen und Verweise nur in ihrer Lage verschoben.
     pub fn scale_about(&mut self, anchor: P, sx: f32, sy: f32) {
         let f = |p: P| P::new(anchor.x + (p.x - anchor.x) * sx, anchor.y + (p.y - anchor.y) * sy);
@@ -849,7 +850,6 @@ impl Kind {
             | Kind::Rect { a, b }
             | Kind::Triangle { a, b }
             | Kind::Circle { a, b }
-            | Kind::TextBox { a, b, .. }
             | Kind::Table { a, b, .. }
             | Kind::Image { a, b, .. } => {
                 m(a);
@@ -884,7 +884,6 @@ impl Kind {
             | Kind::Rect { a, b }
             | Kind::Triangle { a, b }
             | Kind::Circle { a, b }
-            | Kind::TextBox { a, b, .. }
             | Kind::Table { a, b, .. }
             | Kind::Image { a, b, .. } => Some((*a, *b)),
             Kind::Curve { a, b, .. } => Some((*a, *b)),
@@ -898,7 +897,6 @@ impl Kind {
             | Kind::Rect { a, b }
             | Kind::Triangle { a, b }
             | Kind::Circle { a, b }
-            | Kind::TextBox { a, b, .. }
             | Kind::Table { a, b, .. }
             | Kind::Image { a, b, .. } => {
                 *a = na;

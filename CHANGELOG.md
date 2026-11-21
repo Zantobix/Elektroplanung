@@ -67,6 +67,11 @@ Neu:
   `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
 Behoben:
+- Neue Textbox wie im Original: Doppelklick und Eigenschaften öffnen den Textbox-Dialog (Abmessung, Rahmen,
+  Umbruch, Fixiert, Ausrichtung, Drehung, Schrift, Text) statt nur „Text bearbeiten“; Vorgaben des Originals
+  (Rahmen an, Umbruch aus, 8 pt); Umbruch ist schaltbar und wird wie alle Einstellungen im `.epr` gespeichert.
+  Textboxen sind jetzt Texte mit Box (eine Art statt zwei); ältere `.epj` werden beim Laden umgewandelt.
+  MCP `add_object` kennt `kind: textbox` (mit `frame`, `wrap`), `get_sheet` liefert Box, Rahmen und Umbruch
 - Kontaktspiegel wie im Original: steht unmittelbar über dem Schriftfeld (Unterkante der Zeichenfläche minus
   größte Spiegelhöhe des Blattes, bisher mitten im Schriftfeld), Schrift und Schaltzeichen in Kontaktgröße,
   Lage „/Pfad“ für Kontakte auf demselben Blatt (sonst „Blatt/Pfad“), X-Lage folgt der Spule

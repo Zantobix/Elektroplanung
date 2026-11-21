@@ -31,7 +31,7 @@ fn main() {
         Kind::Circle { a: P::new(90.0, 70.0), b: P::new(105.0, 85.0) },
         Kind::Poly { pts: vec![P::new(110.0, 70.0), P::new(130.0, 70.0), P::new(120.0, 85.0)] },
         Kind::Text { pos: epr::text_anchor(rect.0, rect.1, Align::Left, false), text: "Text fett rot (Arial)".into(), size: 3.528, align: Align::Left, vertical: false, style: text_style },
-        Kind::TextBox { a: P::new(110.0, 30.0), b: P::new(170.0, 55.0), text: "Textbox mit Umbruch\nzweite Zeile".into(), size: 3.528 },
+        elektroplanung::textbox::mit(P::new(110.0, 30.0), P::new(170.0, 55.0), "Textbox mit Umbruch\nzweite Zeile", 3.528, TextStyle { frame: true, wrap: true, ..Default::default() }),
         Kind::Table { a: P::new(30.0, 115.0), b: P::new(130.0, 139.0), rows: 3, cols: 3, cells: ["Nr", "Name", "Wert", "1", "Lampe", "60 W", "2", "Dose", "16 A"].map(String::from).to_vec(), header: true, fixed_w: false, art: 0, ab: 0 },
         Kind::Image { a: P::new(180.0, 30.0), b: P::new(260.0, 90.0), path: "bld:1".into(), mode: 2, frame: true },
         Kind::Symbol { key, pos: P::new(200.0, 120.0), rot: 0, mirror_h: false, mirror_v: false, bmk: "-Q1".into(), value: "16A".into(), scale: 1.0, option: 0, title: Some((P::new(6.0, -4.0), false)), flags: 0, ext: SymExt { funktion: "Neu".into(), ..Default::default() } },

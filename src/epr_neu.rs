@@ -1,5 +1,6 @@
-//! Neu angelegte Blattobjekte im Originalformat (*.epr): Textbox, Tabelle, Bild (samt Projektbild BLD › JPG),
-//! Verweis und Sammelschiene, dazu die Eigenschaften, die `epr_write` für neue Linien, Texte, Symbole und
+//! Neu angelegte Blattobjekte im Originalformat (*.epr): Tabelle, Bild (samt Projektbild BLD › JPG),
+//! Verweis und Sammelschiene, dazu die Eigenschaften, die `epr_write` für neue Linien, Texte (auch Textboxen,
+//! siehe `crate::textbox`), Symbole und
 //! Verbindungen noch nicht schrieb (Fixiert, Umbruch, Schriftname, Leitung, Verbindungsbezeichnungen,
 //! Alternativtexte, Parameter).
 //!
@@ -255,20 +256,9 @@ fn bild_art(mode: u8) -> u8 {
     }
 }
 
-/// Werte einer Textbox, eines Bildes oder einer Tabelle in einen ZCN-Block schreiben (neu oder geändert).
+/// Werte eines Bildes oder einer Tabelle in einen ZCN-Block schreiben (neu oder geändert).
 fn schreibe_zcn(b: &mut Block, k: &Kind) {
     match k {
-        Kind::TextBox { a, b: e, text, size } => {
-            set_rect(b, *a, *e);
-            let pts = (size / 0.3528).round() as i32;
-            let v = b.i32(4);
-            b.set_i32(4, (v & !0xffff) | (pts & 0xffff));
-            // Textbox: Rahmen und Umbruch (wie der Nachbau sie zeichnet), links, waagerecht
-            set_byte(b, 0x18, 0);
-            set_byte(b, 0x19, 1);
-            set_byte(b, 0x1a, 1);
-            set_kid(b, "STL", stl_bytes(text), None);
-        }
         Kind::Image { a, b: e, path, mode, frame } => {
             set_rect(b, *a, *e);
             b.set_i32(4, bild_nr(path));
@@ -301,12 +291,11 @@ fn set_fixed(b: &mut Block, fixed: bool) {
     b.set_i32(15, if fixed { v | 0x1_0000 } else { v & !0x1_0000 });
 }
 
-/// Neuer Block für Textbox, Tabelle, Bild, Verweis und Sammelschiene (`None` für andere Arten).
+/// Neuer Block für Tabelle, Bild, Verweis und Sammelschiene (`None` für andere Arten).
 pub fn new_block(project: &Project, o: &Obj) -> Option<Block> {
     match &o.kind {
-        Kind::TextBox { .. } | Kind::Image { .. } | Kind::Table { .. } => {
+        Kind::Image { .. } | Kind::Table { .. } => {
             let ty = match o.kind {
-                Kind::TextBox { .. } => 11,
                 Kind::Image { .. } => 12,
                 _ => 13,
             };
@@ -478,11 +467,11 @@ pub fn patch_zusatz(b: &mut Block, s: &Sheet) {
     }
 }
 
-/// Geänderte Textbox/Tabelle/Bild bzw. Schriftname, Umbruch und Verbindungsdaten in den Originalblock übernehmen.
+/// Geänderte Tabelle/Bild bzw. Schriftname, Umbruch und Verbindungsdaten in den Originalblock übernehmen.
 pub fn patch_more(project: &Project, o: &Obj, old: &Kind, b: &mut Block) {
     if b.is("ZCN") {
         match (&o.kind, b.data.get(0x3c).copied()) {
-            (Kind::TextBox { .. }, Some(11)) | (Kind::Image { .. }, Some(12)) | (Kind::Table { .. }, Some(13)) => schreibe_zcn(b, &o.kind),
+            (Kind::Image { .. }, Some(12)) | (Kind::Table { .. }, Some(13)) => schreibe_zcn(b, &o.kind),
             (Kind::Text { style, .. }, Some(11)) => {
                 let alt = if let Kind::Text { style, .. } = old { Some(style) } else { None };
                 if alt.map(|s| s.font != style.font) != Some(false) {
@@ -628,17 +617,4 @@ pub fn tabelle_flags(k: &Block) -> (bool, bool) {
 pub fn text_extras(k: &Block) -> (bool, String) {
     let font = if k.kid("STL").is_some() { k.kid("STR").map(|s| txt(&s.data)).unwrap_or_default() } else { String::new() };
     (k.data.get(0x19).copied().unwrap_or(0) != 0, font)
-}
-
-/// Text mit Umbruch und Rahmen, sonst ohne eigene Einstellungen, ist eine Textbox des Nachbaus.
-pub fn als_textbox(kind: Kind) -> Kind {
-    if let Kind::Text { text, size, align: Align::Left, vertical: false, style, .. } = &kind {
-        let plain = TextStyle { frame: true, wrap: true, rect: style.rect, ..Default::default() };
-        if *style == plain {
-            if let Some((a, b)) = style.rect {
-                return Kind::TextBox { a, b, text: text.clone(), size: *size };
-            }
-        }
-    }
-    kind
 }

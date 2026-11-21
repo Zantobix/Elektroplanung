@@ -955,7 +955,6 @@ impl App {
                     | Kind::Rect { a, b }
                     | Kind::Triangle { a, b }
                     | Kind::Circle { a, b }
-                    | Kind::TextBox { a, b, .. }
                     | Kind::Table { a, b, .. }
                     | Kind::Image { a, b, .. } => {
                         f(a);
@@ -1390,7 +1389,7 @@ impl App {
                 let options = symbols::find(&self.lib, key).map(|d| d.options.clone()).unwrap_or_default();
                 self.dialog = Some(Dialog::Symbol { id, bmk: bmk.clone(), value: value.clone(), option: *option, options })
             }
-            Kind::Text { text, .. } | Kind::TextBox { text, .. } => {
+            Kind::Text { text, .. } => {
                 self.dialog = Some(Dialog::Text { title: "Text bearbeiten".into(), value: text.clone(), target: TextTarget::EditObj(id) })
             }
             Kind::Table { rows, cols, cells, .. } => self.dialog = Some(Dialog::Table { id, rows: rows.to_string(), cols: cols.to_string(), cells: cells.clone() }),
@@ -1453,7 +1452,7 @@ impl App {
                     self.with_sheet(|s, _| {
                         if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
                             match &mut o.kind {
-                                Kind::Text { text, .. } | Kind::TextBox { text, .. } => *text = value,
+                                Kind::Text { text, .. } => *text = value,
                                 Kind::Terminal { nr, .. } => *nr = value.trim().parse().unwrap_or(*nr),
                                 _ => {}
                             }
@@ -1688,7 +1687,8 @@ impl App {
             Tool::Rect => Kind::Rect { a, b },
             Tool::Triangle => Kind::Triangle { a, b },
             Tool::Circle => Kind::Circle { a, b },
-            Tool::TextBox => Kind::TextBox { a, b, text: "Text".into(), size: 3.5 },
+            // wie im Original ein Text mit Box (ZCN 11): Rahmen an, Umbruch aus, 8 pt – Dialog TTextbox
+            Tool::TextBox => crate::textbox::neu(a, b, "Text"),
             Tool::Table => Kind::Table { a, b, rows: 3, cols: 3, cells: vec![String::new(); 9], header: true, fixed_w: false, art: 0, ab: 0 },
             Tool::Image => Kind::Image { a, b, path: String::new(), mode: 0, frame: true },
             _ => return None,

@@ -99,7 +99,7 @@ impl App {
         let (mn, mx) = canvas::obj_bounds(o, &self.lib);
         Some(match o.kind {
             Kind::Verweis { .. } if self.sym_edit.is_none() => Ziel::Verweis { id, mn, mx },
-            Kind::Text { .. } | Kind::TextBox { .. } => Ziel::Text { id, mn, mx },
+            Kind::Text { .. } => Ziel::Text { id, mn, mx },
             _ => Ziel::Objekt { id, mn, mx },
         })
     }
