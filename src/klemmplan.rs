@@ -74,6 +74,8 @@ pub struct Plan {
     pub bruecken: Vec<Bruecke>,
     /// Höchste Etage (0/1 = einstöckig)
     pub etagen: u8,
+    /// Brückenpaare (Klemme, Gegenklemme als Nummer/Etage) in der Reihenfolge ihres Auftretens (Blätter, Klemmstellen)
+    pub paare: Vec<((u32, u8), (u32, u8))>,
 }
 
 /// Ein Treffer am Ende einer verfolgten Verbindung.
@@ -95,7 +97,8 @@ struct Klemmstelle {
 /// Belegung einer Richtung an der Klemme.
 enum Slot {
     Ziel(Ziel),
-    Bruecke,
+    /// Brücke zur Klemmstelle (Index in `Netz::terms`)
+    Bruecke(usize),
 }
 
 /// Verbindungsdaten eines Blattes.
@@ -252,7 +255,6 @@ impl<'a> Netz<'a> {
     fn klemme(&self, sheet: &Sheet, i: usize) -> ([Option<Slot>; 4], Vec<usize>) {
         let c = self.terms[i].pos;
         let mut slots: [Option<Slot>; 4] = Default::default();
-        let mut br = vec![];
         for (k, pts) in self.wires.iter().enumerate() {
             let n = pts.len();
             let from_start = if pts[0].dist(c) <= KLEMME_R + TOL {
@@ -289,15 +291,16 @@ impl<'a> Netz<'a> {
                     t => t,
                 })
                 .collect();
-            br.extend(hits.iter().filter_map(|t| if let Treffer::Bruecke(j) = t { Some(*j) } else { None }));
             if slots[dir].is_none() {
                 slots[dir] = match hits.into_iter().next() {
                     Some(Treffer::Ziel(z)) => Some(Slot::Ziel(z)),
-                    Some(Treffer::Bruecke(_)) => Some(Slot::Bruecke),
+                    Some(Treffer::Bruecke(j)) => Some(Slot::Bruecke(j)),
                     None => None,
                 };
             }
         }
+        // Brücken wie im Original (0x4830a8): je Richtung höchstens eine, die Gegenklemme dieser Richtung
+        let br = slots.iter().filter_map(|s| if let Some(Slot::Bruecke(j)) = s { Some(*j) } else { None }).collect();
         (slots, br)
     }
 }
@@ -374,6 +377,7 @@ fn plan_in(anlagen: &[Anlage], anlage: &Anlage, leiste: &str, lib: &[SymDef]) ->
     plan.zeilen.sort_by_key(|z| (z.pos, z.level, z.nr));
     plan.etagen = plan.zeilen.iter().map(|z| z.level).max().unwrap_or(0);
     plan.bruecken = ketten(&plan, &links);
+    plan.paare = links;
     plan
 }
 
@@ -384,8 +388,19 @@ fn plan_in(anlagen: &[Anlage], anlage: &Anlage, leiste: &str, lib: &[SymDef]) ->
 /// neue Kette). Eine Klemme kann so Ende einer Kette und Anfang einer anderen in einer zweiten Spur sein – so
 /// zeigt es der Original-Ausdruck des Beispielprojekts (Klemmplan -X2 der Heizungssteuerung: 4A–7A in der
 /// zweiten, 7A–12A in der ersten Spur), wo eine Zusammenfassung zu Gruppen eine einzige Linie 4A–12A ergäbe;
-/// Klemmplan -X1 (Seite 12): Brücken 3–5 und 4–5 bilden eine Kette 3, 4, 5. Abgeleitet aus beiden Ausdrucken,
-/// die Routine 0x49a86c selbst ist nur teilweise entschlüsselt.
+/// Klemmplan -X1 (Seite 12): Brücken 3–5 und 4–5 bilden eine Kette 3, 4, 5. Eine Strecke innerhalb der letzten
+/// Kette einer Spur, die über weitere Brücken mit ihr verbunden ist, kommt ebenfalls in diese Kette (Seite 22,
+/// Klemmplan -X3 der Unterverteilung 2: 3–6, 4–5, 5–6 als eine Kette 3–6). Abgeleitet aus den Ausdrucken
+/// Seite 12, 13, 20–22 und 39.
+///
+/// Stand der Entschlüsselung von 0x49a86c: Die Paare hängen je Zeile in einer Liste (Knoten: eigene Klemme,
+/// Gegenklemme, nächster). Für jede Zeile wird unter ihren Knoten die Gegenklemme gesucht, deren Zeile am
+/// nächsten darunter liegt; nur dieser Knoten bleibt an der Zeile, die übrigen werden an die Liste der
+/// Gegenklemme gehängt (so entsteht eine Kette von oben nach unten). Zwei gleich nahe Gegenklemmen melden
+/// „Fehler beim Initialisieren der Brücken“. Ein zweiter Durchlauf entfernt rückläufige Paare (Gegenklemme
+/// darüber) und hängt Paare mit gemeinsamer Gegenklemme um; die Spurvergabe danach ist nicht entschlüsselt.
+/// Offen: Der Ausdruck Seite 39 zeigt die Brücke 10B→6B nicht (2B–4B–6B und 10B–12B getrennt), obwohl sie im
+/// Projekt genauso gezeichnet ist wie 6B→4B und 12B→10B.
 pub fn ketten(plan: &Plan, links: &[((u32, u8), (u32, u8))]) -> Vec<Bruecke> {
     let idx = |k: (u32, u8)| plan.zeilen.iter().position(|z| (z.nr, z.level) == k);
     let mut strecken: Vec<(usize, usize)> = links
@@ -396,11 +411,29 @@ pub fn ketten(plan: &Plan, links: &[((u32, u8), (u32, u8))]) -> Vec<Bruecke> {
         .collect();
     strecken.sort();
     strecken.dedup();
+    // zusammenhängende Klemmen (über alle Brücken verbunden): Vertreter je Zeile
+    let mut gruppe: Vec<usize> = (0..plan.zeilen.len()).collect();
+    fn wurzel(g: &mut [usize], mut i: usize) -> usize {
+        while g[i] != i {
+            g[i] = g[g[i]];
+            i = g[i];
+        }
+        i
+    }
+    for (a, b) in &strecken {
+        let (ra, rb) = (wurzel(&mut gruppe, *a), wurzel(&mut gruppe, *b));
+        gruppe[ra.max(rb)] = ra.min(rb);
+    }
+    let gr: Vec<usize> = (0..gruppe.len()).map(|i| wurzel(&mut gruppe, i)).collect();
     // je Spur die Ketten (Zeilen aufsteigend); die letzte Kette einer Spur bestimmt, ob die Spur frei ist
     let mut spuren: Vec<Vec<Vec<usize>>> = vec![];
     for (oben, unten) in strecken {
-        // Spur frei (letzte Kette endet über der Strecke) oder letzte Kette enthält eine ihrer Klemmen
-        let teilt = |sp: &Vec<Vec<usize>>| sp.last().map(|k| k.contains(&oben) || k.contains(&unten)).unwrap_or(false);
+        // Spur frei (letzte Kette endet über der Strecke) oder letzte Kette enthält eine ihrer Klemmen oder
+        // umfasst die Strecke und gehört zur selben verbundenen Gruppe (Ausdruck Seite 22, Klemmplan -X3: Brücken
+        // 3–6, 4–5 und 5–6 als eine Kette 3, 4, 5, 6 in einer Spur)
+        let teilt = |sp: &Vec<Vec<usize>>| {
+            sp.last().map(|k| k.contains(&oben) || k.contains(&unten) || (k[0] < oben && unten < *k.last().unwrap() && gr[k[0]] == gr[oben])).unwrap_or(false)
+        };
         let frei = |sp: &Vec<Vec<usize>>| sp.last().and_then(|k| k.last()).map(|e| *e < oben).unwrap_or(true);
         match spuren.iter().position(|sp| teilt(sp) || frei(sp)) {
             Some(l) if teilt(&spuren[l]) => {
@@ -430,9 +463,40 @@ pub fn folge_index(anlage: &Anlage, sheet: &Sheet) -> usize {
 /// Zeilen je Klemmplan-Blatt (gleiche Rechnung wie beim Zeichnen).
 pub fn rows_per_sheet(project: &Project, sheet: &Sheet) -> usize {
     let (_, fy0, _, fy1) = sheet.frame();
-    let (y0, y1) = (fy0 + 10.0, fy1 - project.title_h() - 4.0);
-    ((((y1 - y0 - 9.0) / 4.4).floor().max(3.0)) as usize).saturating_sub(2)
+    let (y0, y1) = (fy0 + TAB_OBEN, fy1 - project.title_h());
+    ((((y1 - y0 - TITEL_H) / ZEILE_H + 1e-3).floor().max(4.0)) as usize).saturating_sub(3)
 }
+
+// Maße der Tabelle, vermessen an den Original-Ausdrucken (Seite 12, 13, 20–22, 39 von „Elektroplanung Wohnung 2“):
+// Tabelle 10 mm unter der Rahmenoberkante bis an das Schriftfeld, Kopfband 10 mm, Zeilen 5 mm, Schrift 3,43 mm
+// (Grundlinie 1,35 mm unter der Zeilenmitte, 1,5 mm Einzug), links 4,9 mm und rechts 7,1 mm innerhalb des Rahmens.
+/// Abstand der Tabelle von der Rahmenoberkante (mm)
+const TAB_OBEN: f32 = 10.0;
+/// Höhe des Kopfbands mit dem Leistennamen (mm)
+const TITEL_H: f32 = 10.0;
+/// Zeilenhöhe (mm)
+const ZEILE_H: f32 = 5.0;
+/// Schriftgröße (Geviert, mm)
+const SCHRIFT: f32 = 3.43;
+/// Einzug der Texte in der Zelle (mm)
+const EINZUG: f32 = 1.5;
+/// Feste Spaltenbreiten (mm): Funktion, KL, Nr, Brücken; Kennung mindestens `KENNUNG_MIN`, sonst längster Text +
+/// `KENNUNG_RAND`; Pfad füllt den Von-Block (Kennung, KL, Pfad: 84,8 mm) bzw. den Nach-Block bis zum rechten Rand.
+const FUNKTION_B: f32 = 56.6;
+const KL_B: f32 = 9.4;
+const NR_B: f32 = 9.4;
+const BRUECKEN_B: f32 = 20.3;
+const KENNUNG_MIN: f32 = 28.3;
+const KENNUNG_RAND: f32 = 3.0;
+const VON_BLOCK: f32 = 84.8;
+/// Breite der Tabelle im Ausdruck (Querformat A4), bei anderen Blattbreiten wird gestreckt
+const TAB_B: f32 = 275.0;
+/// Brückenspalte: Klemmenkreis (Mitte 2,54 mm vom Spaltenrand, Radius 1,2 mm), je Etage bzw. Spur 2,45 mm weiter;
+/// Brückenpunkte Radius 0,65 mm
+const KREIS_X: f32 = 2.54;
+const KREIS_R: f32 = 1.2;
+const SPUR_DX: f32 = 2.45;
+const PUNKT_R: f32 = 0.65;
 
 /// Klemmplan zeichnen (Original-Ausdruck Seite 12 bzw. "Alter Klemmenplan" in den Projekteigenschaften).
 pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
@@ -441,9 +505,10 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
     let z = xf.z;
     let (fx0, fy0, fx1, fy1) = sheet.frame();
     let stroke = Stroke::new((0.18 * z).max(1.0), Color32::BLACK);
+    // Texte senkrecht mittig mit der Grundlinie wie im Ausdruck (egui-Zeile 1,15 Geviert → 0,08 Geviert tiefer)
     let text = |at: P, t: &str, em: f32, a: Align2| {
         if !t.is_empty() {
-            p.text(xf.s(at), a, t, canvas::times(em * z), Color32::BLACK);
+            p.text(xf.s(P::new(at.x, at.y + 0.08 * em)), a, t, canvas::times(em * z), Color32::BLACK);
         }
     };
     let ki = anlage.klemmen.iter().find(|k| k.id == sheet.klm);
@@ -451,25 +516,47 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
     let plan = plan_projekt(dc.project, anlage, name, dc.lib);
     let alt = dc.project.alter_klemmenplan;
     let mehr = plan.etagen > 1;
-    let (x0, x1) = (fx0 + 4.0, fx1 - 4.0);
-    let y0 = fy0 + 10.0;
-    let y1 = fy1 - dc.project.title_h() - 4.0;
+    let (x0, x1) = (fx0 + 4.9, fx1 - 7.1);
+    let y0 = fy0 + TAB_OBEN;
+    let y1 = fy1 - dc.project.title_h();
     // Spalten wie im Original (FUN 0x48e530, Fall Klemmplan): Standard 9 Spalten "Funktion | Kennung KL Pfad |
     // Nr | Brücken | Kennung KL Pfad"; alter Klemmenplan 8 Spalten "Kennung Anschluß Pfad | | Klemme |
     // Kennung Anschluß Pfad" (ohne Funktion und Brücken)
-    let base: &[f32] = if alt { &[57.0, 18.0, 30.0, 6.0, 30.0, 57.0, 18.0, 64.0] } else { &[57.0, 33.6, 9.4, 42.0, 9.5, 20.5, 35.0, 8.0, 64.0] };
-    let f = (x1 - x0) / base.iter().sum::<f32>();
-    let widths: Vec<f32> = base.iter().map(|w| w * f).collect();
+    let widths: Vec<f32> = if alt {
+        let base = [57.0, 18.0, 30.0, 6.0, 30.0, 57.0, 18.0, 64.0];
+        let f = (x1 - x0) / base.iter().sum::<f32>();
+        base.iter().map(|w| w * f).collect()
+    } else {
+        // Kennung so breit wie der längste Text (Ausdruck: 28,3 mm mindestens, „-X1.N=S3 (Schiene -X1.N=S3)“ 46,3 mm)
+        let laengste = |nach: bool| {
+            plan.zeilen.iter().filter_map(|z| if nach { z.nach.as_ref() } else { z.von.as_ref() }).map(|z| crate::textmass::breite(&z.kennung, SCHRIFT, false, false)).fold(0.0, f32::max)
+        };
+        // feste Spalten mit der Tabellenbreite gestreckt, die Brückenspalte nicht (Hochformat Seite 20: Funktion
+        // 36,1 mm, KL/Nr 6,0 mm, Brücken 20,2 mm); Kennung nach dem längsten Text
+        let f = ((x1 - x0 - BRUECKEN_B) / (TAB_B - BRUECKEN_B)).max(0.1);
+        let kv = (laengste(false) + KENNUNG_RAND).max(KENNUNG_MIN * f);
+        let kn = (laengste(true) + KENNUNG_RAND).max(KENNUNG_MIN * f);
+        let pv = (VON_BLOCK * f - kv - KL_B * f).max(KL_B * f);
+        let fest = [FUNKTION_B * f, kv, KL_B * f, pv, NR_B * f, BRUECKEN_B, kn, KL_B * f];
+        let pn = (x1 - x0 - fest.iter().sum::<f32>()).max(KL_B * f);
+        let mut v = fest.to_vec();
+        v.push(pn);
+        v
+    };
     let mut xs = vec![x0];
     for w in &widths {
         xs.push(xs.last().unwrap() + w);
     }
-    let (th, rh) = (9.0, 4.4);
-    let n = (((y1 - y0 - th) / rh).floor().max(3.0)) as usize;
+    // so viele 5-mm-Zeilen wie passen, dann gleichmäßig auf die Höhe verteilt (Hochformat Seite 20: 5,04 mm);
+    // das Kopfband ist zwei Zeilen hoch
+    let n = (((y1 - y0 - TITEL_H) / ZEILE_H + 1e-3).floor().max(4.0)) as usize;
+    let rh = (y1 - y0) / (n + 2) as f32;
+    let th = 2.0 * rh;
     let ybot = y0 + th + n as f32 * rh;
     p.rect_stroke(Rect::from_min_max(xf.s(P::new(x0, y0)), xf.s(P::new(x1, ybot))), 0.0, stroke, egui::StrokeKind::Middle);
     p.line_segment([xf.s(P::new(x0, y0 + th)), xf.s(P::new(x1, y0 + th))], stroke);
-    text(P::new((x0 + x1) / 2.0, y0 + th / 2.0), name, 2.6, Align2::CENTER_CENTER);
+    // Leistenname mittig zwischen Tabellenanfang und rechtem Rahmen (Ausdruck: um 3,5 mm rechts der Tabellenmitte)
+    text(P::new((x0 + fx1) / 2.0, y0 + th / 2.0), name, SCHRIFT, Align2::CENTER_CENTER);
     // Gruppenzeile: senkrechte Linien nur an den Gruppengrenzen
     let (von_col, nach_col, groups): (usize, usize, &[usize]) = if alt { (0, 5, &[3, 4, 5]) } else { (1, 6, &[1, 4, 5, 6]) };
     for (i, x) in xs.iter().enumerate().skip(1).take(widths.len() - 1) {
@@ -478,14 +565,14 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
     }
     for r in 1..n {
         let y = y0 + th + r as f32 * rh;
-        let (a, b) = if r == 1 && !alt { (xs[1], x1) } else { (x0, x1) };
-        p.line_segment([xf.s(P::new(a, y)), xf.s(P::new(b, y))], stroke);
+        // auch unter der Gruppenzeile über die ganze Breite (Ausdruck Seite 12)
+        p.line_segment([xf.s(P::new(x0, y)), xf.s(P::new(x1, y))], stroke);
     }
     let gy = y0 + th + rh / 2.0;
-    text(P::new(xs[von_col] + 0.8, gy), "Von Ziel", 2.2, Align2::LEFT_CENTER);
-    text(P::new(xs[nach_col] + 0.8, gy), "Nach Ziel", 2.2, Align2::LEFT_CENTER);
+    text(P::new(xs[von_col] + EINZUG, gy), "Von Ziel", SCHRIFT, Align2::LEFT_CENTER);
+    text(P::new(xs[nach_col] + EINZUG, gy), "Nach Ziel", SCHRIFT, Align2::LEFT_CENTER);
     if mehr && !alt {
-        text(P::new(xs[6] - 0.8, gy), "Brücken", 2.2, Align2::RIGHT_CENTER);
+        text(P::new(xs[6] - EINZUG, gy), "Brücken", SCHRIFT, Align2::RIGHT_CENTER);
     }
     let abc: String = (0..plan.etagen.min(26)).map(|i| (b'A' + i) as char).collect();
     let head: Vec<&str> = if alt {
@@ -497,13 +584,14 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
     let hy = y0 + th + 1.5 * rh;
     for (c, h) in head.iter().enumerate() {
         if centered(c) && !(mehr && c == 5) {
-            text(P::new((xs[c] + xs[c + 1]) / 2.0, hy), h, 2.2, Align2::CENTER_CENTER);
+            text(P::new((xs[c] + xs[c + 1]) / 2.0, hy), h, SCHRIFT, Align2::CENTER_CENTER);
         } else {
-            text(P::new(xs[c] + 0.8, hy), h, 2.2, Align2::LEFT_CENTER);
+            text(P::new(xs[c] + EINZUG, hy), h, SCHRIFT, Align2::LEFT_CENTER);
         }
     }
     let row_y = |r: usize| y0 + th + (r as f32 + 2.5) * rh;
-    let rows = n.saturating_sub(2);
+    // zwei Kopfzeilen; die letzte Zeile bleibt im Ausdruck leer (ohne Klemmenkreis)
+    let rows = n.saturating_sub(3);
     // Zellen einer Zeile: (Spalte, Text)
     let ziel_cells = |c0: usize, zz: &Option<Ziel>| -> Vec<(usize, String)> {
         match zz {
@@ -517,7 +605,7 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
         let y = row_y(r);
         let Some(zl) = plan.zeilen.get(off + r) else {
             if !alt {
-                p.circle_stroke(xf.s(P::new(xs[5] + 2.0, y)), 0.8 * z, stroke);
+                p.circle_stroke(xf.s(P::new(xs[5] + KREIS_X, y)), KREIS_R * z, stroke);
             }
             continue;
         };
@@ -532,30 +620,30 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
             cells.extend(ziel_cells(6, &zl.nach));
             let first_of_nr = r == 0 || plan.zeilen[off + r - 1].nr != zl.nr;
             if first_of_nr {
-                text(P::new(xs[5] - 0.8, y), &zl.nr.to_string(), 2.2, Align2::RIGHT_CENTER);
+                text(P::new((xs[4] + xs[5]) / 2.0, y), &zl.nr.to_string(), SCHRIFT, Align2::CENTER_CENTER);
             }
-            let dx = if mehr { zl.level.max(1) as f32 * 3.0 - 1.0 } else { 2.0 };
-            p.circle_stroke(xf.s(P::new(xs[5] + dx, y)), 0.8 * z, stroke);
+            let dx = KREIS_X + if mehr { (zl.level.max(1) - 1) as f32 * SPUR_DX } else { 0.0 };
+            p.circle_stroke(xf.s(P::new(xs[5] + dx, y)), KREIS_R * z, stroke);
         }
         for (c, t) in cells {
             if centered(c) {
-                text(P::new((xs[c] + xs[c + 1]) / 2.0, y), &t, 2.2, Align2::CENTER_CENTER);
+                text(P::new((xs[c] + xs[c + 1]) / 2.0, y), &t, SCHRIFT, Align2::CENTER_CENTER);
             } else {
-                text(P::new(xs[c] + 0.8, y), &t, 2.2, Align2::LEFT_CENTER);
+                text(P::new(xs[c] + EINZUG, y), &t, SCHRIFT, Align2::LEFT_CENTER);
             }
         }
     }
     // Brücken: Punkt je Klemme, senkrechte Linie von der ersten bis zur letzten (Spuren nebeneinander)
     // bei mehrstöckigen Leisten rechts neben den Etagen-Kreisen (Ausdruck Seite 39)
     if !alt {
-        let x0 = if mehr { xs[5] + plan.etagen as f32 * 3.0 + 1.2 } else { xs[5] + 4.2 };
+        let x0 = xs[5] + KREIS_X + plan.etagen.max(1) as f32 * SPUR_DX;
         for b in &plan.bruecken {
-            let x = x0 + b.lane as f32 * 3.3;
+            let x = x0 + b.lane as f32 * SPUR_DX;
             let vis: Vec<usize> = b.rows.iter().copied().filter(|r| *r >= off && *r < off + rows).map(|r| r - off).collect();
             let (Some(lo), Some(hi)) = (vis.first(), vis.last()) else { continue };
             p.line_segment([xf.s(P::new(x, row_y(*lo))), xf.s(P::new(x, row_y(*hi)))], stroke);
             for r in &vis {
-                p.circle_filled(xf.s(P::new(x, row_y(*r))), (0.35 * z).max(1.5), Color32::BLACK);
+                p.circle_filled(xf.s(P::new(x, row_y(*r))), (PUNKT_R * z).max(1.5), Color32::BLACK);
             }
         }
     }
@@ -635,5 +723,10 @@ mod tests {
         assert_eq!(k, vec![(0, vec![0, 1, 2]), (0, vec![3, 4, 5])]);
         let k: Vec<(usize, Vec<usize>)> = ketten(&p1, &[(e(1), e(3)), (e(2), e(4))]).into_iter().map(|b| (b.lane, b.rows)).collect();
         assert_eq!(k, vec![(0, vec![0, 2]), (1, vec![1, 3])]);
+        // Seite 22: 3–6, 4–5, 5–6 (verbunden) eine Kette; 1–4 mit nicht verbundenem 2–3 bleiben nebeneinander
+        let k: Vec<(usize, Vec<usize>)> = ketten(&p1, &[(e(3), e(6)), (e(4), e(5)), (e(5), e(4)), (e(6), e(5))]).into_iter().map(|b| (b.lane, b.rows)).collect();
+        assert_eq!(k, vec![(0, vec![2, 3, 4, 5])]);
+        let k: Vec<(usize, Vec<usize>)> = ketten(&p1, &[(e(1), e(4)), (e(2), e(3))]).into_iter().map(|b| (b.lane, b.rows)).collect();
+        assert_eq!(k, vec![(0, vec![0, 3]), (1, vec![1, 2])]);
     }
 }

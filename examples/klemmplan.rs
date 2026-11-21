@@ -13,8 +13,13 @@ fn main() {
             for z in &plan.zeilen {
                 println!("{:>3}{} | {:<32} | {}", z.nr, if z.level > 0 { (b'A' + z.level - 1) as char } else { ' ' }, f(&z.von), f(&z.nach));
             }
-            let br: Vec<Vec<String>> = plan.bruecken.iter().map(|b| b.rows.iter().map(|r| format!("{}{}", plan.zeilen[*r].nr, plan.zeilen[*r].level)).collect()).collect();
-            println!("Brücken {br:?}");
+            let k = |(nr, l): (u32, u8)| if l > 0 { format!("{nr}{}", (b'@' + l) as char) } else { nr.to_string() };
+            let paare: Vec<String> = plan.paare.iter().map(|(x, y)| format!("{}-{}", k(*x), k(*y))).collect();
+            println!("Paare {}", paare.join(" "));
+            for b in &plan.bruecken {
+                let r: Vec<String> = b.rows.iter().map(|r| k((plan.zeilen[*r].nr, plan.zeilen[*r].level))).collect();
+                println!("Brücke Spur {}: {}", b.lane, r.join(", "));
+            }
         }
     }
 }

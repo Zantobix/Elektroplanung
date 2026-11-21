@@ -263,8 +263,15 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   Kennzeichnung des Eigentümers und darunter dessen Lage (Ausdruck Seite 10/18/29: „-K1“ mit „/5“, „/4“, „/5“;
   Schrift etwa 1,5 mm, Grundlinie 2 mm unter der Kennzeichnung, mittig). `src/eigentuemer.rs`.
 - Klemmplan-Brücken: je Brückenverbindung ein Paar Klemme/Gegenklemme (0x4830a8), geordnet zu Ketten (0x49a86c);
-  gezeichnet in Spuren: erste Spur, deren letzte Kette eine der Klemmen enthält oder darüber endet (aus den
-  Ausdrucken Seite 12 und 39, `klemmplan::ketten`).
+  gezeichnet in Spuren: erste Spur, deren letzte Kette eine der Klemmen enthält, die Strecke umfasst und mit ihr
+  verbunden ist, oder darüber endet (aus den Ausdrucken Seite 12, 13, 20–22 und 39, `klemmplan::ketten`). Je
+  Anschlussrichtung zählt nur die erste Verbindung (0x4830a8 legt höchstens vier Paare je Klemme an). 0x49a86c:
+  Paare je Zeile als Liste; behalten wird die Gegenklemme mit der nächsten Zeile darunter, die übrigen Paare
+  wandern zur Gegenklemme; gleich nahe Gegenklemmen melden „Fehler beim Initialisieren der Brücken“.
+- Klemmplan-Tabelle (Ausdruck): 10 mm unter dem Rahmen bis ans Schriftfeld, links 4,9/rechts 7,1 mm eingerückt,
+  n = ⌊(Höhe − 10)/5⌋ Zeilen, Zeilenhöhe = Höhe/(n + 2), Kopfband 2 Zeilen, letzte Zeile leer; Schrift 3,43 mm;
+  Spalten Funktion 56,6, KL 9,4, Nr 9,4 (mit (Breite − 20,3)/254,7 gestreckt), Brücken 20,3 fest, Kennung =
+  längster Text + 3 mm (mindestens 28,3 gestreckt).
 - BLT Feld 32 Byte 1 (0x81) = Zusatz: Deckblatt 0 mit/1 ohne Rahmen, Querverweise 1–3 Tabellen, Artikelliste
   0 Summenliste/1 Summe+BMK/2 Einzelliste (Klemmplan: ab Bit 8 die Leiste).
 - OBJ (0x40 Byte): Feld 4 Wort 0 = 0xFFFF, Byte 2 Art (0 Sammelschiene, 1 Verweis, 2 Klemmstelle), Byte 3 = 1 Text

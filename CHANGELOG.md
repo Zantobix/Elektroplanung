@@ -9,6 +9,13 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Geändert (Vergleich mit dem Original-Ausdruck):
+- Textboxen: Text 0,2 mm eingerückt, Zeilenabstand 1,13 Geviert, hochkante Zeilen ab dem linken Boxrand
+- Schriftfeld: Schrift 0,88 × Feldhöhe (statt 0,72), „Von“ aus „Erstellt von“ der Anlage; Spaltennummern 12 pt
+- Klemmplan: Zeilen 5 mm, Schrift 3,43 mm, Spaltenbreiten nach dem längsten Text, Klemmenkreise und
+  Brückenspuren wie im Ausdruck; je Anschlussrichtung höchstens eine Brücke; verbundene Brücken innerhalb einer
+  Kette bleiben in deren Spur (Klemmplan -X3: 3–6, 4–5, 5–6 als eine Kette)
+
 Neu:
 - PDF: Texte mit eigener Schrift betten die installierte TrueType-Schrift als Teilmenge ein (statt Helvetica/
   Courier/Times); Rückfall auf die Standardschriften wie bisher
