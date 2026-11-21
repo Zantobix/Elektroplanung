@@ -939,8 +939,9 @@ impl App {
                     let r = Rect::from_min_max(xf.s(a) - Vec2::splat(6.0), xf.s(b) + Vec2::splat(8.0));
                     clip.rect_filled(r, 0.0, fill);
                 }
-                Kind::Text { style, .. } => {
-                    let (a, b) = style.rect.unwrap_or_else(|| canvas::obj_bounds(o, &self.lib));
+                Kind::Text { .. } => {
+                    // Umriss wie gezeichnet (Textbox und Schrift, textmass.rs) – passt auch nach dem Vergrößern
+                    let (a, b) = canvas::obj_bounds(o, &self.lib);
                     let r = Rect::from_min_max(xf.s(a), xf.s(b)).expand(2.0);
                     clip.rect_filled(r, 0.0, fill);
                     clip.add(egui::Shape::dashed_line(&[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()], Stroke::new(1.0, Color32::from_rgb(223, 0, 11)), 3.0, 2.0));
@@ -1017,6 +1018,11 @@ impl App {
             }
             _ => {}
         }
+        // Vormarkierung (gestricheltes Rechteck) und Zusatz am Mauszeiger, siehe hover.rs
+        if let (Some(z), Some(h)) = (crate::hover::gemerkt(ui.ctx()), hover) {
+            crate::hover::rechteck(&clip, xf, &z);
+            crate::hover::zusatz(&clip, h, &z);
+        }
         if let Some(ring) = &self.ring {
             // Variantenrad: Ring mit den Bildern, im Loch das gewählte Bild um die Absetzstelle zentriert
             if let Some(def) = symbols::find(&self.lib, &ring.key) {
@@ -1060,7 +1066,7 @@ impl App {
         let Some(sheet) = self.sheet() else { return };
         let mark = Color32::from_rgb(0, 90, 200);
         let hit = Color32::from_rgb(0, 160, 0);
-        for o in sheet.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })) {
+        for o in sheet.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. } | Kind::Verweis { .. })) {
             for q in canvas::obj_pins(o, &self.lib).into_iter().filter(|q| q.dist(m) <= SNAP_SHOW) {
                 p.rect_stroke(Rect::from_center_size(xf.s(q), Vec2::splat(5.0)), 0.0, Stroke::new(1.0, mark), StrokeKind::Middle);
             }
@@ -1116,6 +1122,8 @@ impl App {
         let blocked = ui.ctx().any_popup_open() || hover.map(|h| ui.ctx().layer_id_at(h) != Some(ui.layer_id())).unwrap_or(true);
         let inside = !blocked && hover.map(|h| area.contains(h)).unwrap_or(false);
         let tol = 5.0 / xf.z;
+        // Vormarkierung des vorigen Bildes verwerfen (wird unten neu bestimmt, siehe hover.rs)
+        crate::hover::setzen(ui.ctx(), resp, None);
         if let Some(h) = hover {
             if inside {
                 self.mouse_mm = self.snap(xf.m(h));
@@ -1227,11 +1235,10 @@ impl App {
             return;
         }
 
-        // Strg über einem Verweis: Hand als Mauszeiger, Strg+Klick springt zum Ziel
-        if inside && ctrl && self.tool == Tool::Select && matches!(self.drag, Drag::None) && self.verweis_unter(m, tol).is_some() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            resp.clone().on_hover_text_at_pointer("Strg+Klick: zum Ziel springen");
-            if pressed_l && self.verweis_strg_klick(m, tol) {
+        // Vormarkierung und Mauszeiger beim Überfahren (über Verweisen Hand und Hinweis); Strg+Klick springt zum Ziel
+        if inside && self.tool == Tool::Select && matches!(self.drag, Drag::None) {
+            crate::hover::setzen(ui.ctx(), resp, self.vormarkierung(m, tol, xf.z));
+            if ctrl && pressed_l && self.verweis_strg_klick(m, tol) {
                 return;
             }
         }
@@ -1239,10 +1246,6 @@ impl App {
         if inside && pressed_l {
             match self.tool {
                 Tool::Select => {
-                    // Titel/Wert eines markierten Symbols ziehen
-                    if !shift && !ctrl && self.beschriftung_greifen(m, tol) {
-                        return;
-                    }
                     if let Some((mn, mx)) = self.sel_frame() {
                         let r = (FRAME_HANDLE / 2.0).max(2.5 / xf.z) + 0.5 / xf.z;
                         let nur_ecken = crate::groesse::proportional(&self.selected_objs());
@@ -1266,6 +1269,10 @@ impl App {
                                 }
                             }
                         }
+                    }
+                    // Titel/Wert eines Symbols gegenüber dem Symbol verschieben (wie im Original ohne Markieren)
+                    if !shift && !ctrl && self.beschriftung_greifen(m, tol) {
+                        return;
                     }
                     if let Some(pin) = self.pin_near(m, tol, &[]) {
                         let on_selected = self.selected_objs().iter().any(|o| canvas::hit(o, m, tol, &self.lib));

@@ -26,8 +26,18 @@ Neu:
   geschrieben; neue Verbindungen mit Leitung und Verbindungsbezeichnungen, neue Symbole mit Zähler,
   Alternativtexten und Parametern, neue Zeichenelemente mit „Fixiert“
 - .epr: Schriftname und Umbruch von Texten, Bilder auf dem Blatt (Typ 12) und Tabelleneinstellungen werden gelesen
+- Zeichenfläche: Vormarkierung wie im Original – das Objekt unter der Maus bekommt ein gestricheltes Rechteck;
+  Mauszeiger mit Verschiebekreuz (Objekte) bzw. „A“ (Texte), Größenpfeile über den Griffen, Hand und Hinweis
+  „Strg+Klick“ schon beim Überfahren eines Verweises
+- Titel und Wert eines Symbols lassen sich direkt (ohne vorheriges Markieren) gegenüber dem Symbol verschieben
+- Leitungen lassen sich an die Pfeilspitze eines Verweises anschließen; im .epr verweist die Verbindung auf den
+  Verweis (VBG Feld 2/3 bzw. 6/7), Leitungen ziehen beim Verschieben des Verweises mit
 
 Behoben:
+- Vergrößerter Text: Markierung, Treffer und Rahmen passten nicht zur gezeichneten Schrift (die Textbox wuchs
+  nicht mit; Umriss jetzt aus den Schriftmaßen der Times)
+- Drehen eines Verweises dreht nur den Pfeil, der Text bleibt an seiner Stelle; beim Vergrößern eines Symbols
+  bleiben Titel und Wert stehen
 - Die Rackposition überschrieb beim Speichern die Parameterwerte des Symbols (SPA)
 - .epr: Verschieben eines Textes oder einer Tabelle veränderte Schriftgrad bzw. Spalten/Zeilen im Originalblock
 

@@ -106,17 +106,14 @@ pub fn busbar_text_at(project: &Project, r: SheetRef, m: P, tol: f32) -> Option<
 }
 
 /// Verweis drehen/spiegeln (op wie `App::transform_selection`: 1 = 90° im Uhrzeigersinn, 2 = vertikal,
-/// 4 = horizontal spiegeln) um die Pfeilspitze, den Anschlusspunkt an der Leitung. Beim Drehen wandern Pfeil und
-/// Textlage mit, der Text selbst bleibt in seiner Leserichtung (waagerecht bleibt waagerecht; gespeichert als
-/// OBJ Feld 15 Bit 0); vier Drehungen ergeben wieder die Ausgangslage.
+/// 4 = horizontal spiegeln) um die Pfeilspitze, den Anschlusspunkt an der Leitung. Beim Drehen dreht wie im
+/// Original nur der Pfeil; der Text bleibt an seiner Stelle und in seiner Leserichtung (waagerecht bleibt
+/// waagerecht; gespeichert als OBJ Feld 15 Bit 0). Vier Drehungen ergeben wieder die Ausgangslage.
 pub fn drehen(kind: &mut Kind, op: u8) {
     let Kind::Verweis { pos, text_pos, dir, .. } = kind else { return };
     let (dx, dy) = (text_pos.x - pos.x, text_pos.y - pos.y);
     match op {
-        1 => {
-            *text_pos = P::new(pos.x - dy, pos.y + dx);
-            *dir = (*dir + 270) % 360;
-        }
+        1 => *dir = (*dir + 270) % 360,
         2 => {
             text_pos.x = pos.x - dx;
             *dir = (540 - *dir % 360) % 360;
@@ -330,8 +327,8 @@ mod tests {
             let Kind::Verweis { pos, text_pos, dir, vertical, .. } = &k else { unreachable!() };
             assert!(!vertical, "Drehung {n}: Text darf nicht hochkant werden");
             assert_eq!(*dir, [270, 180, 90, 0][n - 1]);
-            // Textlage dreht um die Pfeilspitze mit
-            assert!((text_pos.dist(*pos) - P::new(5.0, -1.0).dist(P::default())).abs() < 1e-4);
+            // der Text bleibt beim Drehen an derselben Stelle, nur der Pfeil dreht um seine Spitze
+            assert_eq!((*pos, *text_pos), (P::new(50.0, 50.0), P::new(55.0, 49.0)));
         }
         assert_eq!(k, verweis("=A", None));
     }

@@ -103,7 +103,7 @@ pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u
     let pins: Vec<P> = sheet
         .objects
         .iter()
-        .filter(|o| moved.contains(&o.id) && matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. }))
+        .filter(|o| moved.contains(&o.id) && matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. } | Kind::Verweis { .. }))
         .flat_map(|o| canvas::obj_pins(o, lib))
         .collect();
     if pins.is_empty() {
