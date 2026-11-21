@@ -537,7 +537,8 @@ pub fn macro_values(project: &Project, anlage: &Anlage, sheet: &Sheet) -> MacroV
         projekt: project.name.clone(),
         // wie im Original: Datum des Blattes (BLT), sonst des Projekts
         erstellt: if sheet.erstellt.is_empty() { project.erstellt.clone() } else { sheet.erstellt.clone() },
-        geaendert: if sheet.geaendert.is_empty() { project.geaendert.clone() } else { sheet.geaendert.clone() },
+        // auf dem Bildschirm nach einer Änderung „Heute“ wie im Original (blatt_tasten.rs)
+        geaendert: crate::blatt_tasten::geaendert_text(if sheet.geaendert.is_empty() { project.geaendert.clone() } else { sheet.geaendert.clone() }),
         name: sheet.name.clone(),
         // „Erstellt von“ der Anlage (ANL @66), nicht des Projekts: Im Original-Ausdruck zeigt jede Anlage ihren
         // eigenen Namen, eine Anlage mit leerem Feld keinen

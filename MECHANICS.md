@@ -338,3 +338,18 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   Eckpunkt, rechtwinklig zum letzten Punkt (|dx| < |dy| → senkrecht, sonst waagerecht; < 6 px wird übergangen;
   gerade Fortsetzung verschiebt den letzten Punkt). Klick auf einen Anschluss beendet, Rechtsklick bricht ab.
   Nachbau zusätzlich: Ziehen vom Anschluss zum Ziel, die erste deutliche Zugrichtung bestimmt das erste Teilstück.
+
+## Rechte Maustaste, Klemmstelle in Leitung, Tasten, „Heute“ (src/rechts_ziehen.rs, klemme_leitung.rs, blatt_tasten.rs)
+
+- Rechte Maustaste ziehen auf einem Objekt bzw. der Markierung: Vorschau folgt der Maus, beim Loslassen eine Kopie
+  mit derselben BMK (keine Neunummerierung), markiert, kein Kontextmenü, ein Rückgängig-Schritt; Zeiger Pfeil mit
+  Plus. Auf freier Fläche und auf Leitungen entsteht nichts, das Kontextmenü erscheint beim Loslassen.
+- Werkzeug Klemmstelle auf einer Leitung (Routine 0x47bf14, Art 5): die Verbindung wird an der Klemme geteilt; die
+  Teile enden 0,8 mm vor dem Mittelpunkt (so alle Klemmstellen in W2), ihre Enden verweisen auf die Klemmstelle
+  (VBG Feld 2/3 bzw. 6/7). Nummer = Zähler der Klemmleiste (KLM Feld 18), in W2 -X2 (Unterverteilung 1) = 15.
+- FormKeyDown 0x43f054: Strg+Tab nächster Reiter (Umschalt egal), Leertaste beim Platzieren eines Symbols = Drehung
+  um 90° (+0xa68: 0/1/2/4), sonst zurück zum zuletzt angezeigten Blatt (+0x8f4); Strg+1…9 = Etage der markierten
+  Klemmstellen bzw. Zusatzoption n der markierten Symbole umschalten; F gehalten beim Verschieben: Bezugspunkt auf
+  den Rasterpunkt der Maus; Enter ohne Wirkung; Pfeiltasten mit Umschalt 0,1 mm, Strg+A alles markieren.
+- Schriftfeld %Geändert (0x4876d8, Fall 8): auf dem Bildschirm „Heute“, wenn das Blatt in der Rückgängig-Liste steht
+  (in dieser Sitzung geändert), sonst Datum BLT @120 bzw. „---------“; %Datum = heute, %Erstellt = BLT @112.
