@@ -120,6 +120,11 @@ pub fn doppelte_bmk(ai: usize, a: &Anlage, lib: &[SymDef], out: &mut Vec<Hinweis
         if list.len() < 2 || list.iter().any(|(_, _, k, _)| *k != list[0].2) {
             continue;
         }
+        // gleiche Symbole mit gleicher BMK auf einem Blatt sind eine gewollte Gruppe (z. B. mehrere Leuchten
+        // eines Stromkreises im Installationsplan) – gemeldet wird nur, wenn die BMK auf mehreren Blättern steht
+        if list.iter().all(|(si, ..)| *si == list[0].0) {
+            continue;
+        }
         let name = symbols::find(lib, list[0].2).map(|d| d.name.clone()).unwrap_or_else(|| list[0].2.to_string());
         for (si, id, _, pos) in &list {
             out.push(Hinweis {
@@ -176,15 +181,23 @@ mod tests {
         s.objects.push(sym(3, "spule", P::new(50.0, 80.0), "-K2"));
         s.objects.push(wire(4, vec![P::new(30.0, 80.0), P::new(45.0, 80.0)]));
         s.objects.push(wire(5, vec![P::new(55.0, 80.0), P::new(70.0, 80.0)]));
-        s.objects.push(sym(6, "spule", P::new(50.0, 110.0), "-K2"));
-        // Anschluss mitten auf einer Leitung (Abzweig) und Anschluss an Anschluss gelten als verbunden
-        s.objects.push(wire(7, vec![P::new(40.0, 110.0), P::new(80.0, 110.0)]));
+        // gleiche Spule zweimal auf demselben Blatt = gewollte Gruppe, kein Hinweis
+        s.objects.push(sym(13, "spule", P::new(50.0, 140.0), "-K3"));
+        s.objects.push(sym(14, "spule", P::new(50.0, 160.0), "-K3"));
+        s.objects.push(wire(15, vec![P::new(40.0, 140.0), P::new(80.0, 140.0)]));
+        s.objects.push(wire(16, vec![P::new(40.0, 160.0), P::new(80.0, 160.0)]));
         s.objects.push(sym(8, "kontakt", P::new(100.0, 50.0), "-K1"));
         s.objects.push(sym(9, "kontakt", P::new(110.0, 50.0), "-K1"));
         s.objects.push(wire(10, vec![P::new(80.0, 50.0), P::new(95.0, 50.0)]));
         s.objects.push(wire(11, vec![P::new(115.0, 50.0), P::new(115.0, 60.0)]));
         // Symbol ohne Anschlüsse in der Definition und ohne BMK: nie ein Hinweis
         s.objects.push(sym(12, "ohne", P::new(150.0, 150.0), ""));
+        // zweite -K2-Spule auf einem anderen Blatt → doppelt
+        let mut s2 = Sheet::new(2);
+        s2.objects.push(sym(6, "spule", P::new(50.0, 110.0), "-K2"));
+        // Anschluss mitten auf einer Leitung (Abzweig) und Anschluss an Anschluss gelten als verbunden
+        s2.objects.push(wire(7, vec![P::new(40.0, 110.0), P::new(80.0, 110.0)]));
+        p.anlagen[0].sheets.push(s2);
         let h = pruefen(&p, &lib);
         let offen: Vec<_> = h.iter().filter(|x| x.art == HinweisArt::OffenerAnschluss).collect();
         assert_eq!(offen.len(), 1, "{h:#?}");
