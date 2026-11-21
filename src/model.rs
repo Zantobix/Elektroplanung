@@ -351,6 +351,28 @@ impl Sheet {
     pub fn col_label(&self, i: usize) -> String {
         self.col_labels.get(i).filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| (i + 1).to_string())
     }
+
+    /// Mitte des Strompfades, der `x` am nächsten liegt – dieselbe Teilung wie die Strompfad-Spaltenleiste
+    /// (Rahmen links bis rechts durch die Zahl der Strompfade). None bei Blättern ohne Spaltenleiste.
+    pub fn path_center_x(&self, x: f32) -> Option<f32> {
+        if self.art == 4 || self.art == 5 {
+            return None;
+        }
+        let (fx0, _, fx1, _) = self.frame();
+        Some(path_center(fx0, fx1, self.columns.max(1), x))
+    }
+}
+
+/// Strompfadausrichtung wie im Original: Schritt = (rechts − links) / Pfade, Mitte = links + (k + 0,5) · Schritt;
+/// gewählt wird der Pfad, in dessen Mitte `x` am nächsten liegt (ohne Abstandsgrenze).
+pub fn path_center(left: f32, right: f32, cols: u32, x: f32) -> f32 {
+    let n = cols.max(1);
+    let step = (right - left) / n as f32;
+    if step <= 0.0 {
+        return x;
+    }
+    let k = ((x - left) / step - 0.5).round().clamp(0.0, (n - 1) as f32);
+    left + (k + 0.5) * step
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -720,6 +742,45 @@ impl Kind {
         }
         if let Kind::Wire { bez, .. } = self {
             bez.iter_mut().for_each(|(p, _)| mv(p));
+        }
+    }
+
+    /// Rahmen zur Größenänderung: Objekt um `anchor` mit den Faktoren `sx`/`sy` strecken. Punktbasierte Objekte
+    /// (Linien, Verbindungen, Rechtecke, Kreise, Kurven, Dreiecke, Textboxen, Tabellen, Bilder, Polygone,
+    /// Sammelschienen) werden gestreckt; Symbole, Texte, Klemmstellen und Verweise nur in ihrer Lage verschoben.
+    pub fn scale_about(&mut self, anchor: P, sx: f32, sy: f32) {
+        let f = |p: P| P::new(anchor.x + (p.x - anchor.x) * sx, anchor.y + (p.y - anchor.y) * sy);
+        let m = |p: &mut P| *p = f(*p);
+        match self {
+            Kind::Line { a, b }
+            | Kind::Rect { a, b }
+            | Kind::Triangle { a, b }
+            | Kind::Circle { a, b }
+            | Kind::TextBox { a, b, .. }
+            | Kind::Table { a, b, .. }
+            | Kind::Image { a, b, .. } => {
+                m(a);
+                m(b)
+            }
+            Kind::Curve { a, c1, c2, b } => {
+                m(a);
+                m(c1);
+                m(c2);
+                m(b)
+            }
+            Kind::Poly { pts } => pts.iter_mut().for_each(m),
+            Kind::Wire { pts, bez, .. } => {
+                pts.iter_mut().for_each(m);
+                bez.iter_mut().for_each(|(p, _)| m(p));
+            }
+            Kind::Busbar { a, x2, .. } => {
+                m(a);
+                *x2 = anchor.x + (*x2 - anchor.x) * sx;
+            }
+            Kind::Symbol { pos, .. } | Kind::Text { pos, .. } | Kind::Terminal { pos, .. } | Kind::Verweis { pos, .. } => {
+                let d = f(*pos).sub(*pos);
+                self.translate(d);
+            }
         }
     }
 

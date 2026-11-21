@@ -867,23 +867,51 @@ impl App {
         self.info = format!("Textgenerator: {n} Kennzeichnungen erzeugt");
     }
 
-    /// Eigentümer setzen: markierte Symbole übernehmen die Kennzeichnung des zuerst markierten (z. B. Kontakt → Spule).
-    pub fn set_owner_from_first(&mut self) {
-        let objs = self.selected_objs();
-        let first = self.selection.first().copied();
-        let Some(owner) = first.and_then(|f| objs.iter().find(|o| o.id == f)) else { return };
-        let Kind::Symbol { bmk, .. } = &owner.kind else { return };
-        let bmk = bmk.clone();
-        let ids: Vec<u64> = self.selection.iter().skip(1).copied().collect();
+    /// Eigentümer › Setzen wie im Original: die markierten Symbole merken und auf einen Klick auf das
+    /// Eigentümersymbol warten (z. B. Spule für einen Kontakt).
+    pub fn start_owner_pick(&mut self) {
+        let ids: Vec<u64> = self.selected_objs().iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).map(|o| o.id).collect();
+        if ids.is_empty() {
+            return;
+        }
+        self.owner_pick = Some(ids);
+        self.placing = None;
+        self.drag = Drag::None;
+        self.info = "Eigentümer wählen: Symbol anklicken (Esc = Abbruch)".into();
+    }
+
+    /// Klick im Modus „Eigentümer setzen“: die gemerkten Symbole übernehmen Kennzeichnung (Vorlage) und Zähler
+    /// des angeklickten Symbols – beides bestimmt die angezeigte BMK. Kein Symbol oder eines der Ziele → weiter warten.
+    pub fn owner_picked(&mut self, owner_id: u64) {
+        let Some(targets) = self.owner_pick.clone() else { return };
+        if targets.contains(&owner_id) {
+            return;
+        }
+        let owner = self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == owner_id)).cloned();
+        let Some(Kind::Symbol { bmk, ext, .. }) = owner.map(|o| o.kind) else { return };
+        let counter = ext.counter;
+        self.owner_pick = None;
+        let changes = self
+            .sheet()
+            .map(|s| s.objects.iter().filter(|o| targets.contains(&o.id)).any(|o| matches!(&o.kind, Kind::Symbol { bmk: b, ext: e, .. } if *b != bmk || e.counter != counter)))
+            .unwrap_or(false);
+        let shown = self.sheet().zip(self.cur()).and_then(|(s, r)| self.project.anlagen.get(r.anlage).map(|a| symbols::display_bmk(&bmk, counter, &canvas::bmk_ctx(a, s))));
+        let shown = shown.unwrap_or_else(|| bmk.clone());
+        if !changes {
+            self.info = format!("Eigentümer {shown}: keine Änderung");
+            return;
+        }
         self.checkpoint();
         self.with_sheet(|s, _| {
-            for o in s.objects.iter_mut().filter(|o| ids.contains(&o.id)) {
-                if let Kind::Symbol { bmk: b, .. } = &mut o.kind {
+            for o in s.objects.iter_mut().filter(|o| targets.contains(&o.id)) {
+                if let Kind::Symbol { bmk: b, ext: e, .. } = &mut o.kind {
                     *b = bmk.clone();
+                    e.counter = counter;
                 }
             }
         });
-        self.info = format!("Eigentümer {bmk} gesetzt");
+        self.selection = targets;
+        self.info = format!("Eigentümer {shown} gesetzt");
     }
 
     /// Eigentümer suchen: nächstes Symbol mit gleicher Kennzeichnung im Projekt öffnen und markieren.

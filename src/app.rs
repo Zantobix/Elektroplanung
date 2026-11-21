@@ -45,11 +45,15 @@ pub enum RightTab {
 #[derive(Clone)]
 pub enum Drag {
     None,
-    Move { last: P, moved: bool },
+    /// Verschieben: Rasterpunkt beim Drücken und bisher angewandte Gesamtverschiebung (kein Wandern durch Ausrichtung)
+    Move { start: P, applied: P, moved: bool },
     Rubber { start: P },
     Create { tool: Tool, start: P },
     Wire { start: P },
     Resize { id: u64, corner: usize },
+    /// Rahmen zur Größenänderung um die ganze Markierung: Griff 0–7 (links oben im Uhrzeigersinn),
+    /// Umriss und Objekte beim Beginn des Ziehens
+    Scale { handle: usize, start: (P, P), orig: Vec<Obj> },
     Pan { last: Pos2 },
 }
 
@@ -216,6 +220,15 @@ pub struct App {
     /// Lage des letzten Rechtsklicks auf dem Blatt (für "Verweis einfügen")
     pub mouse_ctx: P,
     pub right_w: f32,
+    /// gehaltene Tasten (nur ohne Texteingabe): S kehrt die Strompfadausrichtung, A die automatischen
+    /// Verbindungen vorübergehend um, Umschalt schaltet den Rasterfang ab
+    pub hold_s: bool,
+    pub hold_a: bool,
+    pub no_snap: bool,
+    /// Taste S/A gedrückt und noch nicht losgelassen: (Taste, während des Haltens benutzt)
+    pub hold_press: [Option<bool>; 2],
+    /// Eigentümer › Setzen: diese Symbole übernehmen die Kennzeichnung des als Nächstes angeklickten Symbols
+    pub owner_pick: Option<Vec<u64>>,
 }
 
 impl App {
@@ -289,7 +302,7 @@ impl App {
             info: String::new(),
             shot: shot.map(|path| Shot { path, frames: 0, requested: false, done: Arc::new(AtomicBool::new(false)) }),
             sheet_color: Color32::from_rgb(238, 221, 221),
-            grid_color: Color32::from_rgb(224, 208, 208),
+            grid_color: Color32::from_rgb(192, 168, 168),
             invert_wheel: false,
             images: HashMap::new(),
             sheet_screen_rect: Rect::NOTHING,
@@ -311,6 +324,11 @@ impl App {
             lib_filter: String::new(),
             mouse_ctx: P::new(50.0, 50.0),
             right_w: 441.0,
+            hold_s: false,
+            hold_a: false,
+            no_snap: false,
+            hold_press: [None, None],
+            owner_pick: None,
             lib_dir: None,
             lib_info: String::new(),
         }
@@ -582,7 +600,8 @@ impl App {
 
     pub fn snap(&self, p: P) -> P {
         let r = self.raster();
-        if r <= 0.0 {
+        // Umschalt gehalten: kein Rasterfang (wie im Original), nur auf 0,1 mm runden
+        if r <= 0.0 || self.no_snap {
             return P::new((p.x * 10.0).round() / 10.0, (p.y * 10.0).round() / 10.0);
         }
         P::new(GRID_ORIGIN + ((p.x - GRID_ORIGIN) / r).round() * r, GRID_ORIGIN + ((p.y - GRID_ORIGIN) / r).round() * r)
@@ -651,12 +670,23 @@ impl App {
         self.project.anlagen.get(a).map(|a| a.klemmleisten.clone()).unwrap_or_default()
     }
 
-    /// Symbol platzieren: erster Anschluss liegt auf dem Raster; mit AutoVerb wird eine Leitung aufgetrennt.
+    /// Wirksame Strompfadausrichtung: Schalter der Werkzeugleiste, mit gehaltener Taste S umgekehrt.
+    pub fn path_align_eff(&self) -> bool {
+        self.path_align ^ self.hold_s
+    }
+
+    /// Wirksame automatische Verbindungen: Schalter der Werkzeugleiste, mit gehaltener Taste A umgekehrt.
+    pub fn auto_conn_eff(&self) -> bool {
+        self.auto_conn ^ self.hold_a
+    }
+
+    /// Symbol platzieren: erster Anschluss liegt auf dem Raster. Wie im Original wird eine Leitung, auf die das
+    /// Symbol gesetzt wird, immer aufgetrennt; mit automatischen Verbindungen werden freie Anschlüsse verbunden.
     pub fn place_symbol(&mut self, key: String, at: P) {
         let Some(def) = symbols::find(&self.lib, &key).cloned() else { return };
         let pin0 = def.pins.first().copied().unwrap_or_default();
         let mut pos = self.snap(at.add(pin0)).sub(pin0);
-        pos = self.align_to_path(pos, &def.pins, &[]);
+        pos = self.align_to_path(pos);
         let bmk = self.new_bmk(&def);
         if !self.project.symdefs.iter().any(|d| d.key == def.key) {
             self.project.symdefs.push(def.clone());
@@ -666,36 +696,55 @@ impl App {
         // Vorlageblocks (hochkant, im Symbol) – das Original zeigte die BMK dann winzig und senkrecht.
         let (title, title_align) = symbol_title_rot(&def, 0, 0);
         let ext = SymExt { querverweise: def.frg.0, sicherung: def.frg.1, title_align, ..Default::default() };
-        self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option: 0, title: Some((title, false)), flags: 0, ext });
-        if self.auto_conn {
-            let wpins: Vec<P> = def.pins.iter().map(|q| sym_xform(*q, pos, 0, false, false)).collect();
-            self.insert_into_wire(&wpins);
+        let id = self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option: 0, title: Some((title, false)), flags: 0, ext });
+        let wpins: Vec<P> = def.pins.iter().map(|q| sym_xform(*q, pos, 0, false, false)).collect();
+        self.insert_into_wire(&wpins);
+        if self.auto_conn_eff() {
+            // gehört zum selben Rückgängig-Schritt wie das Setzen (add_obj hat ihn schon angelegt)
+            self.auto_connect_nocp(&[id]);
         }
     }
 
-    /// Strompfadausrichtung: Symbol waagerecht auf Anschlüsse anderer Objekte ausrichten (±3 mm, geschätzt).
-    pub fn align_to_path(&self, pos: P, local_pins: &[P], exclude: &[u64]) -> P {
-        if !self.path_align || local_pins.is_empty() {
+    /// Strompfadausrichtung wie im Original: die Lage (Bezugspunkt) des Symbols waagerecht auf die Mitte des
+    /// nächsten Strompfades setzen (Teilung wie die Spaltenleiste, ohne Abstandsgrenze).
+    pub fn align_to_path(&self, pos: P) -> P {
+        if !self.path_align_eff() || self.sym_edit.is_some() {
             return pos;
         }
-        let Some(sheet) = self.sheet() else { return pos };
-        let px = pos.x + local_pins[0].x;
-        let mut best: Option<f32> = None;
-        for o in &sheet.objects {
-            if exclude.contains(&o.id) {
-                continue;
-            }
-            for q in canvas::obj_pins(o, &self.lib) {
-                let d = (q.x - px).abs();
-                if d > 0.01 && d <= 3.0 && best.map(|b| d < (b - px).abs()).unwrap_or(true) {
-                    best = Some(q.x);
-                }
-            }
-        }
-        match best {
-            Some(x) => P::new(pos.x + (x - px), pos.y),
+        match self.sheet().and_then(|s| s.path_center_x(pos.x)) {
+            Some(x) => P::new(x, pos.y),
             None => pos,
         }
+    }
+
+    /// Automatische Verbindungen für die Objekte `ids` mit eigenem Rückgängig-Schritt (nur wenn etwas entsteht).
+    pub fn auto_connect(&mut self, ids: &[u64]) {
+        let Some(sheet) = self.sheet() else { return };
+        if auto_wires(sheet, &self.lib, ids, AUTO_CONN_MAX).is_empty() {
+            return;
+        }
+        self.checkpoint();
+        self.auto_connect_nocp(ids);
+    }
+
+    /// Wie `auto_connect`, ohne Rückgängig-Schritt (Aufrufer hat ihn schon angelegt). Liefert die Zahl der Leitungen.
+    pub fn auto_connect_nocp(&mut self, ids: &[u64]) -> usize {
+        let Some(sheet) = self.sheet() else { return 0 };
+        let wires = auto_wires(sheet, &self.lib, ids, AUTO_CONN_MAX);
+        let n = wires.len();
+        if n == 0 {
+            return 0;
+        }
+        let leitung = self.leitung;
+        self.with_sheet(|s, next| {
+            for (a, b) in wires {
+                let id = *next;
+                *next += 1;
+                s.objects.push(Obj { id, kind: Kind::Wire { pts: vec![a, b], leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
+            }
+        });
+        self.dirty = true;
+        n
     }
 
     /// Liegen die beiden äußeren Symbolanschlüsse auf derselben Leitung, wird die Leitung dazwischen aufgetrennt.
@@ -733,6 +782,22 @@ impl App {
             s.objects.retain(|o| !remove.contains(&o.id));
             s.objects.extend(new_objs);
         });
+    }
+
+    /// Rahmen zur Größenänderung um die Markierung: bei mindestens zwei Objekten oder einem Symbol/Text
+    /// (einzelne Zeichenelemente behalten ihre Eckgriffe). Umriss (min, max) in mm.
+    pub fn sel_frame(&self) -> Option<(P, P)> {
+        if !self.size_frame || self.tool != Tool::Select || self.placing.is_some() {
+            return None;
+        }
+        let objs = self.selected_objs();
+        let single = objs.len() == 1 && matches!(objs[0].kind, Kind::Symbol { .. } | Kind::Text { .. });
+        if objs.len() < 2 && !single {
+            return None;
+        }
+        let pts: Vec<P> = objs.iter().flat_map(|o| { let (a, b) = canvas::obj_bounds(o, &self.lib); [a, b] }).collect();
+        let (mn, mx) = canvas::pts_bounds(&pts);
+        Some((mn, mx))
     }
 
     pub fn selected_objs(&self) -> Vec<Obj> {
@@ -1274,7 +1339,13 @@ impl App {
 
     pub fn hit_top(&self, m: P, tol: f32) -> Option<u64> {
         let s = self.sheet()?;
-        s.objects.iter().rev().find(|o| self.edit_visible(o.id) && canvas::hit(o, m, tol, &self.lib)).map(|o| o.id)
+        s.objects.iter().rev().find(|o| self.selectable(o) && canvas::hit(o, m, tol, &self.lib)).map(|o| o.id)
+    }
+
+    /// Lässt sich das Objekt markieren? Im Editor nur sichtbare; mit „Fixierung aktivieren“ keine fixierten
+    /// (wie im Original weder per Klick noch per Aufziehen).
+    pub fn selectable(&self, o: &Obj) -> bool {
+        self.edit_visible(o.id) && !(o.fixed && self.fix_active)
     }
 
     pub fn edit_props(&mut self, id: u64) {
@@ -1621,4 +1692,228 @@ pub fn symbol_title_rot(def: &SymDef, rot: u8, option: u16) -> (P, u8) {
     let (rmn, rmx) = crate::canvas::pts_bounds(&pts);
     // waagerecht liegendes Symbol: BMK mittig darüber
     (P::new((rmn.x + rmx.x) / 2.0, rmn.y - 3.5), 1)
+}
+
+/// Kantenlänge der Griffe des Rahmens zur Größenänderung in mm (Original 2,4 mm).
+pub const FRAME_HANDLE: f32 = 2.4;
+
+/// Größte Suchweite der automatischen Verbindungen in mm.
+pub const AUTO_CONN_MAX: f32 = 200.0;
+
+/// Ein Anschluss gilt als verbunden, wenn ein Leitungsende oder ein anderer Anschluss so nah liegt (mm).
+const CONN_TOL: f32 = 0.05;
+
+/// Automatische Verbindungen wie im Original: für jeden noch freien Anschluss der Objekte `ids` die Richtung nach
+/// außen bestimmen (Anschluss am linken/rechten/oberen/unteren Rand des Umrisses, Toleranz 0,2 mm) und eine gerade
+/// Leitung bis zum nächsten Ziel auf diesem Strahl ziehen: Anschluss eines anderen Objekts oder eine Leitung, die
+/// den Strahl kreuzt. Liefert die neuen Leitungen (Anfang, Ende).
+pub fn auto_wires(sheet: &Sheet, lib: &[SymDef], ids: &[u64], max: f32) -> Vec<(P, P)> {
+    let mut out: Vec<(P, P)> = vec![];
+    // Anschlüsse und Leitungsstrecken aller Objekte (mit Objekt-Id)
+    let pins: Vec<(u64, P)> = sheet.objects.iter().flat_map(|o| canvas::obj_pins(o, lib).into_iter().map(move |p| (o.id, p))).collect();
+    let segs: Vec<(P, P)> = sheet
+        .objects
+        .iter()
+        .filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts) } else { None })
+        .flat_map(|pts| pts.windows(2).map(|w| (w[0], w[1])).collect::<Vec<_>>())
+        .collect();
+    for o in sheet.objects.iter().filter(|o| ids.contains(&o.id)) {
+        if !matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. }) {
+            continue;
+        }
+        let own = canvas::obj_pins(o, lib);
+        if own.is_empty() {
+            continue;
+        }
+        let (mut mn, mut mx) = canvas::obj_bounds(o, lib);
+        for p in &own {
+            mn = P::new(mn.x.min(p.x), mn.y.min(p.y));
+            mx = P::new(mx.x.max(p.x), mx.y.max(p.y));
+        }
+        let tall = mx.y - mn.y >= mx.x - mn.x;
+        for &p in &own {
+            let connected = pins.iter().any(|(id, q)| *id != o.id && q.dist(p) <= CONN_TOL) || out.iter().any(|(a, b)| a.dist(p) <= CONN_TOL || b.dist(p) <= CONN_TOL);
+            if connected {
+                continue;
+            }
+            for d in pin_dirs(p, mn, mx, tall) {
+                // nächstes Ziel auf dem Strahl p + t·d (t > 0)
+                let mut best: Option<f32> = None;
+                let mut take = |t: f32| {
+                    if t > CONN_TOL && t <= max && best.map(|b| t < b).unwrap_or(true) {
+                        best = Some(t);
+                    }
+                };
+                for (id, q) in &pins {
+                    if *id == o.id {
+                        continue;
+                    }
+                    let v = q.sub(p);
+                    let t = v.x * d.x + v.y * d.y;
+                    let off = (v.x * d.y - v.y * d.x).abs();
+                    if off <= CONN_TOL {
+                        take(t);
+                    }
+                }
+                for (a, b) in segs.iter().chain(out.iter()) {
+                    if let Some(t) = ray_seg(p, d, *a, *b) {
+                        take(t);
+                    }
+                }
+                if let Some(t) = best {
+                    out.push((p, P::new(p.x + d.x * t, p.y + d.y * t)));
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Richtungen nach außen für einen Anschluss am Umriss (mn, mx); an Ecken zuerst entlang der längeren Seite des
+/// Umrisses (hohes Symbol → oben/unten).
+fn pin_dirs(p: P, mn: P, mx: P, tall: bool) -> Vec<P> {
+    const T: f32 = 0.2;
+    let mut v = vec![];
+    let mut h = vec![];
+    if (p.y - mn.y).abs() <= T {
+        v.push(P::new(0.0, -1.0));
+    }
+    if (p.y - mx.y).abs() <= T {
+        v.push(P::new(0.0, 1.0));
+    }
+    if (p.x - mn.x).abs() <= T {
+        h.push(P::new(-1.0, 0.0));
+    }
+    if (p.x - mx.x).abs() <= T {
+        h.push(P::new(1.0, 0.0));
+    }
+    // Umriss ohne Ausdehnung in einer Richtung: dort keine eindeutige Richtung nach außen
+    if v.len() > 1 {
+        v.clear();
+    }
+    if h.len() > 1 {
+        h.clear();
+    }
+    if tall {
+        v.extend(h);
+        v
+    } else {
+        h.extend(v);
+        h
+    }
+}
+
+/// Schnitt des Strahls p + t·d (d Einheitsvektor) mit der Strecke a–b: Abstand t oder None.
+fn ray_seg(p: P, d: P, a: P, b: P) -> Option<f32> {
+    let e = b.sub(a);
+    let den = d.x * e.y - d.y * e.x;
+    let w = a.sub(p);
+    if den.abs() < 1e-6 {
+        // parallel: nur wenn die Strecke auf dem Strahl liegt – ihr erster Punkt vor dem Anschluss
+        if (w.x * d.y - w.y * d.x).abs() > CONN_TOL {
+            return None;
+        }
+        let ta = w.x * d.x + w.y * d.y;
+        let tb = (b.x - p.x) * d.x + (b.y - p.y) * d.y;
+        let t = ta.min(tb);
+        return if t > CONN_TOL { Some(t) } else { None };
+    }
+    let t = (w.x * e.y - w.y * e.x) / den;
+    let u = (w.x * d.y - w.y * d.x) / den;
+    if (-1e-4..=1.0 + 1e-4).contains(&u) {
+        Some(t)
+    } else {
+        None
+    }
+}
+
+/// Griffe des Rahmens zur Größenänderung (links oben im Uhrzeigersinn: Ecke, Mitte oben, Ecke, Mitte rechts …).
+pub fn frame_handles(mn: P, mx: P) -> [P; 8] {
+    let cx = (mn.x + mx.x) / 2.0;
+    let cy = (mn.y + mx.y) / 2.0;
+    [P::new(mn.x, mn.y), P::new(cx, mn.y), P::new(mx.x, mn.y), P::new(mx.x, cy), P::new(mx.x, mx.y), P::new(cx, mx.y), P::new(mn.x, mx.y), P::new(mn.x, cy)]
+}
+
+/// Streckung beim Ziehen des Griffs `handle` nach `cur`: (Festpunkt = gegenüberliegender Griff, Faktor x, Faktor y).
+pub fn frame_scale(handle: usize, mn: P, mx: P, cur: P) -> (P, f32, f32) {
+    let h = frame_handles(mn, mx);
+    let g = h[handle % 8];
+    let anchor = h[(handle + 4) % 8];
+    let fac = |c: f32, g: f32, a: f32| if (g - a).abs() < 0.01 { 1.0 } else { ((c - a) / (g - a)).max(0.05) };
+    let (sx, sy) = match handle % 8 {
+        1 | 5 => (1.0, fac(cur.y, g.y, anchor.y)),
+        3 | 7 => (fac(cur.x, g.x, anchor.x), 1.0),
+        _ => (fac(cur.x, g.x, anchor.x), fac(cur.y, g.y, anchor.y)),
+    };
+    (anchor, sx, sy)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sym(id: u64, key: &str, pos: P) -> Obj {
+        Obj { id, kind: Kind::Symbol { key: key.into(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk: String::new(), value: String::new(), scale: 1.0, option: 0, title: None, flags: 0, ext: Default::default() }, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    fn wire(id: u64, a: P, b: P) -> Obj {
+        Obj { id, kind: Kind::Wire { pts: vec![a, b], leitung: 0, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    #[test]
+    fn strompfad_mitte() {
+        // A4 quer: Rahmen 5 … 292, 8 Pfade → Schritt 35,875
+        let step = (292.0 - 5.0) / 8.0;
+        assert!((path_center(5.0, 292.0, 8, 6.0) - (5.0 + 0.5 * step)).abs() < 1e-4);
+        assert!((path_center(5.0, 292.0, 8, 60.0) - (5.0 + 1.5 * step)).abs() < 1e-4);
+        assert!((path_center(5.0, 292.0, 8, 400.0) - (5.0 + 7.5 * step)).abs() < 1e-4);
+        assert!((path_center(5.0, 292.0, 8, -50.0) - (5.0 + 0.5 * step)).abs() < 1e-4);
+        let s = Sheet::new(1);
+        let (fx0, _, fx1, _) = s.frame();
+        assert!((s.path_center_x(100.0).unwrap() - path_center(fx0, fx1, 8, 100.0)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn automatische_verbindung_zum_anschluss_und_zur_leitung() {
+        let lib = symbols::builtin();
+        let mut s = Sheet::new(1);
+        // Schließer bei (50, 100): Anschlüsse (50, 93) oben und (50, 107) unten
+        s.objects.push(sym(1, "builtin:schliesser", P::new(50.0, 100.0)));
+        // darüber eine waagerechte Leitung, darunter ein zweiter Schließer
+        s.objects.push(wire(2, P::new(10.0, 60.0), P::new(150.0, 60.0)));
+        s.objects.push(sym(3, "builtin:schliesser", P::new(50.0, 140.0)));
+        let w = auto_wires(&s, &lib, &[1], AUTO_CONN_MAX);
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert!(w.iter().any(|(a, b)| a.dist(P::new(50.0, 93.0)) < 1e-3 && b.dist(P::new(50.0, 60.0)) < 1e-3));
+        assert!(w.iter().any(|(a, b)| a.dist(P::new(50.0, 107.0)) < 1e-3 && b.dist(P::new(50.0, 133.0)) < 1e-3));
+        // bereits verbundener Anschluss bekommt keine weitere Leitung
+        s.objects.push(wire(4, P::new(50.0, 93.0), P::new(50.0, 60.0)));
+        let w = auto_wires(&s, &lib, &[1], AUTO_CONN_MAX);
+        assert_eq!(w.len(), 1, "{w:?}");
+        // nichts in Reichweite → keine Leitung
+        let mut s2 = Sheet::new(1);
+        s2.objects.push(sym(1, "builtin:schliesser", P::new(50.0, 100.0)));
+        assert!(auto_wires(&s2, &lib, &[1], AUTO_CONN_MAX).is_empty());
+    }
+
+    #[test]
+    fn rahmen_streckung() {
+        let (mn, mx) = (P::new(10.0, 10.0), P::new(30.0, 20.0));
+        // rechte untere Ecke auf (50, 30): Festpunkt links oben, Faktor 2
+        let (a, sx, sy) = frame_scale(4, mn, mx, P::new(50.0, 30.0));
+        assert_eq!(a, P::new(10.0, 10.0));
+        assert!((sx - 2.0).abs() < 1e-5 && (sy - 2.0).abs() < 1e-5);
+        // Mitte links: nur waagerecht, Festpunkt rechte Seite
+        let (a, sx, sy) = frame_scale(7, mn, mx, P::new(20.0, 99.0));
+        assert_eq!(a.x, 30.0);
+        assert!((sx - 0.5).abs() < 1e-5 && sy == 1.0);
+        // Linie wird gestreckt, Symbol nur verschoben
+        let mut l = Kind::Line { a: P::new(10.0, 10.0), b: P::new(30.0, 20.0) };
+        l.scale_about(P::new(10.0, 10.0), 2.0, 2.0);
+        assert_eq!(l, Kind::Line { a: P::new(10.0, 10.0), b: P::new(50.0, 30.0) });
+        let mut k = sym(1, "builtin:schliesser", P::new(20.0, 15.0)).kind;
+        k.scale_about(P::new(10.0, 10.0), 2.0, 2.0);
+        assert!(matches!(k, Kind::Symbol { pos, scale, .. } if pos == P::new(30.0, 20.0) && scale == 1.0));
+    }
 }

@@ -957,6 +957,17 @@ impl App {
                 }
             }
         }
+        // Rahmen zur Größenänderung um die ganze Markierung (wie im Original, Griffe 2,4 mm)
+        if let Some((mn, mx)) = self.sel_frame() {
+            let r = Rect::from_min_max(xf.s(mn), xf.s(mx));
+            clip.add(egui::Shape::dashed_line(&[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()], Stroke::new(1.0, Color32::from_rgb(0, 90, 200)), 4.0, 3.0));
+            let hs = (FRAME_HANDLE * xf.z).max(5.0);
+            for q in crate::app::frame_handles(mn, mx) {
+                let hr = Rect::from_center_size(xf.s(q), Vec2::splat(hs));
+                clip.rect_filled(hr, 0.0, Color32::from_rgb(0, 90, 200));
+                clip.rect_stroke(hr, 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
+            }
+        }
         match &self.drag {
             Drag::Rubber { start } => {
                 if let Some(h) = hover {
@@ -984,7 +995,7 @@ impl App {
             if area.contains(h) {
                 if let Some(def) = symbols::find(&self.lib, &key) {
                     let pin0 = def.pins.first().copied().unwrap_or_default();
-                    let pos = self.align_to_path(self.snap(xf.m(h).add(pin0)).sub(pin0), &def.pins, &[]);
+                    let pos = self.align_to_path(self.snap(xf.m(h).add(pin0)).sub(pin0));
                     canvas::draw_symbol(&clip, xf, def, pos, 0, false, false, 1.0, 0, Stroke::new((0.25 * xf.z).max(1.0), PREVIEW));
                 }
             }
@@ -1095,9 +1106,33 @@ impl App {
             }
         }
 
+        // Eigentümer › Setzen: das angeklickte Symbol gibt seine Kennzeichnung an die gemerkten Symbole
+        if self.owner_pick.is_some() {
+            if inside && pressed_l {
+                if let Some(id) = self.hit_top(m, tol) {
+                    self.owner_picked(id);
+                }
+                self.drag = Drag::None;
+            }
+            if inside && pressed_r {
+                self.owner_pick = None;
+                self.info = "Eigentümer setzen abgebrochen".into();
+            }
+            return;
+        }
+
         if inside && pressed_l {
             match self.tool {
                 Tool::Select => {
+                    if let Some((mn, mx)) = self.sel_frame() {
+                        let r = (FRAME_HANDLE / 2.0).max(2.5 / xf.z) + 0.5 / xf.z;
+                        if let Some(hi) = frame_handles(mn, mx).iter().position(|q| (q.x - m.x).abs() <= r && (q.y - m.y).abs() <= r) {
+                            self.checkpoint();
+                            let orig = self.selected_objs();
+                            self.drag = Drag::Scale { handle: hi, start: (mn, mx), orig };
+                            return;
+                        }
+                    }
                     if self.size_frame && self.selection.len() == 1 {
                         if let Some(o) = self.selected_objs().first().cloned() {
                             if let Some((a, b)) = o.kind.frame_points() {
@@ -1130,7 +1165,7 @@ impl App {
                             self.selection = vec![id];
                         }
                         self.expand_groups();
-                        self.drag = Drag::Move { last: self.snap(m), moved: false };
+                        self.drag = Drag::Move { start: self.snap(m), applied: P::default(), moved: false };
                     } else {
                         if !shift && !ctrl {
                             self.selection.clear();
@@ -1153,31 +1188,45 @@ impl App {
             }
         }
 
-        if let Drag::Move { last, moved } = self.drag.clone() {
-            let cur = self.snap(m);
-            let mut d = cur.sub(last);
-            if d.x.abs() > 1e-4 || d.y.abs() > 1e-4 {
-                let objs = self.selected_objs();
-                let movable: Vec<u64> = objs.iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
-                if !movable.is_empty() {
-                    if !moved {
-                        self.checkpoint();
-                    }
-                    if movable.len() == 1 {
-                        if let Some(o) = objs.iter().find(|o| o.id == movable[0]) {
-                            if let Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, .. } = &o.kind {
-                                if let Some(def) = symbols::find(&self.lib, key) {
-                                    let lp: Vec<P> = def.pins.iter().map(|q| sym_xf(*q, P::default(), *rot, *mirror_h, *mirror_v, *scale)).collect();
-                                    let np = self.align_to_path(pos.add(d), &lp, &movable);
-                                    d = np.sub(*pos);
-                                }
-                            }
-                        }
-                    }
-                    self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| movable.contains(&o.id)).for_each(|o| o.kind.translate(d)));
-                    self.drag = Drag::Move { last: cur, moved: true };
-                }
+        if let Drag::Move { start, applied, moved } = self.drag.clone() {
+            // Gesamtverschiebung seit dem Drücken; mit Strompfadausrichtung richtet das erste Symbol (bzw. die
+            // erste Klemmstelle) der Markierung sie auf die Mitte des nächsten Strompfades aus, alle anderen folgen
+            let mut total = self.snap(m).sub(start);
+            // bloßer Klick ohne Bewegung verschiebt nichts (auch nicht durch die Ausrichtung)
+            let still = !moved && total.x.abs() < 1e-4 && total.y.abs() < 1e-4;
+            let objs = if still { vec![] } else { self.selected_objs() };
+            let movable: Vec<u64> = objs.iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
+            let reference = self.selection.iter().filter_map(|id| objs.iter().find(|o| o.id == *id && movable.contains(id))).find_map(|o| match &o.kind {
+                Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } => Some(*pos),
+                _ => None,
+            });
+            if let Some(pos) = reference {
+                // Lage vor dem Ziehen = jetzige Lage − bisherige Verschiebung
+                let p0 = pos.sub(applied);
+                let np = self.align_to_path(p0.add(total));
+                total.x = np.x - p0.x;
             }
+            let d = total.sub(applied);
+            if (d.x.abs() > 1e-4 || d.y.abs() > 1e-4) && !movable.is_empty() {
+                if !moved {
+                    self.checkpoint();
+                }
+                self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| movable.contains(&o.id)).for_each(|o| o.kind.translate(d)));
+                self.drag = Drag::Move { start, applied: total, moved: true };
+            }
+        }
+        if let Drag::Scale { handle, start, orig } = self.drag.clone() {
+            let (anchor, sx, sy) = frame_scale(handle, start.0, start.1, self.snap(m));
+            let fix = self.fix_active;
+            self.with_sheet(|s, _| {
+                for o0 in orig.iter().filter(|o| !(o.fixed && fix)) {
+                    if let Some(o) = s.objects.iter_mut().find(|o| o.id == o0.id) {
+                        let mut k = o0.kind.clone();
+                        k.scale_about(anchor, sx, sy);
+                        o.kind = k;
+                    }
+                }
+            });
         }
         if let Drag::Resize { id, corner } = self.drag.clone() {
             let cur = self.snap(m);
@@ -1205,6 +1254,7 @@ impl App {
                             let ids: Vec<u64> = s
                                 .objects
                                 .iter()
+                                .filter(|o| self.selectable(o))
                                 .filter(|o| {
                                     let (a, b) = canvas::obj_bounds(o, &self.lib);
                                     a.x >= mn.x && a.y >= mn.y && b.x <= mx.x && b.y <= mx.y
@@ -1234,6 +1284,11 @@ impl App {
                         let l = self.leitung;
                         self.add_obj(Kind::Wire { pts: route(start, end), leitung: l, bez: vec![], opts: 0 });
                     }
+                }
+                // nach dem Verschieben: freie Anschlüsse automatisch verbinden (gleicher Rückgängig-Schritt)
+                Drag::Move { moved: true, .. } if self.auto_conn_eff() => {
+                    let ids: Vec<u64> = self.selected_objs().iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })).map(|o| o.id).collect();
+                    self.auto_connect_nocp(&ids);
                 }
                 _ => {}
             }
@@ -1598,11 +1653,54 @@ impl App {
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
         if ctx.egui_wants_keyboard_input() || self.dialog.is_some() || self.xdlg.is_some() || self.opt_dlg.is_some() || self.ask_save.is_some() {
+            self.hold_s = false;
+            self.hold_a = false;
+            self.no_snap = false;
+            self.hold_press = [None, None];
             return;
         }
         let eigene = self.opt.tasten.clone();
-        // Befehle mit einstellbarer Belegung (Optionen › Tastenkürzel)
-        let fired: Vec<&'static str> = ctx.input(|i| crate::kuerzel::BEFEHLE.iter().filter(|b| crate::kuerzel::gedrueckt(i, &eigene, b.id)).map(|b| b.id).collect());
+        // Gehaltene Tasten wie im Original: S kehrt die Strompfadausrichtung, A die automatischen Verbindungen um,
+        // solange sie gedrückt sind; Umschalt schaltet den Rasterfang ab. Ein kurzer Druck ohne Setzen/Ziehen
+        // schaltet beim Loslassen wie bisher um. Gilt nur für Belegungen ohne Strg/Umschalt/Alt.
+        let busy = self.placing.is_some() || matches!(self.drag, Drag::Move { .. } | Drag::Create { .. } | Drag::Wire { .. } | Drag::Resize { .. } | Drag::Scale { .. });
+        let hold_keys: [Option<Key>; 2] = ["pfadfang", "autoverb"].map(|id| {
+            crate::kuerzel::parse(&crate::kuerzel::belegung(&eigene, id)).filter(|(m, _)| !m.ctrl && !m.shift && !m.alt && !m.command).map(|(_, k)| k)
+        });
+        let (down, mods_free, shift_down) = ctx.input(|i| {
+            let m = i.modifiers;
+            (hold_keys.map(|k| k.map(|k| i.key_down(k)).unwrap_or(false)), !m.ctrl && !m.alt && !m.command && !m.shift, m.shift)
+        });
+        self.no_snap = shift_down;
+        let mut toggle = [false, false];
+        for n in 0..2 {
+            match (self.hold_press[n], down[n]) {
+                (None, true) if mods_free => self.hold_press[n] = Some(busy),
+                (Some(used), true) => self.hold_press[n] = Some(used || busy),
+                (Some(used), false) => {
+                    self.hold_press[n] = None;
+                    toggle[n] = !used;
+                }
+                _ => {}
+            }
+        }
+        self.hold_s = self.hold_press[0].is_some();
+        self.hold_a = self.hold_press[1].is_some();
+        if toggle[0] {
+            self.path_align = !self.path_align;
+        }
+        if toggle[1] {
+            self.auto_conn = !self.auto_conn;
+        }
+        // Befehle mit einstellbarer Belegung (Optionen › Tastenkürzel); S/A ohne Modifikatoren siehe oben
+        let fired: Vec<&'static str> = ctx.input(|i| {
+            crate::kuerzel::BEFEHLE
+                .iter()
+                .filter(|b| !(b.id == "pfadfang" && hold_keys[0].is_some() || b.id == "autoverb" && hold_keys[1].is_some()))
+                .filter(|b| crate::kuerzel::gedrueckt(i, &eigene, b.id))
+                .map(|b| b.id)
+                .collect()
+        });
         let (arrows, shift, copy, cut, paste) = ctx.input(|i| {
             let cmd = i.modifiers.command;
             (
@@ -1615,6 +1713,11 @@ impl App {
         });
         for id in fired {
             self.run_befehl(id);
+        }
+        // Esc bricht „Eigentümer setzen“ immer ab (auch bei anderer Belegung von „Werkzeug: Auswahl“)
+        if self.owner_pick.is_some() && ctx.input(|i| i.key_pressed(Key::Escape)) {
+            self.owner_pick = None;
+            self.info = "Eigentümer setzen abgebrochen".into();
         }
         if copy {
             self.copy();
@@ -1640,6 +1743,14 @@ impl App {
             self.checkpoint();
             let sel: Vec<u64> = self.selected_objs().iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
             self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| sel.contains(&o.id)).for_each(|o| o.kind.translate(d)));
+            // mit gehaltener Taste A wie im Original: freie Anschlüsse nach dem Schritt automatisch verbinden
+            if self.hold_a {
+                if let Some(p) = self.hold_press[1].as_mut() {
+                    *p = true;
+                }
+                let ids: Vec<u64> = self.selected_objs().iter().filter(|o| sel.contains(&o.id) && matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })).map(|o| o.id).collect();
+                self.auto_connect_nocp(&ids);
+            }
         }
     }
 
@@ -2065,7 +2176,7 @@ impl App {
             "loeschen" => self.delete_selection(),
             "alles" => {
                 if let Some(s) = self.sheet() {
-                    self.selection = s.objects.iter().map(|o| o.id).collect();
+                    self.selection = s.objects.iter().filter(|o| self.selectable(o)).map(|o| o.id).collect();
                 }
             }
             "eigenschaften" => {
@@ -2103,6 +2214,9 @@ impl App {
             "autoverb" => self.auto_conn = !self.auto_conn,
             "gitter" => self.grid = !self.grid,
             "w_auswahl" => {
+                if self.owner_pick.take().is_some() {
+                    self.info = "Eigentümer setzen abgebrochen".into();
+                }
                 self.placing = None;
                 self.tool = Tool::Select;
                 self.drag = Drag::None;

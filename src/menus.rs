@@ -140,8 +140,9 @@ impl App {
                     self.edit_props(id);
                     ui.close();
                 }
-                if ui.button("Setzen").clicked() {
-                    self.set_owner_from_first();
+                let any_sym = self.selected_objs().iter().any(|o| matches!(o.kind, Kind::Symbol { .. }));
+                if ui.add_enabled(any_sym, egui::Button::new("Setzen")).clicked() {
+                    self.start_owner_pick();
                     ui.close();
                 }
                 if ui.add_enabled(self.selection.len() == 1, egui::Button::new("Suchen")).clicked() {
