@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-pub const RASTER: [(&str, f32); 8] = [
-    ("Kein", 0.0),
+/// Rasterweiten der Rasterauswahl; ob gefangen wird, schaltet der Gitterknopf (`App::grid`)
+pub const RASTER: [(&str, f32); 7] = [
     ("1,0mm", 1.0),
     ("2,5mm", 2.5),
     ("3,5mm", 3.5),
@@ -54,6 +54,8 @@ pub enum Drag {
     /// Rahmen zur Größenänderung um die ganze Markierung: Griff 0–7 (links oben im Uhrzeigersinn),
     /// Umriss und Objekte beim Beginn des Ziehens
     Scale { handle: usize, start: (P, P), orig: Vec<Obj> },
+    /// Titel (`wert` = false) bzw. Wert eines Symbols verschieben: Maus und Lage (relativ zum Symbol) beim Drücken
+    Beschriftung { id: u64, wert: bool, start: P, orig: P },
     Pan { last: Pos2 },
 }
 
@@ -240,6 +242,8 @@ pub struct App {
     pub multi_props: Option<crate::mehrfach::MultiProps>,
     /// Symbol wird aus der Bibliothek auf das Blatt gezogen (Loslassen außerhalb bricht ab)
     pub lib_drag: bool,
+    /// weitere Dialoge (zusatz.rs: Parameter, Projektgrafik)
+    pub zusatz: crate::zusatz::Zusatz,
 }
 
 impl App {
@@ -274,7 +278,7 @@ impl App {
             tool: Tool::Select,
             zoom_tool: false,
             pen: 0,
-            raster_idx: 6,
+            raster_idx: 5,
             grid: true,
             path_align: true,
             auto_conn: true,
@@ -344,6 +348,7 @@ impl App {
             owner_pick: None,
             move_follow: vec![],
             multi_props: None,
+            zusatz: Default::default(),
             lib_drag: false,
             lib_dir: None,
             lib_info: String::new(),
@@ -562,8 +567,18 @@ impl App {
         symbols::expand_bmk(&tpl, 1, sheet_no)
     }
 
+    /// Gewählte Rasterweite (mm), auch bei ausgeschaltetem Rasterfang.
     pub fn raster(&self) -> f32 {
-        RASTER[self.raster_idx].1
+        RASTER[self.raster_idx.min(RASTER.len() - 1)].1
+    }
+
+    /// Wirksamer Rasterfang (mm): 0 = aus (Gitterknopf aus), dann nur Rundung auf 0,1 mm.
+    pub fn fang(&self) -> f32 {
+        if self.grid {
+            self.raster()
+        } else {
+            0.0
+        }
     }
 
     pub fn cur(&self) -> Option<SheetRef> {
@@ -588,6 +603,7 @@ impl App {
         self.redo.clear();
         self.dirty = true;
         self.project.geaendert = today();
+        self.mark_sheet_changed();
     }
 
     pub fn do_undo(&mut self) {
@@ -615,7 +631,7 @@ impl App {
     }
 
     pub fn snap(&self, p: P) -> P {
-        let r = self.raster();
+        let r = self.fang();
         // Umschalt gehalten: kein Rasterfang (wie im Original), nur auf 0,1 mm runden
         if r <= 0.0 || self.no_snap {
             return P::new((p.x * 10.0).round() / 10.0, (p.y * 10.0).round() / 10.0);
@@ -813,21 +829,14 @@ impl App {
         });
     }
 
-    /// Rahmen zur Größenänderung um eine Mehrfachmarkierung, die Zeichenelemente enthält (einzelne
-    /// Zeichenelemente behalten ihre Eckgriffe; Symbole, Texte, Klemmstellen und Verweise allein bekommen
-    /// keinen Rahmen – ihre Größe ändert man über die Eigenschaften). Umriss (min, max) in mm.
+    /// Rahmen zur Größenänderung um die Markierung (einzelne Zeichenelemente behalten ihre Eckgriffe; ein einzelnes
+    /// Symbol bzw. ein einzelner Text bekommt vier Eckgriffe zum proportionalen Skalieren, siehe groesse.rs).
+    /// Umriss (min, max) in mm.
     pub fn sel_frame(&self) -> Option<(P, P)> {
         if !self.size_frame || self.tool != Tool::Select || self.placing.is_some() {
             return None;
         }
-        let objs = self.selected_objs();
-        let drawing = |o: &Obj| !matches!(o.kind, Kind::Symbol { .. } | Kind::Text { .. } | Kind::Terminal { .. } | Kind::Verweis { .. });
-        if objs.len() < 2 || !objs.iter().any(drawing) {
-            return None;
-        }
-        let pts: Vec<P> = objs.iter().flat_map(|o| { let (a, b) = canvas::obj_bounds(o, &self.lib); [a, b] }).collect();
-        let (mn, mx) = canvas::pts_bounds(&pts);
-        Some((mn, mx))
+        crate::groesse::rahmen(&self.selected_objs(), &self.lib)
     }
 
     pub fn selected_objs(&self) -> Vec<Obj> {
@@ -870,7 +879,7 @@ impl App {
             return;
         }
         self.checkpoint();
-        let d = if self.raster() > 0.0 { self.raster() } else { 5.0 };
+        let d = if self.fang() > 0.0 { self.fang() } else { 5.0 };
         let mut new_sel = vec![];
         let clip = self.clipboard.clone();
         let mut gmap: HashMap<u64, u64> = HashMap::new();
@@ -1205,7 +1214,7 @@ impl App {
             self.save_as();
             return;
         };
-        let is_epr = p.extension().map(|e| e.eq_ignore_ascii_case("epr")).unwrap_or(false);
+        let is_epr = crate::vorlage::is_epr_format(&p);
         let mut skipped = vec![];
         let res = if is_epr {
             // Vor dem ersten Überschreiben einer Originaldatei eine Sicherung anlegen
@@ -1214,6 +1223,8 @@ impl App {
                 let _ = std::fs::copy(&p, &bak);
             }
             skipped = crate::epr_write::unsupported(&self.project);
+            // Projekt-/Anlagenangaben, deren Ablage im Originalformat unbekannt ist
+            skipped.extend(crate::epr_projekt::nicht_gespeichert(&self.project));
             crate::epr_write::save(&self.project, &p)
         } else {
             serde_json::to_string_pretty(&self.project).map_err(|e| e.to_string()).and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string()))
@@ -1224,7 +1235,7 @@ impl App {
                 self.info = format!("Gespeichert: {}", p.display());
                 if !skipped.is_empty() {
                     self.dialog = Some(Dialog::Message(format!(
-                        "Gespeichert. Folgende Objekte kann das Originalformat (.epr) noch nicht aufnehmen und wurden nicht geschrieben:\n{}\n\nZum vollständigen Speichern zusätzlich als .epj sichern.",
+                        "Gespeichert. Folgendes kann das Originalformat (.epr) noch nicht aufnehmen und wurde nicht geschrieben:\n{}\n\nZum vollständigen Speichern zusätzlich als .epj sichern.",
                         skipped.join("\n")
                     )));
                 }
@@ -1234,14 +1245,14 @@ impl App {
     }
 
     pub fn open(&mut self, add: bool) {
-        let dlg = rfd::FileDialog::new().add_filter("Elektroplanung Projekt", &["epj", "epr"]).add_filter("Neues Format", &["epj"]).add_filter("Altes Format", &["epr"]);
+        let dlg = rfd::FileDialog::new().add_filter("Elektroplanung Projekt", &["epj", "epr", "epv"]).add_filter("Neues Format", &["epj"]).add_filter("Altes Format", &["epr"]);
         let Some(p) = dlg.pick_file() else { return };
         self.open_path(p, add);
     }
 
     /// Projekt laden: .epr (Originalformat, wird übernommen) oder .epj (eigenes Format).
     pub fn open_path(&mut self, p: PathBuf, add: bool) {
-        let is_epr = p.extension().map(|e| e.eq_ignore_ascii_case("epr")).unwrap_or(false);
+        let is_epr = crate::vorlage::is_epr_format(&p);
         let res = if is_epr {
             crate::epr::import(&p)
         } else {

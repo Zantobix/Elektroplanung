@@ -158,16 +158,21 @@ nicht. Gemessen werden stattdessen:
 
 ## Bekannte Grenzen
 
-- Textboxen, Tabellen und Bilder, die im Nachbau **neu** angelegt werden, kann das `.epr`-Format des Nachbaus
-  noch nicht schreiben (vorhandene bleiben erhalten); der Nachbau meldet sie beim Speichern. Neue Klemmstellen
-  und Klemmleisten werden geschrieben (OBJ, KLM mit KFO-Einträgen, siehe `src/klemmen.rs`).
-- Eigene Schriftarten pro Text: Schnitt, Grad, Farbe und Unterstreichung werden geschrieben, der Schriftname
-  (Original: Zeiger in Feld 9) noch nicht; gezeichnet wird in Times wie die Projektschrift.
+- Neue Klemmstellen und Klemmleisten werden geschrieben (OBJ, KLM mit KFO-Einträgen, `src/klemmen.rs`). Neue Textboxen, Tabellen, Bilder (samt
+  Projektbild), Verweise und Sammelschienen werden geschrieben (`src/epr_neu.rs`); ihr Aufbau folgt der
+  Speicherroutine des Originals, im Original geöffnet ist das Ergebnis noch nicht geprüft
+  (`cargo run --example neu_objekte` erzeugt eine Testdatei).
+- Eigene Schriftarten pro Text: Schnitt, Grad, Farbe, Unterstreichung und Schriftname (STR nach dem STL) werden
+  gelesen und geschrieben; gezeichnet wird aber in Times wie die Projektschrift.
 - Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
   füllt das Original zur Laufzeit – der Nachbau listet die markierten Objekte.
-- Symboleditor: Parameter (PRA) werden nicht bearbeitet; Freigaben eines Symbols gelten als Vorgabe für neu
-  gesetzte Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
-- Drucken: „Änderung seit …“ druckt alle Blätter der Anlage (der Nachbau führt kein Änderungsdatum je Blatt).
+- Symboleditor: Stifte des Symbols (SIT) werden nur angezeigt und unverändert übernommen; Freigaben eines
+  Symbols gelten als Vorgabe für neu gesetzte Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
+- Symboleigenschaften: Die Rackposition wird nur im eigenen Format (`.epj`) gespeichert; ihr Ablageort im
+  VSY-Block ist unbekannt (SPA enthält die Parameterwerte).
+- Tabelle › Daten „Inhaltsverzeichnis“ füllt die Tabelle beim Bearbeiten mit den Blättern der Anlage; sie wird
+  danach nicht selbständig nachgeführt.
+- Projektgrafiken, die im Nachbau neu angelegt oder geändert werden, schreibt das `.epr`-Format noch nicht.
 - Optionen › Datenbank: Serverangaben werden nur gespeichert; der Nachbau liest die Bibliothek direkt aus Symbole.tfi.
 - Info-Dialog bewusst nicht 1:1 (Copyright, E-Mail und Registrierungsschlüssel des Original-Autors).
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
@@ -180,8 +185,12 @@ nicht. Gemessen werden stattdessen:
   Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
 - Inhaltsverzeichnis und Artikelliste (Summenliste) als Blattart: Spalten der Artikelliste wie im Original,
   Maße und Spalten des Inhaltsverzeichnisses ohne Vorlage; Querverweis-Blätter bleiben leer.
-- Neue Einstellungen der Dialoge (Tabellenkopf fett, Bildausrichtung, Verbindungsoptionen, Sammelschienen-
-  Einstellungen, Begrenzungslinien, Schriftfeldhöhe) speichert der Nachbau im eigenen Format (.epj); ihre
-  Ablage im .epr ist noch unbekannt.
+- Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
+  Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift), Blattart
+  (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Nur im
+  eigenen Format (.epj) bleiben: Bauteile samt Zuordnung, Platzhaltergruppen, Projektstatus, "Alter Klemmenplan",
+  Schriftfeld "Absolut", Schalter der Sammelschienen (Querverweise, Pfeile …), Tabellenkopf fett, Bildausrichtung,
+  Verbindungsoptionen und Schriftnamen je Text – ihre Ablage im .epr ist noch unbekannt; der Nachbau nennt sie
+  beim Speichern als .epr.
 - Querverweise auf andere Anlagen: Pfeilrichtung aus zwei Beispielen abgeleitet (siehe MECHANICS.md).
 - Hilfsprogramme zur Formatanalyse: `cargo run --example dump|vsy|sym|obj -- <datei.epr> …`.

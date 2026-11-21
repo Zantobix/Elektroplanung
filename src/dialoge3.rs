@@ -378,6 +378,9 @@ impl App {
             Dlg3::ListExport { .. } => ("Listen Export", [420.0, 566.0]),
         };
         let leitungen_n = self.project.leitungen.len();
+        let mut rail_edit: Option<String> = None;
+        // Tabelle › Daten „Inhaltsverzeichnis“: Blätter der aktuellen Anlage (inhalt.rs)
+        let toc = if matches!(d, Dlg3::Tab { art: 1, .. }) { crate::inhalt::blaetter(&self.project, self.cur().map(|r| r.anlage).unwrap_or(0)) } else { vec![] };
         let closed = tool_window(ctx, "dlg3", title, size, egui::Order::Middle, |ui| {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 5.0);
             match &mut d {
@@ -385,6 +388,11 @@ impl App {
                     ui.horizontal(|ui| {
                         lbl(ui, 76.0, "S-Schiene");
                         combo(ui, "sms", sliste, sel, 150.0);
+                        // Knopf "Bearbeiten" (SammelS1NeuClick): Einstellungen der gewählten Schiene
+                        let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::PartList, 20.0));
+                        if ui.add(btn.min_size(Vec2::new(31.0, 24.0))).on_hover_text("Bearbeiten").clicked() {
+                            rail_edit = sliste.get(*sel).cloned();
+                        }
                     });
                     ui.checkbox(einsp, RichText::new("Einspeisung").font(bold(13.0)));
                     ui.group(|ui| {
@@ -516,6 +524,11 @@ impl App {
                         lbl(ui, 92.0, "Ab");
                         ui.add(egui::TextEdit::singleline(ab).desired_width(40.0));
                     });
+                    if *art == 1 {
+                        *cells = crate::inhalt::tabelle(&toc, ab.trim().parse().unwrap_or(0), *header);
+                        *spalten = crate::inhalt::KOPF.len().to_string();
+                        *zeilen = cells.len().to_string();
+                    }
                     // Spalten/Zeilen sofort übernehmen
                     let nc = spalten.trim().parse::<usize>().unwrap_or(1).clamp(1, 50);
                     let nr = zeilen.trim().parse::<usize>().unwrap_or(1).clamp(1, 500);
@@ -944,6 +957,14 @@ impl App {
         if closed {
             done = Some(false);
         }
+        // Sammelschienen-Objekt › Bearbeiten: Objekt übernehmen, dann die Schiene bearbeiten
+        if let Some(name) = rail_edit {
+            if let Some(r) = self.cur() {
+                let _ = self.apply_dlg3(d);
+                self.open_schiene_dialog(r.anlage, &name);
+                return;
+            }
+        }
         match done {
             Some(true) => {
                 // Titelgenerator bleibt offen (Übernehmen), alle anderen schließen
@@ -961,8 +982,14 @@ impl App {
         let mut ok = 0;
         let mut errs = vec![];
         for p in liste {
+            let is_cur = self.path.as_ref().map(|c| c.display().to_string() == *p).unwrap_or(false);
             let (prj, out) = if p.starts_with('(') {
-                (self.project.clone(), std::env::temp_dir().join("Elektroplanung_Export.pdf"))
+                // ungespeichertes aktuelles Projekt: Zieldatei erfragen
+                let Some(out) = rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name("Projekt.pdf").save_file() else { continue };
+                (self.project.clone(), out)
+            } else if is_cur {
+                // aktuelles Projekt mit seinem Bearbeitungsstand, PDF neben der Projektdatei
+                (self.project.clone(), PathBuf::from(p).with_extension("pdf"))
             } else {
                 let path = PathBuf::from(p);
                 match crate::mcp::open_project(&path) {

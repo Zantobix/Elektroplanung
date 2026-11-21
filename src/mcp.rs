@@ -38,7 +38,7 @@ pub fn load_library(dir: Option<&Path>) -> (Vec<SymDef>, String) {
 
 /// Projekt aus .epr (Original) oder .epj (JSON des Nachbaus) laden.
 pub fn open_project(path: &Path) -> Result<Project, String> {
-    let is_epr = path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("epr")).unwrap_or(false);
+    let is_epr = crate::vorlage::is_epr_format(path);
     if is_epr {
         crate::epr::import(path)
     } else {
@@ -470,6 +470,7 @@ impl Server {
                 let mut warnings = vec![];
                 if fmt == "epr" {
                     warnings = crate::epr_write::unsupported(&self.project);
+                    warnings.extend(crate::epr_projekt::nicht_gespeichert(&self.project));
                     crate::epr_write::save(&self.project, &path)?;
                 } else {
                     let s = serde_json::to_string_pretty(&self.project).map_err(|e| e.to_string())?;

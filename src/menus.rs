@@ -114,10 +114,16 @@ impl App {
                     }
                 });
             }
+            // Parameter: Werte der Symbolparameter (Tabelle wie TTextAbfrage, parameter.rs)
+            if ui.button("Parameter").clicked() {
+                self.open_param_dialog(id, 2);
+                ui.close();
+            }
             // Alternativtext: Standard, die Sätze des Symbols, Benutzerdefiniert
             let sets = def.as_ref().map(|d| d.alt_sets.clone()).unwrap_or_default();
+            let custom = !ext.texts.is_empty();
             ui.menu_button("Alternativtext", |ui| {
-                let cur = ext.alt;
+                let cur = if custom { u16::MAX } else { ext.alt };
                 let mut items = vec!["Standard".to_string()];
                 items.extend(sets.iter().map(|s| symbols::alt_label(s)));
                 for (i, n) in items.iter().enumerate() {
@@ -125,13 +131,15 @@ impl App {
                         self.change_symbol(id, |k| {
                             if let Kind::Symbol { ext, .. } = k {
                                 ext.alt = i as u16;
+                                // ein Satz ersetzt die benutzerdefinierten Texte
+                                ext.texts.clear();
                             }
                         });
                         ui.close();
                     }
                 }
                 if ui.radio(cur as usize >= items.len(), "Benutzerdefiniert").clicked() {
-                    self.edit_props(id);
+                    self.open_param_dialog(id, 1);
                     ui.close();
                 }
             });
@@ -172,7 +180,7 @@ impl App {
             });
             ui.separator();
             if ui.button("Symbol bearbeiten").clicked() {
-                self.open_symbol_editor(Some(key.clone()));
+                self.open_symbol_editor_fuer(id);
                 ui.close();
             }
             ui.separator();

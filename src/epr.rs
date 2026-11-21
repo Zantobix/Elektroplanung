@@ -188,7 +188,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
             set: AnlSettings {
                 kurz: txt_at(&a.data, 55, 66),
                 von: txt_at(&a.data, 66, 112),
-                znr: String::new(),
+                znr: txt_at(&a.data, 116, 136),
                 format: (a.i32(38), a.i32(39)),
                 raender: [a.i32(40), a.i32(41), a.i32(42), a.i32(43)],
                 pfade: a.i32(44),
@@ -281,6 +281,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
         }
     }
     p.next_id = next_id + 10;
+    crate::epr_projekt::import(prj, &mut p);
     Ok(p)
 }
 
@@ -292,7 +293,8 @@ fn drawing(k: &Block) -> Option<(Kind, usize)> {
     }
     let v = |i: usize| i32_at(e, i * 4);
     let pt = |i: usize| P::new(mm(v(2 * i)), mm(v(2 * i + 1)));
-    let pen = v(16).clamp(0, 3) as usize;
+    // Stift: 0–3 fest eingebaut, ab 4 eigene Stifte (PRJ › SIT Feld 8)
+    let pen = v(16).clamp(0, 255) as usize;
     let kind = match e[0x3c] {
         1 => Kind::Line { a: pt(0), b: pt(1) },
         2 => Kind::Curve { a: pt(0), c1: pt(1), c2: pt(2), b: pt(3) },
@@ -337,19 +339,22 @@ fn drawing(k: &Block) -> Option<(Kind, usize)> {
                 underline: (v(7) >> 8) & 0xff != 0,
                 color: if (0..=0xff_ffff).contains(&col) { [(col & 0xff) as u8, ((col >> 8) & 0xff) as u8, ((col >> 16) & 0xff) as u8] } else { [0, 0, 0] },
                 rotation: v(5) as i16,
-                wrap: false,
+                wrap: e[0x3c] == 11 && crate::epr_neu::text_extras(k).0,
                 rect: Some((mn, mx)),
-                font: String::new(),
+                font: if e[0x3c] == 11 { crate::epr_neu::text_extras(k).1 } else { String::new() },
             };
             let pos = text_anchor(mn, mx, align, vertical);
-            Kind::Text { pos, text, size, align, vertical, style }
+            crate::epr_neu::als_textbox(Kind::Text { pos, text, size, align, vertical, style })
         }
         // Tabelle: Feld 0–3 Rechteck, 4 Spalten, 5 Zeilen, Zellen zeilenweise im STR-Unterblock (0-getrennt)
         13 => {
             let (mn, mx) = crate::canvas::norm_rect(pt(0), pt(1));
             let cells: Vec<String> = k.kid("STR").map(|n| table_cells(&n.data)).unwrap_or_default();
-            Kind::Table { a: mn, b: mx, rows: v(5).clamp(1, 500) as usize, cols: v(4).clamp(1, 50) as usize, cells, header: false, fixed_w: false }
+            let (header, fixed_w) = crate::epr_neu::tabelle_flags(k);
+            Kind::Table { a: mn, b: mx, rows: v(5).clamp(1, 500) as usize, cols: v(4).clamp(1, 50) as usize, cells, header, fixed_w }
         }
+        // Bild: Projektbild Feld 4, Rahmen/Ausrichtung Feld 5 (siehe epr_neu)
+        12 => crate::epr_neu::bild_lesen(k),
         _ => return None,
     };
     Some((kind, pen))
@@ -515,7 +520,8 @@ fn symbol(k: &Block) -> Option<(Kind, usize)> {
                 querverweise: k.i32(20) & 1 == 0,
                 sicherung: (k.i32(20) >> 24) & 1 == 1,
                 funktion: k.kid("FKT").map(|t| txt(&t.data)).unwrap_or_default(),
-                rack: k.kid("SPA").map(|s| i32_at(&s.data, 0)).unwrap_or(-1),
+                // Rackposition: Ablage im VSY unbekannt (SPA sind Parameterwerte, nicht die Rackposition)
+                rack: -1,
                 counter: k.i32(38).max(0),
                 texts: k.kids_of("ALT").map(|a| (a.i32(0).max(0) as u32, a.kid("STR").map(|t| txt(&t.data)).unwrap_or_default())).collect(),
                 params: k.kids_of("SPA").map(|s| (i32_at(&s.data, 0).max(0) as u32, s.kid("STR").map(|t| txt(&t.data)).unwrap_or_default())).collect(),
@@ -626,7 +632,7 @@ pub fn anl_settings(a: &Block) -> AnlSettings {
     AnlSettings {
         kurz: txt_at(&a.data, 55, 66),
         von: txt_at(&a.data, 66, 112),
-        znr: String::new(),
+        znr: txt_at(&a.data, 116, 136),
         format: (a.i32(38), a.i32(39)),
         raender: [a.i32(40), a.i32(41), a.i32(42), a.i32(43)],
         pfade: a.i32(44),

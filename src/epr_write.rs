@@ -93,6 +93,8 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
         }
     }
     SYM_IDS.with(|m| *m.borrow_mut() = ids);
+    // Kennungen, Projektbilder und Schienen für neue Blattobjekte (epr_neu)
+    crate::epr_neu::vorbereiten(project, &base);
 
     // Unterblöcke des Projekts in Originalreihenfolge; Anlagen an der Stelle der ersten Anlage
     let mut anl_done = false;
@@ -129,8 +131,9 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
             prj.kids.push(anlage_block(project, a, tpl_prj)?);
         }
     }
-    sync_names(&mut prj, "POT", &project.potentiale, tpl_prj);
-    sync_names(&mut prj, "LTG", &project.leitungen.iter().map(|l| l.name.clone()).collect::<Vec<_>>(), tpl_prj);
+    // Projekt-, Anlagen- und Blattwerte (Leitungen, Potentiale, Stifte, Schriftfeld, Strompfade …)
+    crate::epr_projekt::write(project, &mut prj);
+    crate::epr_neu::nachbereiten(&mut prj);
     *out.root_mut("PRJ").unwrap() = prj;
     Ok(out)
 }
@@ -145,43 +148,19 @@ fn edited_sym(project: &Project, k: &Block) -> Option<Block> {
         a.name == b.name && a.bmk == b.bmk && a.prims == b.prims && a.pins == b.pins && a.title == b.title && a.vis == b.vis
             && a.pin_vis == b.pin_vis && a.options == b.options && a.flag == b.flag && a.flag_names == b.flag_names
             && a.alt_sets == b.alt_sets && a.text_mode == b.text_mode && a.fill == b.fill && a.value_pos == b.value_pos
+            && a.params == b.params
     };
     if same(def, &orig) {
         return None;
     }
     let mut nb = sym_block(def, k, id);
-    // Unterblöcke, die der Nachbau nicht neu erzeugt (Parameter PRA, Stifte SIT), aus dem Original übernehmen
+    // Stifte (SIT) erzeugt der Nachbau nicht neu: aus dem Original übernehmen (Parameter PRA schreibt sym_block)
     if let (Some(og), Some(ng)) = (k.kid("GRD"), nb.kids.iter_mut().find(|b| b.is("GRD"))) {
-        for c in og.kids.iter().filter(|c| c.is("PRA") || c.is("SIT")) {
+        for c in og.kids.iter().filter(|c| c.is("SIT")) {
             ng.kids.push(c.clone());
         }
     }
     Some(nb)
-}
-
-/// Namenslisten (Potentiale, Leitungen) nachführen: vorhandene Blöcke umbenennen, fehlende anhängen,
-/// überzählige entfernen. Unveränderte Listen bleiben byteidentisch.
-fn sync_names(prj: &mut Block, tag: &str, names: &[String], tpl: &Block) {
-    let idx: Vec<usize> = prj.kids.iter().enumerate().filter(|(_, k)| k.is(tag)).map(|(i, _)| i).collect();
-    let template = prj.kids_of(tag).next().cloned().or_else(|| tpl.kids_of(tag).next().cloned());
-    let Some(template) = template else { return };
-    for (n, &i) in idx.iter().enumerate() {
-        if let Some(name) = names.get(n) {
-            if crate::epr::name20(&prj.kids[i]) != *name {
-                put_str(&mut prj.kids[i].data, 0, 20, name);
-            }
-        }
-    }
-    for &i in idx.iter().skip(names.len()).rev() {
-        prj.kids.remove(i);
-    }
-    let mut at = idx.last().map(|i| i + 1).unwrap_or(0).min(prj.kids.len());
-    for name in names.iter().skip(idx.len()) {
-        let mut b = Block { kids: vec![], ..template.clone() };
-        put_str(&mut b.data, 0, 20, name);
-        prj.kids.insert(at, b);
-        at += 1;
-    }
 }
 
 fn anlage_block(project: &Project, a: &Anlage, tpl_prj: &Block) -> Result<Block, String> {
@@ -307,6 +286,13 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
 
 /// Block für ein Objekt: Original unverändert, verschoben oder aus den Daten neu erzeugt.
 pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
+    let mut b = object_block_raw(project, o)?;
+    crate::epr_projekt::leitung_setzen(project, o, &mut b);
+    Some(b)
+}
+
+fn object_block_raw(project: &Project, o: &Obj) -> Option<Block> {
+    // Klemmstellen (geändert und neu) schreibt klemmen.rs
     if matches!(o.kind, Kind::Terminal { .. }) {
         return crate::klemmen::terminal_block(project, o);
     }
@@ -321,13 +307,16 @@ pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
                 write_ziel(project, &mut b, ziel.as_ref());
             }
         }
+        crate::epr_neu::patch_more(project, o, &r.kind, &mut b);
         if b.is("ZCN") {
             let v = b.i32(15);
             b.set_i32(15, if o.fixed { v | 0x1_0000 } else { v & !0x1_0000 });
         }
         return Some(b);
     }
-    new_block(project, o)
+    let mut b = new_block(project, o)?;
+    crate::epr_neu::nachfuehren(project, o, &mut b);
+    Some(b)
 }
 
 /// Verschiebung zwischen zwei Formen gleicher Art, falls sich nur die Lage geändert hat.
@@ -362,7 +351,9 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
     let shift = pure_shift(old, new);
     if b.is("ZCN") {
         if let Some(d) = shift {
-            for i in 0..8 {
+            // Texte, Bilder und Tabellen haben nur zwei Punkte (Feld 4–7 sind Schrift, Spalten …)
+            let n = if matches!(b.data.get(0x3c), Some(6 | 11 | 12 | 13)) { 4 } else { 8 };
+            for i in 0..n {
                 let v = b.i32(i);
                 b.set_i32(i, v + if i % 2 == 0 { to01(d.x) } else { to01(d.y) });
             }
@@ -394,7 +385,13 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
         return;
     }
     if b.is("VSY") {
-        if let Kind::Symbol { pos, rot, mirror_h, mirror_v, bmk, value, scale, option, title, flags, ext, .. } = new {
+        if let Kind::Symbol { key, pos, rot, mirror_h, mirror_v, bmk, value, scale, option, title, flags, ext } = new {
+            // auf eine andere Symboldefinition umgestellt ("Nur dieses" im Symboleditor): Kennung des SYM-Blocks
+            if matches!(old, Kind::Symbol { key: ok, .. } if ok != key) && b.data.len() >= 112 {
+                if let Some(id) = SYM_IDS.with(|m| m.borrow().get(key).copied()) {
+                    b.data[104..112].copy_from_slice(&id.to_le_bytes());
+                }
+            }
             b.set_i32(23, *flags as i32);
             let old_ext = if let Kind::Symbol { ext, .. } = old { Some(ext.clone()) } else { None };
             if old_ext.as_ref() != Some(ext) {
@@ -423,15 +420,12 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
                         set_child_text(b, "FKT", &ext.funktion);
                     }
                 }
-                if old_ext.as_ref().map(|e| e.rack) != Some(ext.rack) {
-                    if ext.rack < 0 {
-                        b.kids.retain(|k| !k.is("SPA"));
-                    } else {
-                        match b.kids.iter_mut().find(|k| k.is("SPA")) {
-                            Some(k) => k.set_i32(0, ext.rack),
-                            None => b.kids.push(Block::new("SPA", ext.rack.to_le_bytes().to_vec())),
-                        }
-                    }
+                // Parameterwerte (SPA) und benutzerdefinierte Texte (ALT) der Instanz
+                if old_ext.as_ref().map(|e| (&e.params, &e.texts)) != Some((&ext.params, &ext.texts)) {
+                    crate::parameter::sync_vsy_kids(b, &ext.params, &ext.texts);
+                }
+                if old_ext.as_ref().map(|e| e.counter) != Some(ext.counter) {
+                    b.set_i32(38, if ext.counter > 0 { ext.counter } else { -1 });
                 }
             }
             b.set_i32(16, to01(pos.x));
@@ -555,12 +549,12 @@ pub fn verweis_winkel(cross: bool, ohne_text: bool, dir: u16, vertical: bool) ->
 /// Ziel eines Verweises in OBJ Feld 8–13 (Kennungen von Anlage, Blatt, Gegenverweis) und Feld 15 Byte 1
 /// (Ziel gesetzt) schreiben. Kennungen gibt es nur für Teile, die aus der .epr stammen (bzw. für neue Blätter
 /// die beim Speichern vergebene); was sich nicht auflösen lässt, bleibt 0.
-fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::VerweisZiel>) {
+pub(crate) fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::VerweisZiel>) {
     let id = |blk: &Block, at: usize| blk.data.get(at..at + 8).map(|d| u64::from_le_bytes(d.try_into().unwrap())).unwrap_or(0);
     let mut ids = [0u64; 3];
     if let Some(z) = ziel {
         if let Some(a) = project.anlagen.iter().find(|a| a.name == z.anlage) {
-            ids[0] = a.raw.as_deref().map(|(blk, _)| id(blk, crate::epr::ANL_ID_AT)).unwrap_or(0);
+            ids[0] = a.raw.as_deref().map(|(blk, _)| id(blk, crate::epr::ANL_ID_AT)).unwrap_or_else(|| crate::epr_neu::anlage_kennung(project, a));
             if let Some(s) = a.sheets.iter().find(|s| s.number == z.blatt) {
                 ids[1] = match s.raw.as_deref() {
                     Some(r) => id(&r.block, crate::epr::BLT_ID_AT),
@@ -569,7 +563,7 @@ fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::Verw
             }
         }
         if let Some((_, o)) = project.find_obj(z.obj).filter(|_| z.obj != 0) {
-            ids[2] = o.raw.as_deref().filter(|r| r.block.is("OBJ")).map(|r| id(&r.block, 0)).unwrap_or(0);
+            ids[2] = crate::epr_neu::kennung(o);
         }
     }
     if b.data.len() < 64 {
@@ -730,8 +724,8 @@ fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             Some(b)
         }
         Kind::Terminal { .. } => crate::klemmen::terminal_block(project, o),
-        // Textbox, Tabelle, Bild und Klemmstelle haben im Original eigene Formate, die der Nachbau noch nicht schreibt
-        _ => None,
+        // Textbox, Tabelle, Bild, Verweis, Sammelschiene
+        _ => crate::epr_neu::new_block(project, o),
     }
 }
 
@@ -918,6 +912,8 @@ fn sym_block(def: &crate::symbols::SymDef, tpl: &Block, id: u64) -> Block {
         opt.kids.push(Block::new("STR", crate::eprfile::encode_cp1252(name)));
         grd.kids.push(opt);
     }
+    // Parameter (PRA: Nummer; STR Name, STR Vorgabe)
+    grd.kids.extend(crate::parameter::pra_blocks(&def.params));
     b.kids.push(grd);
     b
 }

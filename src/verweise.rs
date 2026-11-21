@@ -1,5 +1,6 @@
-//! Verweise anklicken: Sprung zum Ziel eines Verweises (Doppelklick wie im Original, Option "Doppelklick auf
-//! Verweise = Ziel anzeigen / Eigenschaften" in TForm4) und zu den Querverweisen der Sammelschienen ("Blatt/Pfad").
+//! Verweise anklicken: Sprung zum Ziel eines Verweises mit Strg+Klick (Hand als Mauszeiger), per Doppelklick wie
+//! im Original je nach Option "Doppelklick auf Verweise = Ziel anzeigen / Eigenschaften" in TForm4, und zu den
+//! Querverweisen der Sammelschienen ("Blatt/Pfad"). Ein einfacher Klick markiert und verschiebt wie bei anderen Objekten.
 //! Dieselben Flächen werden im PDF als Verknüpfungen auf die Zielseite ausgegeben (pdf.rs).
 
 use crate::app::App;
@@ -105,16 +106,16 @@ pub fn busbar_text_at(project: &Project, r: SheetRef, m: P, tol: f32) -> Option<
 }
 
 /// Verweis drehen/spiegeln (op wie `App::transform_selection`: 1 = 90° im Uhrzeigersinn, 2 = vertikal,
-/// 4 = horizontal spiegeln) um die Pfeilspitze, den Anschlusspunkt an der Leitung. Beim Drehen wechselt der Text
-/// zwischen waagerecht und hochkant; vier Drehungen ergeben wieder die Ausgangslage.
+/// 4 = horizontal spiegeln) um die Pfeilspitze, den Anschlusspunkt an der Leitung. Beim Drehen wandern Pfeil und
+/// Textlage mit, der Text selbst bleibt in seiner Leserichtung (waagerecht bleibt waagerecht; gespeichert als
+/// OBJ Feld 15 Bit 0); vier Drehungen ergeben wieder die Ausgangslage.
 pub fn drehen(kind: &mut Kind, op: u8) {
-    let Kind::Verweis { pos, text_pos, dir, vertical, .. } = kind else { return };
+    let Kind::Verweis { pos, text_pos, dir, .. } = kind else { return };
     let (dx, dy) = (text_pos.x - pos.x, text_pos.y - pos.y);
     match op {
         1 => {
             *text_pos = P::new(pos.x - dy, pos.y + dx);
             *dir = (*dir + 270) % 360;
-            *vertical = !*vertical;
         }
         2 => {
             text_pos.x = pos.x - dx;
@@ -191,6 +192,29 @@ impl App {
                 self.info = format!("Verweis: {} › {name}", self.project.anlagen.get(s.blatt.anlage).map(|a| a.name.as_str()).unwrap_or(""));
             }
             Err(e) => self.info = e,
+        }
+    }
+
+    /// Ziel des Verweises bzw. Sammelschienen-Querverweistextes unter `m` auf dem aktuellen Blatt (für Strg+Klick
+    /// und den Hand-Mauszeiger); None = dort ist nichts anzuspringen.
+    pub fn verweis_unter(&self, m: P, tol: f32) -> Option<Result<Sprung, String>> {
+        let r = self.cur()?;
+        if let Some(id) = self.hit_top(m, tol) {
+            if let Some(Kind::Verweis { ziel, .. }) = self.project.sheet(r).and_then(|s| s.objects.iter().find(|o| o.id == id)).map(|o| &o.kind) {
+                return Some(verweis_ziel(&self.project, ziel.as_ref()));
+            }
+        }
+        busbar_text_at(&self.project, r, m, tol).map(|f| f.ziel)
+    }
+
+    /// Strg+Klick bei `m`: zum Ziel des Verweises springen. true = behandelt.
+    pub fn verweis_strg_klick(&mut self, m: P, tol: f32) -> bool {
+        match self.verweis_unter(m, tol) {
+            Some(z) => {
+                self.springe(z);
+                true
+            }
+            None => false,
         }
     }
 
@@ -296,5 +320,19 @@ mod tests {
         assert!(busbar_text_at(&p, s0, P::new(124.0, 40.0), 0.2).is_some());
         assert!(busbar_text_at(&p, s0, P::new(60.0, 40.0), 0.2).is_none());
         assert!(busbar_text_at(&p, s1, P::new(17.0, 40.0), 0.2).is_some());
+    }
+
+    #[test]
+    fn drehen_laesst_text_waagerecht() {
+        let mut k = verweis("=A", None);
+        for n in 1..=4 {
+            drehen(&mut k, 1);
+            let Kind::Verweis { pos, text_pos, dir, vertical, .. } = &k else { unreachable!() };
+            assert!(!vertical, "Drehung {n}: Text darf nicht hochkant werden");
+            assert_eq!(*dir, [270, 180, 90, 0][n - 1]);
+            // Textlage dreht um die Pfeilspitze mit
+            assert!((text_pos.dist(*pos) - P::new(5.0, -1.0).dist(P::default())).abs() < 1e-4);
+        }
+        assert_eq!(k, verweis("=A", None));
     }
 }
