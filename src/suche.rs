@@ -5,7 +5,6 @@ use crate::app::{App, View};
 use crate::canvas;
 use crate::model::*;
 use crate::pruefen::{self, Hinweis};
-use crate::symbols;
 use eframe::egui::{self, Color32, RichText, Vec2};
 use std::path::PathBuf;
 
@@ -26,8 +25,9 @@ pub fn objekt_texte(project: &Project, a: &Anlage, s: &Sheet, o: &Obj) -> Vec<(&
         Kind::Text { text, .. } => v.push(("Text", project.expand_placeholders(text))),
         Kind::Table { cells, .. } => v.extend(cells.iter().map(|c| ("Tabelle", c.clone()))),
         Kind::Verweis { text, .. } => v.push(("Verweis", project.expand_placeholders(text))),
-        Kind::Symbol { bmk, value, ext, .. } => {
-            v.push(("BMK", symbols::display_bmk(bmk, ext.counter, &canvas::bmk_ctx(a, s))));
+        Kind::Symbol { value, ext, .. } => {
+            // angezeigte BMK, bei Symbolen mit Eigentümer dessen Kennzeichnung (wie auf dem Blatt)
+            v.push(("BMK", crate::eigentuemer::anzeige_bmk(project, o, &canvas::bmk_ctx(a, s))));
             v.push(("Wert", project.expand_placeholders(value)));
             v.extend(ext.texts.iter().map(|(_, t)| ("Symboltext", t.clone())));
         }

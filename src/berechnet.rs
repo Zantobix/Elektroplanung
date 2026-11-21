@@ -7,7 +7,11 @@
 //! - Inhaltsverzeichnis: Spalten „Seite“, „Bezeichnung“ (Stringtabelle 4000/4001); je Blatt der Anlage eine Zeile.
 //! - Querverweise: Spalten „Objekt“, „Blatt/Pfad“ (4010/4011). Aufgenommen werden Symbole mit Kennzeichnung, deren
 //!   Freigabe „Querverweise“ gesetzt ist (VSY Feld 20 Bit 0 = aus); je Kennzeichnung eine Zeile, natürlich sortiert,
-//!   die Fundstellen „Blatt/Pfad“ sortiert und durch Leerzeichen getrennt.
+//!   die Fundstellen „Blatt/Pfad“ sortiert und durch Leerzeichen getrennt. Ein Symbol mit Eigentümer (Laufzeit
+//!   +0xb4, VSY › OWR) steht unter der Kennzeichnung des Eigentümers (0x46e9f4 mit dessen Blatt und Anlage) mit
+//!   seiner eigenen Fundstelle und wird unabhängig von seiner eigenen Freigabe aufgenommen (Bedingung im
+//!   Listenaufbau: „Freigabe und Kennzeichnung“ oder „Eigentümer“). Aufnahme des Originals: „-K1“ mit „6/5 6/6“
+//!   (Spule und Schließer), die eigene Vorlage „-Q1+W2“ des Schließers fehlt.
 //! - Stückliste: Kopf je Zusatz – Summenliste „Bezeichnung, Menge, Typnummer, Hersteller, Bestellnummer“,
 //!   Summe+BMK „Betriebsmittelkennzeichen, Menge, Bezeichnung, Typnummer, Hersteller, Bestellnummer“ (die
 //!   Kennzeichen durch Leerzeichen getrennt), Einzelliste „Betriebsmittelkennzeichen, Bezeichnung, Typnummer,
@@ -61,10 +65,11 @@ pub fn artikel_rows(p: &Project, a: &Anlage) -> Vec<Vec<String>> {
     rows
 }
 
-/// Kennzeichnung eines Objekts mit Bauteil für die Stückliste (Symbol: aufgelöste BMK, Klemme: Leiste.Nummer).
-fn kennzeichen(a: &Anlage, s: &Sheet, o: &Obj) -> String {
+/// Kennzeichnung eines Objekts mit Bauteil für die Stückliste (Symbol: angezeigte BMK, mit Eigentümer dessen;
+/// Klemme: Leiste.Nummer).
+fn kennzeichen(anlagen: &[Anlage], a: &Anlage, s: &Sheet, o: &Obj) -> String {
     match &o.kind {
-        Kind::Symbol { bmk, ext, .. } => symbols::display_bmk(bmk, ext.counter, &bmk_ctx(a, s)),
+        Kind::Symbol { .. } => crate::eigentuemer::anzeige_in(anlagen, o, &bmk_ctx(a, s)),
         Kind::Terminal { leiste, nr, .. } => format!("{leiste}.{nr}"),
         _ => String::new(),
     }
@@ -77,7 +82,7 @@ pub fn stueckliste(p: &Project, a: &Anlage, zusatz: u8) -> (Vec<&'static str>, V
     for s in &a.sheets {
         for o in &s.objects {
             if let Some(i) = p.part_of.get(&o.id).filter(|i| **i < p.bauteile.len()) {
-                teile.entry(*i).or_default().push(kennzeichen(a, s, o));
+                teile.entry(*i).or_default().push(kennzeichen(&p.anlagen, a, s, o));
             }
         }
     }
@@ -130,8 +135,9 @@ pub fn inhalt(a: &Anlage) -> Vec<(u32, Vec<String>)> {
     v.into_iter().map(|s| (s.number, vec![seite(s), s.name.clone()])).collect()
 }
 
-/// Querverweisliste der Anlage: je Kennzeichnung (natürlich sortiert) die Fundstellen „Blatt/Pfad“.
-pub fn querverweise(a: &Anlage) -> Vec<Vec<String>> {
+/// Querverweisliste der Anlage: je Kennzeichnung (natürlich sortiert) die Fundstellen „Blatt/Pfad“; Symbole mit
+/// Eigentümer stehen unter dessen Kennzeichnung.
+pub fn querverweise(p: &Project, a: &Anlage) -> Vec<Vec<String>> {
     let mut map: Vec<(String, Vec<String>)> = vec![];
     for s in &a.sheets {
         if s.blattart() != 3 {
@@ -140,10 +146,11 @@ pub fn querverweise(a: &Anlage) -> Vec<Vec<String>> {
         let ctx = bmk_ctx(a, s);
         for o in &s.objects {
             let Kind::Symbol { bmk, ext, pos, .. } = &o.kind else { continue };
-            if !ext.querverweise {
-                continue;
-            }
-            let b = symbols::display_bmk(bmk, ext.counter, &ctx);
+            let b = match crate::eigentuemer::kennzeichnung(p, o) {
+                Some(k) => k,
+                None if ext.querverweise => symbols::display_bmk(bmk, ext.counter, &ctx),
+                None => continue,
+            };
             if b.trim().is_empty() {
                 continue;
             }
@@ -170,10 +177,10 @@ pub fn querverweise(a: &Anlage) -> Vec<Vec<String>> {
 /// Inhalt einer Tabelle mit berechneten Daten (TSTab „Daten“): 1 Inhaltsverzeichnis ab Blattnummer `ab`,
 /// 2 Querverweise ab Eintrag `ab` (ab 1). Rückgabe: Spaltenzahl und Zellen zeilenweise (mit Kopfzeile, falls
 /// `kopf`), höchstens `zeilen` Zeilen. None bei Benutzerdaten.
-pub fn tabelle(a: &Anlage, art: u8, ab: u32, kopf: bool, zeilen: usize) -> Option<(usize, Vec<String>)> {
+pub fn tabelle(p: &Project, a: &Anlage, art: u8, ab: u32, kopf: bool, zeilen: usize) -> Option<(usize, Vec<String>)> {
     let (head, rows): (&[&str], Vec<Vec<String>>) = match art {
         1 => (&KOPF_INHALT, inhalt(a).into_iter().filter(|(n, _)| *n >= ab).map(|(_, r)| r).collect()),
-        2 => (&KOPF_QUER, querverweise(a).into_iter().skip(ab.saturating_sub(1) as usize).collect()),
+        2 => (&KOPF_QUER, querverweise(p, a).into_iter().skip(ab.saturating_sub(1) as usize).collect()),
         _ => return None,
     };
     let mut cells: Vec<String> = vec![];
@@ -219,7 +226,7 @@ type Liste = (Vec<&'static str>, Vec<f32>, Vec<Vec<String>>);
 fn liste(p: &Project, sheet: &Sheet, a: &Anlage) -> Option<Liste> {
     Some(match sheet.blattart() {
         1 => (KOPF_INHALT.to_vec(), vec![13.0], inhalt(a).into_iter().map(|(_, r)| r).collect()),
-        2 => (KOPF_QUER.to_vec(), vec![29.6], querverweise(a)),
+        2 => (KOPF_QUER.to_vec(), vec![29.6], querverweise(p, a)),
         6 => {
             let (head, rows) = stueckliste(p, a, sheet.zusatz);
             // feste Breite je Spalte (Bildschirmaufnahmen des Originals vom 21.11.2026), die letzte füllt den Rest
@@ -387,14 +394,29 @@ mod tests {
         s2.objects.push(aus);
         p.anlagen[0].sheets[0].objects.push(sym(1, "-K1", 20.0));
         p.anlagen[0].sheets.push(s2);
-        let q = querverweise(&p.anlagen[0]);
+        let q = querverweise(&p, &p.anlagen[0]);
         assert_eq!(q, vec![vec!["-F10".to_string(), "2/1".into()], vec!["-K1".into(), "1/1 2/6".into()]]);
-        let (cols, cells) = tabelle(&p.anlagen[0], 2, 2, true, 10).unwrap();
+        let (cols, cells) = tabelle(&p, &p.anlagen[0], 2, 2, true, 10).unwrap();
         assert_eq!((cols, cells), (2, ["Objekt", "Blatt/Pfad", "-K1", "1/1 2/6"].map(String::from).to_vec()));
         let mut d = Sheet::new(0);
         d.subindex = 2;
         assert_eq!(seite(&d), "b");
-        assert_eq!(tabelle(&p.anlagen[0], 0, 0, true, 3), None);
+        assert_eq!(tabelle(&p, &p.anlagen[0], 0, 0, true, 3), None);
+    }
+
+    #[test]
+    fn querverweise_mit_eigentuemer() {
+        let mut p = Project::new_default();
+        p.anlagen[0].sheets[0].objects.push(sym(1, "-K1", 20.0));
+        // Kontakt mit eigener Vorlage und ohne eigene Freigabe: steht trotzdem unter der Spule
+        let mut k = sym(2, "-Q1", 60.0);
+        if let Kind::Symbol { ext, .. } = &mut k.kind {
+            ext.querverweise = false;
+        }
+        p.anlagen[0].sheets[0].objects.push(k);
+        p.anlagen[0].sheets[0].objects.push(sym(3, "-Q2", 200.0));
+        assert!(crate::eigentuemer::setzen(&mut p, 1, &[2, 3]));
+        assert_eq!(querverweise(&p, &p.anlagen[0]), vec![vec!["-K1".to_string(), "1/1 1/2 1/6".into()]]);
     }
 
     #[test]

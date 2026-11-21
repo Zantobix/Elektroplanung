@@ -17,7 +17,8 @@
 //!   tauscht oben/unten und links/rechts. "Von Ziel" = erste Richtung mit Ziel; "Nach Ziel" = unten, wenn Von
 //!   oben ist und unten ein Ziel hat, sonst die nächste Richtung mit Ziel.
 //! - Symbole mit Eigentümer (VSY › OWR, z. B. Kontakt eines Relais) erscheinen mit der Kennung des Eigentümers
-//!   (Ausdruck Seite 13: "-K1" statt "-Q1+W2").
+//!   (Ausdruck Seite 13: "-K1" statt "-Q1+W2"); Quelle ist wie überall `SymExt::eigentuemer` (`eigentuemer.rs`),
+//!   also auch ein im Nachbau gesetzter Eigentümer.
 //! - Funktion = Funktion der Klemme (Klemmen-Dialog), sonst die Pfadbeschreibung ihres Strompfades (Anleitung 4.2.4).
 //! - Reihenfolge der Zeilen: Position in der Klemmleiste, dann Etage (wie das Original: Position · 10 + Etage).
 //! - Brücken als Ketten in Spuren (`ketten`), nicht als zusammenhängende Gruppen.
@@ -29,7 +30,7 @@ use crate::canvas::{self, DrawCtx};
 use crate::model::*;
 use crate::symbols::{self, Prim, SymDef};
 use eframe::egui::{self, Align2, Color32, Rect, Stroke};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 /// Toleranz für zusammenfallende Punkte in mm
 pub const TOL: f32 = 0.05;
@@ -136,29 +137,6 @@ pub fn pin_name(def: &SymDef, pin: usize, ext: &SymExt, option: u16) -> String {
     symbols::expand_text(&s, def, &ext.params, option).replace("\r\n", " ").replace('\n', " ").trim().to_string()
 }
 
-/// Kennung eines Symbols im Original (VSY Byte 96–103).
-fn vsy_uid(o: &Obj) -> Option<u64> {
-    o.raw.as_deref().filter(|r| r.block.is("VSY")).and_then(|r| r.block.data.get(96..104)).map(|b| u64::from_le_bytes(b.try_into().unwrap()))
-}
-
-/// Eigentümer eines Symbols (VSY › OWR Byte 0–7 = Kennung des Eigentümer-Symbols).
-fn owner_uid(o: &Obj) -> Option<u64> {
-    o.raw.as_deref().and_then(|r| r.block.kid("OWR")).and_then(|w| w.data.get(0..8)).map(|b| u64::from_le_bytes(b.try_into().unwrap()))
-}
-
-/// Angezeigte Kennung aller Symbole der Anlage, die Eigentümer sein können (Kennung → BMK).
-fn owners(anlage: &Anlage) -> HashMap<u64, String> {
-    let mut m = HashMap::new();
-    for s in &anlage.sheets {
-        let ctx = canvas::bmk_ctx(anlage, s);
-        for o in &s.objects {
-            if let (Kind::Symbol { bmk, ext, .. }, Some(id)) = (&o.kind, vsy_uid(o)) {
-                m.insert(id, symbols::display_bmk(bmk, ext.counter, &ctx));
-            }
-        }
-    }
-    m
-}
 
 /// Pfadbeschreibung des Strompfades bei `x` (leer, wenn keine eigene vergeben ist).
 pub fn pfad_text(sheet: &Sheet, x: f32) -> String {
@@ -170,7 +148,8 @@ pub fn pfad_text(sheet: &Sheet, x: f32) -> String {
 }
 
 impl<'a> Netz<'a> {
-    fn new(anlage: &Anlage, sheet: &'a Sheet, lib: &[SymDef], owners: &HashMap<u64, String>) -> Self {
+    /// `anlagen`: wo Eigentümer gesucht werden (`eigentuemer::anzeige_in`)
+    fn new(anlagen: &[Anlage], anlage: &Anlage, sheet: &'a Sheet, lib: &[SymDef]) -> Self {
         let ctx = canvas::bmk_ctx(anlage, sheet);
         let mut n = Netz { wires: vec![], bruecke: vec![], pins: vec![], terms: vec![], bars: vec![] };
         for o in &sheet.objects {
@@ -180,9 +159,9 @@ impl<'a> Netz<'a> {
                     let raw = o.raw.as_deref().filter(|r| r.block.is("VBG") && r.kind == o.kind).map(|r| r.block.i32(14) & 0x100 != 0);
                     n.bruecke.push(raw.unwrap_or(false) || opts & WIRE_BRUECKE != 0);
                 }
-                Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, flags, bmk, ext, .. } => {
+                Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, flags, ext, .. } => {
                     let Some(def) = symbols::find(lib, key) else { continue };
-                    let kennung = owner_uid(o).and_then(|w| owners.get(&w).cloned()).unwrap_or_else(|| symbols::display_bmk(bmk, ext.counter, &ctx));
+                    let kennung = crate::eigentuemer::anzeige_in(anlagen, o, &ctx);
                     let pf = pfad(sheet, pos.x);
                     for (i, q) in def.pins.iter().enumerate() {
                         if !symbols::visible(*option, def.pin_vis.get(i)) || !symbols::flag_visible(*flags, def.pin_info.get(i).map(|x| &x.1)) {
@@ -334,8 +313,18 @@ fn von_nach(slots: &[Option<Slot>; 4]) -> (Option<Ziel>, Option<Ziel>) {
     (ziel(v), n.and_then(ziel))
 }
 
-/// Klemmplan der Klemmleiste `leiste` einer Anlage berechnen (Klemmen aller Blätter der Anlage).
+/// Klemmplan der Klemmleiste `leiste` einer Anlage berechnen (Klemmen aller Blätter der Anlage); Eigentümer
+/// (`SymExt::eigentuemer`) werden nur in dieser Anlage gesucht – mit Projekt: `plan_projekt`.
 pub fn plan(anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
+    plan_in(std::slice::from_ref(anlage), anlage, leiste, lib)
+}
+
+/// Klemmplan wie `plan`, Eigentümer im ganzen Projekt gesucht (auch in anderen Anlagen).
+pub fn plan_projekt(p: &Project, anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
+    plan_in(&p.anlagen, anlage, leiste, lib)
+}
+
+fn plan_in(anlagen: &[Anlage], anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
     let mut plan = Plan::default();
     let mut links: Vec<((u32, u8), (u32, u8))> = vec![];
     let row_of = |plan: &mut Plan, nr: u32, level: u8, label: String, pos: u32| -> usize {
@@ -345,12 +334,11 @@ pub fn plan(anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
         plan.zeilen.push(Zeile { nr, level, label, von: None, nach: None, funktion: String::new(), pos });
         plan.zeilen.len() - 1
     };
-    let owners = owners(anlage);
     for sheet in &anlage.sheets {
         if sheet.art == 4 || sheet.art == 5 {
             continue;
         }
-        let netz = Netz::new(anlage, sheet, lib, &owners);
+        let netz = Netz::new(anlagen, anlage, sheet, lib);
         for i in 0..netz.terms.len() {
             let t = &netz.terms[i];
             if t.leiste != leiste {
@@ -460,7 +448,7 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
     };
     let ki = anlage.klemmen.iter().find(|k| k.id == sheet.klm);
     let name = ki.map(|k| k.name.as_str()).unwrap_or("");
-    let plan = plan(anlage, name, dc.lib);
+    let plan = plan_projekt(dc.project, anlage, name, dc.lib);
     let alt = dc.project.alter_klemmenplan;
     let mehr = plan.etagen > 1;
     let (x0, x1) = (fx0 + 4.0, fx1 - 4.0);

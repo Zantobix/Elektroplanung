@@ -40,7 +40,7 @@ pub fn pruefen(project: &Project, lib: &[SymDef]) -> Vec<Hinweis> {
     let mut out = vec![];
     for (ai, a) in project.anlagen.iter().enumerate() {
         for (si, s) in a.sheets.iter().enumerate() {
-            offene_anschluesse(SheetRef { anlage: ai, sheet: si }, a, s, lib, &mut out);
+            offene_anschluesse(&project.anlagen, SheetRef { anlage: ai, sheet: si }, a, s, lib, &mut out);
         }
         doppelte_bmk(ai, a, lib, &mut out);
     }
@@ -48,9 +48,9 @@ pub fn pruefen(project: &Project, lib: &[SymDef]) -> Vec<Hinweis> {
 }
 
 /// Bezeichnung eines Symbols für Hinweistexte: angezeigte BMK, sonst Name der Symboldefinition.
-fn symbol_name(o: &Obj, a: &Anlage, s: &Sheet, lib: &[SymDef]) -> String {
-    let Kind::Symbol { key, bmk, ext, .. } = &o.kind else { return String::new() };
-    let shown = symbols::display_bmk(bmk, ext.counter, &canvas::bmk_ctx(a, s));
+fn symbol_name(anlagen: &[Anlage], o: &Obj, a: &Anlage, s: &Sheet, lib: &[SymDef]) -> String {
+    let Kind::Symbol { key, .. } = &o.kind else { return String::new() };
+    let shown = crate::eigentuemer::anzeige_in(anlagen, o, &canvas::bmk_ctx(a, s));
     if !shown.is_empty() {
         return shown;
     }
@@ -60,7 +60,7 @@ fn symbol_name(o: &Obj, a: &Anlage, s: &Sheet, lib: &[SymDef]) -> String {
 /// Anschlüsse von Symbolen, an denen weder ein Leitungsende noch ein anderer Anschluss oder eine Klemmstelle
 /// liegt. Als verbunden gilt auch ein Anschluss auf dem Verlauf einer Leitung oder Sammelschiene (Abzweig).
 /// Symbole, deren Bibliotheksdefinition keine Anschlüsse hat (oder fehlt), werden übergangen.
-pub fn offene_anschluesse(r: SheetRef, a: &Anlage, s: &Sheet, lib: &[SymDef], out: &mut Vec<Hinweis>) {
+pub fn offene_anschluesse(anlagen: &[Anlage], r: SheetRef, a: &Anlage, s: &Sheet, lib: &[SymDef], out: &mut Vec<Hinweis>) {
     // Gegenstellen des Blattes: Punkte (Anschlüsse anderer Symbole, Klemmstellen) und Strecken (Leitungen, Schienen)
     let mut points: Vec<(u64, P)> = vec![];
     let mut segs: Vec<(P, P)> = vec![];
@@ -90,7 +90,7 @@ pub fn offene_anschluesse(r: SheetRef, a: &Anlage, s: &Sheet, lib: &[SymDef], ou
                     sheet: r,
                     id: o.id,
                     art: HinweisArt::OffenerAnschluss,
-                    text: format!("{}: Anschluss {} ist nicht verbunden", symbol_name(o, a, s, lib), k + 1),
+                    text: format!("{}: Anschluss {} ist nicht verbunden", symbol_name(anlagen, o, a, s, lib), k + 1),
                     pos: p,
                 });
             }
@@ -108,6 +108,10 @@ pub fn doppelte_bmk(ai: usize, a: &Anlage, lib: &[SymDef], out: &mut Vec<Hinweis
         let ctx = canvas::bmk_ctx(a, s);
         for o in &s.objects {
             let Kind::Symbol { key, pos, bmk, ext, .. } = &o.kind else { continue };
+            // Symbole mit Eigentümer (Kontakte einer Spule) tragen gewollt dessen Kennzeichnung
+            if ext.eigentuemer != 0 {
+                continue;
+            }
             let shown = symbols::display_bmk(bmk, ext.counter, &ctx);
             // leere oder reine Vorzeichen ("-", "=", "+") zählen nicht
             if shown.trim_matches(|c: char| c == '-' || c == '=' || c == '+' || c.is_whitespace()).is_empty() {
