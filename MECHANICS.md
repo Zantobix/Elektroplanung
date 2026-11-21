@@ -252,6 +252,13 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   Byte 1 Ausrichtung (0 Zentriert, 1 Eingepasst, 2 Gestreckt), Feld 15 Bit 16 Fixiert.
 - Tabelle (Typ 13): Feld 6 „Ab“, Feld 9 Byte 0 Überschrift, Byte 1 Autobreite, Byte 2 Art (0 Benutzerdaten,
   1 Inhaltsverzeichnis, 2 Querverweise); berechnete Tabellen zeichnet der Nachbau stets mit dem aktuellen Inhalt.
+  Zeichnen (Routine 0x4701a4, `tabelle.rs`): Zeilenhöhe = Höhe/Zeilen, Schrift = ¾ Zeilenhöhe, Text 1,5 mm vom
+  linken Rand, senkrecht mittig, Kopfzeile fett. Autobreite (nur mit Inhalt): längster Text je Spalte, gemessen mit
+  Schrift = Zeilenhöhe, + 3 mm; passt die Summe, reicht die letzte Spalte bis zum Rand, sonst Stauchung mit
+  Faktor f (Schrift × 1,3 f). Sonst gleich breite Spalten. „Ab“ = erste angezeigte Datenzeile (Kopfzeile bleibt).
+  Berechnete Tabellen immer mit Kopfzeile und Autobreite. Neue Tabelle: 2 × 2, ohne Überschrift, Autobreite.
+  Liste laden/speichern: Textdatei (Windows-1252), Tabulator zwischen Zellen, CR LF je Zeile; „Zeile löschen“
+  entfernt die markierte Zeile und hängt eine leere an.
 - Kontaktspiegel (OBJ, Byte 0x14 = 5): Feld 6 X in 0,1 mm, Feld 8/9 Kennung der Spule (VSY Byte 96), Byte 0x2c
   Bit 0 = Zeilen vorhanden; je Zeile STB (0x1c Byte: Kennung Kontakt, Blatt (BLT Byte 72), Anlage (ANL Byte 0x88),
   Byte 0x18 Art 0 Schließer/1 Öffner/2 Wechsler) mit je Anschlussnummer einem ALT (Feld 0 = Nummer 1–3), darin

@@ -35,6 +35,10 @@ Behoben:
 
 Neu:
 - `examples/pdf_export.rs`: Projekt ohne Fenster als PDF und jedes Blatt als PNG ausgeben (Vergleich)
+- Tabelle wie im Original: Spaltenbreiten (Autobreite mit 3 mm Zuschlag, letzte Spalte bis zum Rand, sonst
+  gestaucht), Schrift aus der Zeilenhöhe, „Ab“ als erste angezeigte Zeile; keine doppelten Linien mehr bei leeren
+  Tabellen. Neue Tabellen 2 × 2 ohne Überschrift. Dialog mit eigenen Icons und den Hinweisen des Originals; Liste
+  laden/speichern als Textdatei mit Tabulatoren, „Zeile löschen“ für die markierte Zeile, Pfeiltasten im Raster
 - PDF: Texte mit eigener Schrift betten die installierte TrueType-Schrift als Teilmenge ein (statt Helvetica/
   Courier/Times); Rückfall auf die Standardschriften wie bisher
 - Umriss, Treffertest, Markierung und Griffe von Texten passen zur gezeichneten Schrift (Metrik der
