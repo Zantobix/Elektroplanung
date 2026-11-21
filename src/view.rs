@@ -892,6 +892,8 @@ impl App {
 
         let clip = painter.with_clip_rect(area);
         if let Some(e) = &self.sym_edit {
+            // Objekte im Editor zeichnen mit den Stiften des Symbols
+            let _stifte = crate::symbol_stifte::Ersatz::setzen(self.edit_stifte());
             self.draw_edit_base(&clip, xf);
             let dc = DrawCtx { painter: &clip, xf, lib: &self.lib, project: &self.project, images: &self.images, bmk: Default::default(), anlage: None };
             for o in &e.sheet.objects {

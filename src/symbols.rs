@@ -83,6 +83,9 @@ pub struct SymDef {
     /// z. B. der Verbindungspunkt im Symbol "Verbindung"
     #[serde(default)]
     pub fill: Vec<bool>,
+    /// Eigene Stifte des Symbols (GRD › SIT): Stiftnummer ab 4 und Stift; Elemente nennen ihn in Feld 0x40
+    #[serde(default)]
+    pub pens: Vec<(u32, crate::model::Stift)>,
 }
 
 fn frg_default() -> (bool, bool) {
@@ -383,6 +386,7 @@ pub fn load_db(dir: &Path) -> Result<Vec<SymDef>, String> {
             value_pos: el.value_pos,
             text_mode: el.text_mode,
             fill: el.fill,
+            pens: crate::symbol_stifte::aus_bibliothek(&data[1..]),
         });
     }
     if out.is_empty() {
@@ -452,7 +456,8 @@ pub fn parse_elements(data: &[u8], texts: &[String]) -> Elements {
         let v = |i: usize| i32_at(e, i * 4) as f32 / 10.0;
         let pt = |i: usize| P::new(v(2 * i), v(2 * i + 1));
         let t = e[0x3c];
-        let style = (i32_at(e, 0x40).clamp(0, 3)) as u8;
+        // Stift des Elements: 0–3 eingebaut (= Stiftart), ab 4 eigene Stifte des Symbols (symbol_stifte.rs)
+        let style = (i32_at(e, 0x40).clamp(0, 255)) as u8;
         let opt = u16_at(e, 0x44);
         let mode = u16_at(e, 0x46);
         let page = i32_at(e, 0x48);
@@ -542,6 +547,7 @@ fn def(key: &str, name: &str, group: &[&str], bmk: &str, prims: Vec<Prim>, pins:
         value_pos: None,
         text_mode: vec![],
         fill: vec![],
+        pens: vec![],
         options: vec![],
     }
 }
@@ -897,6 +903,7 @@ impl SymDef {
             value_pos: None,
             text_mode: vec![],
             fill: vec![],
+            pens: vec![],
         }
     }
 }

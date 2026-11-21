@@ -59,6 +59,8 @@ pub struct SymEdit {
     /// gesetztes Symbol, aus dem der Editor geöffnet wurde, und offene Frage "auf alle N übernehmen?" (symbol_kopie.rs)
     pub instanz: Option<u64>,
     pub frage: Option<usize>,
+    /// eigene Stifte des Symbols (SIT, Nummer ab 4); Objekte im Editor tragen die Stiftnummer in `pen`
+    pub pens: Vec<(u32, Stift)>,
 }
 
 impl SymEdit {
@@ -182,6 +184,7 @@ impl App {
             value_pos: None,
             text_mode: vec![],
             fill: vec![],
+            pens: vec![],
                 options: vec!["Standard".into()],
             }
         });
@@ -227,7 +230,7 @@ impl App {
                     (Kind::Text { pos: P::new(x, (mn.y + mx.y) / 2.0), text: s.replace("\r\n", "\n"), size: (0.72 * (mx.y - mn.y) / s.lines().count().max(1) as f32).min((mx.x - mn.x) / (0.5 * s.lines().map(|l| l.trim_end().chars().count()).max().unwrap_or(1).max(1) as f32)).max(1.0), align: *al, vertical: false, style: Default::default() }, 0)
                 }
             };
-            sheet.objects.push(Obj { id, kind, pen: pen.min(3), fixed: false, group: None, raw: None });
+            sheet.objects.push(Obj { id, kind, pen, fixed: false, group: None, raw: None });
             if let Some(v) = def.vis.get(i) {
                 vis.insert(id, *v);
             }
@@ -300,10 +303,12 @@ impl App {
             boxes0: (e(tpos), e(vpos)),
             instanz: None,
             frage: None,
+            pens: def.pens.clone(),
         });
         self.selection.clear();
         self.tool = Tool::Select;
         self.placing = None;
+        self.pen = 0; // Stiftnummern im Editor sind die des Symbols
         self.view_before_edit = Some(self.view.clone());
         self.view.user = false;
         self.view.last_size = Vec2::ZERO;
@@ -330,6 +335,7 @@ impl App {
     pub fn symbol_editor_commit(&mut self) {
         let Some(e) = self.sym_edit.take() else { return };
         self.raster_idx = e.prev_raster;
+        self.pen = 0;
         let b = |p: P| P::new(((p.x - EDIT_C.x) / EDIT_K * 10.0).round() / 10.0, ((p.y - EDIT_C.y) / EDIT_K * 10.0).round() / 10.0);
         let mut prims = vec![];
         let mut pvis = vec![];
@@ -342,7 +348,8 @@ impl App {
         let mut pin_info: Vec<(u32, u32)> = vec![];
         // freie Textnummern ab der höchsten vergebenen
         let mut next_text = e.text_idx.values().copied().max().unwrap_or(1).max(1) + 1;
-        let style = |pen: usize| self.project.stifte.get(pen).map(|s| s.style).unwrap_or(0);
+        // Stiftnummer des Elements (0–3 eingebaut, ab 4 Stift des Symbols)
+        let style = |pen: usize| pen.min(255) as u8;
         let mut title = e.title;
         let mut value_pos = e.value_pos;
         for o in &e.sheet.objects {
@@ -444,6 +451,7 @@ impl App {
             value_pos,
             text_mode: pmode,
             fill: pfill,
+            pens: e.pens.clone(),
         };
         self.checkpoint();
         if let Some(d) = self.lib.iter_mut().find(|d| d.key == def.key) {
@@ -467,6 +475,7 @@ impl App {
     pub fn symbol_editor_cancel(&mut self) {
         if let Some(e) = self.sym_edit.take() {
             self.raster_idx = e.prev_raster;
+            self.pen = 0;
         }
         self.selection.clear();
         self.restore_view();
@@ -535,7 +544,8 @@ impl App {
                 }
             }
             ui.add_space(1.0);
-            let pens: Vec<String> = self.project.stifte.iter().map(|s| s.name.clone()).collect();
+            // Stifte des Symbols (eingebaute 0–3 und eigene ab 4)
+            let pens: Vec<String> = self.edit_stifte().iter().map(|s| s.name.clone()).collect();
             let mut pen = self.pen;
             if crate::view::auswahl(ui, "symstift", 74.0, &pens, &mut pen) {
                 self.pen = pen;
@@ -697,6 +707,13 @@ impl App {
     // ------------------------------------------------------------------ Dialoge zu Stift, Leitung, Potential …
 
     pub fn open_pen_dialog(&mut self, idx: usize) {
+        // im Symboleditor: eigene Stifte des Symbols (ab Nummer 4)
+        if self.sym_edit.is_some() && idx >= crate::symbol_stifte::ERSTER as usize {
+            if let Some(s) = self.edit_stifte().get(idx).cloned() {
+                self.xdlg = Some(XDialog::Stift { idx: usize::MAX - idx, name: s.name, style: s.style as usize, width: format!("{:.2}", s.width).replace('.', ","), color: to_c32(s.color) });
+            }
+            return;
+        }
         if let Some(s) = self.project.stifte.get(idx) {
             self.xdlg = Some(XDialog::Stift { idx, name: s.name.clone(), style: s.style as usize, width: format!("{:.2}", s.width).replace('.', ","), color: to_c32(s.color) });
         }
@@ -1754,6 +1771,16 @@ impl App {
     fn apply_xdialog(&mut self, d: XDialog) {
         let num = |s: &str, def: f32| s.trim().replace(',', ".").parse::<f32>().unwrap_or(def);
         match d {
+            XDialog::Stift { idx, name, style, width, color } if idx > usize::MAX / 2 => {
+                // Stift des Symbols im Editor (Kennung usize::MAX − Stiftnummer)
+                let nr = (usize::MAX - idx) as u32;
+                if let Some((_, s)) = self.sym_edit.as_mut().and_then(|e| e.pens.iter_mut().find(|(n, _)| *n == nr)) {
+                    s.name = name;
+                    s.style = style as u8;
+                    s.width = num(&width, 0.25).clamp(0.05, 5.0);
+                    s.color = from_c32(color);
+                }
+            }
             XDialog::Stift { idx, name, style, width, color } => {
                 self.checkpoint();
                 if let Some(s) = self.project.stifte.get_mut(idx) {

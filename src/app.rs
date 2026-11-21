@@ -1149,6 +1149,13 @@ impl App {
     }
 
     pub fn new_pen(&mut self) {
+        // im Symboleditor: neuer Stift des Symbols
+        if let Some(e) = &mut self.sym_edit {
+            let nr = crate::symbol_stifte::neue_nummer(&e.pens);
+            e.pens.push((nr, Stift { name: format!("Stift {nr}"), style: 0, color: [0, 0, 160], width: 0.25 }));
+            self.pen = nr as usize;
+            return;
+        }
         self.checkpoint();
         let n = self.project.stifte.len() + 1;
         self.project.stifte.push(Stift { name: format!("Stift {n}"), style: 0, color: [0, 0, 160], width: 0.25 });
@@ -1632,6 +1639,7 @@ impl App {
             value_pos: None,
             text_mode: vec![],
             fill: vec![],
+            pens: vec![],
             options: vec![],
         };
         self.checkpoint();

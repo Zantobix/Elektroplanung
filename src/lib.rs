@@ -39,6 +39,7 @@ pub mod pruefen;
 pub mod schriften;
 pub mod suche;
 pub mod symbol_kopie;
+pub mod symbol_stifte;
 pub mod symbols;
 pub mod titleblock;
 pub mod variantenrad;

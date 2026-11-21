@@ -148,19 +148,13 @@ fn edited_sym(project: &Project, k: &Block) -> Option<Block> {
         a.name == b.name && a.bmk == b.bmk && a.prims == b.prims && a.pins == b.pins && a.title == b.title && a.vis == b.vis
             && a.pin_vis == b.pin_vis && a.options == b.options && a.flag == b.flag && a.flag_names == b.flag_names
             && a.alt_sets == b.alt_sets && a.text_mode == b.text_mode && a.fill == b.fill && a.value_pos == b.value_pos
-            && a.params == b.params
+            && a.params == b.params && a.pens == b.pens
     };
     if same(def, &orig) {
         return None;
     }
-    let mut nb = sym_block(def, k, id);
-    // Stifte (SIT) erzeugt der Nachbau nicht neu: aus dem Original übernehmen (Parameter PRA schreibt sym_block)
-    if let (Some(og), Some(ng)) = (k.kid("GRD"), nb.kids.iter_mut().find(|b| b.is("GRD"))) {
-        for c in og.kids.iter().filter(|c| c.is("SIT")) {
-            ng.kids.push(c.clone());
-        }
-    }
-    Some(nb)
+    // Stifte (SIT) schreibt sym_block; vorhandene SIT-Blöcke behalten ihre übrigen Bytes
+    Some(sym_block(def, k, id))
 }
 
 fn anlage_block(project: &Project, a: &Anlage, tpl_prj: &Block) -> Result<Block, String> {
@@ -890,6 +884,10 @@ fn sym_block(def: &crate::symbols::SymDef, tpl: &Block, id: u64) -> Block {
         }
         grd.kids.push(Block::new("SEI", o));
     }
+    // eigene Stifte des Symbols (SIT) wie im Original nach STR/SEI; beim geänderten Symbol (gleiche Kennung)
+    // dienen die bisherigen SIT-Blöcke als Vorlage
+    let alte: Vec<&Block> = if sym_id(tpl) == Some(id) { tpl.kid("GRD").map(|g| g.kids_of("SIT").collect()).unwrap_or_default() } else { vec![] };
+    grd.kids.extend(crate::symbol_stifte::sit_bloecke(&def.pens, &alte));
     // Alternativtexte (ALT: Textnummer, Satz; Ersatztext als STR, leer = ohne STR) und Optionen (OPT: 0, Bit; Name als STR)
     for (si, set) in def.alt_sets.iter().enumerate() {
         for (idx, text) in set {

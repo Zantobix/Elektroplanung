@@ -597,7 +597,9 @@ fn draw_title_block(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, x0: f32, x1: f
 }
 
 pub fn pen_stroke(project: &Project, pen: usize, z: f32) -> (Stroke, u8) {
-    let st = project.stifte.get(pen).cloned().unwrap_or(Stift { name: String::new(), style: 0, color: [0, 0, 0], width: 0.25 });
+    // im Symboleditor gelten die Stifte des Symbols (symbol_stifte::Ersatz)
+    let st = crate::symbol_stifte::ersatz(pen).unwrap_or_else(|| project.stifte.get(pen).cloned());
+    let st = st.unwrap_or(Stift { name: String::new(), style: 0, color: [0, 0, 0], width: 0.25 });
     (Stroke::new((st.width.max(0.05) * z).max(1.0), c32(st.color)), st.style)
 }
 
@@ -915,28 +917,33 @@ pub fn draw_symbol_full(p: &egui::Painter, xf: Xf, def: &SymDef, pos: P, rot: u8
         if !symbols::visible(option, def.vis.get(i)) || !symbols::flag_visible(flags, def.flag.get(i)) {
             continue;
         }
+        // Stift des Elements: eingebaute Stiftart oder eigener Stift des Symbols (Breite, Art, Farbe)
+        let (stroke, art) = match pr {
+            Prim::Line(.., st) | Prim::Poly(_, st) | Prim::Bezier(.., st) | Prim::Ellipse(.., st) => crate::symbol_stifte::strich(def, *st, stroke, xf.z),
+            _ => (stroke, 0),
+        };
         match pr {
-            Prim::Line(a, b, st) => styled_line(p, &[t(*a), t(*b)], stroke, *st, z),
+            Prim::Line(a, b, _) => styled_line(p, &[t(*a), t(*b)], stroke, art, z),
             Prim::Poly(v, _) if def.fill.get(i).copied().unwrap_or(false) => {
                 p.add(Shape::convex_polygon(v.iter().map(|q| t(*q)).collect(), stroke.color, stroke));
             }
             Prim::Ellipse(a, b, _) if def.fill.get(i).copied().unwrap_or(false) => {
                 p.add(Shape::convex_polygon(ellipse(*a, *b, 40).into_iter().map(t).collect(), stroke.color, stroke));
             }
-            Prim::Poly(v, st) => {
+            Prim::Poly(v, _) => {
                 let mut pts: Vec<Pos2> = v.iter().map(|q| t(*q)).collect();
                 if let Some(f) = pts.first().copied() {
                     pts.push(f);
                 }
-                styled_line(p, &pts, stroke, *st, z);
+                styled_line(p, &pts, stroke, art, z);
             }
-            Prim::Bezier(a, b, c, d, st) => {
+            Prim::Bezier(a, b, c, d, _) => {
                 let pts: Vec<Pos2> = bezier(*a, *b, *c, *d, 24).into_iter().map(t).collect();
-                styled_line(p, &pts, stroke, *st, z);
+                styled_line(p, &pts, stroke, art, z);
             }
-            Prim::Ellipse(a, b, st) => {
+            Prim::Ellipse(a, b, _) => {
                 let pts: Vec<Pos2> = ellipse(*a, *b, 40).into_iter().map(t).collect();
-                styled_line(p, &pts, stroke, *st, z);
+                styled_line(p, &pts, stroke, art, z);
             }
             Prim::TextBox(a, b, s, al) => {
                 // Alternativtext: Ersatz für diese Textnummer im gewählten Satz
