@@ -67,6 +67,9 @@ Neu:
   `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
 Behoben:
+- .epr: Anschlussnummern im Kontaktspiegel als STR im ALT (das Original meldete „Fehler beim erzeugen des
+  Objekts: STR“); leere Tabellen ohne STR (das Original meldete die ZCN-Datenstruktur als fehlerhaft)
+- Listenblätter: Spaltenbreiten, Ränder, Abstand der Tabellen und Zeilenhöhe wie im Original
 - Tools › Ausrichtung: Referenzpunkt wie im Original „Mitte“, „Links/Oben“, „Rechts/Unten“ – Bezug ist die
   gemeinsame Umrandung der Auswahl (bisher ein einzelnes markiertes Objekt)
 - Projektbaum: Ein einfacher Klick auf eine Gruppe klappte sie schon um, ein Doppelklick daher auf und gleich

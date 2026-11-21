@@ -194,7 +194,8 @@ nicht. Gemessen werden stattdessen:
   8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken. Folgeblätter: direkt folgende
   Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
 - Inhaltsverzeichnis, Querverweise (1–3 Tabellen) und Artikelliste (Summenliste, Summe+BMK, Einzelliste) als
-  Blattart: Spaltenköpfe wie im Original, Maße und Spaltenbreiten ohne Vorlage (kein Ausdruck vorhanden).
+  Blattart: Spaltenköpfe, Spaltenbreiten, Ränder und Zeilenhöhe wie in Bildschirmaufnahmen des Originals; den
+  Rahmen der Listenblätter zeichnet das Original 10 mm unter der Blattkante, der Nachbau nach der Rahmenhöhe.
 - Kontaktspiegel: verknüpftes Objekt unter der Spule (Lage der Kontakte, neue/gelöschte Kontakte). Wie im
   Original (Dekompilat) bleibt er beim Verschieben der Spule stehen und beim Löschen der Spule erhalten und wird
   nicht mitkopiert; Feld 14 = Höhe. Die Schaltzeichen sind eigene Zeichnung (das Original nimmt drei

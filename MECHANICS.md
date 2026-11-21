@@ -244,7 +244,8 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   1 Inhaltsverzeichnis, 2 Querverweise); berechnete Tabellen zeichnet der Nachbau stets mit dem aktuellen Inhalt.
 - Kontaktspiegel (OBJ, Byte 0x14 = 5): Feld 6 X in 0,1 mm, Feld 8/9 Kennung der Spule (VSY Byte 96), Byte 0x2c
   Bit 0 = Zeilen vorhanden; je Zeile STB (0x1c Byte: Kennung Kontakt, Blatt (BLT Byte 72), Anlage (ANL Byte 0x88),
-  Byte 0x18 Art 0 Schließer/1 Öffner/2 Wechsler) mit ALT (Feld 0 = Nummer 1–3) + STR je Anschlussnummer.
+  Byte 0x18 Art 0 Schließer/1 Öffner/2 Wechsler) mit je Anschlussnummer einem ALT (Feld 0 = Nummer 1–3), darin
+  STR ohne abschließende 0 (STR neben dem ALT meldet das Original als Fehler).
   Y = Rahmenhöhe des Blattes, Zeilen 3 mm (Wechsler +2 mm davor, +0,5 mm danach). ALT Feld 0 = Spalte 1–3, Feld 1 = 0
   (Übernehmen hört bei der ersten leeren Spalte auf); Feld 14 = Höhe in 0,1 mm (30 je Zeile, +25 vor einem Wechsler
   außer in Zeile 1, mindestens 30). Der Spiegel folgt der Spule nicht und wird mit ihr nicht gelöscht (keine Stelle im

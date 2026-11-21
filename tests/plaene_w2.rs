@@ -103,9 +103,10 @@ fn neuer_kontaktspiegel_in_w2() {
         assert!(blatt_ids.contains(&id_at(&s.data, 8)), "Blattkennung");
         assert!(anl_ids.contains(&id_at(&s.data, 16)), "Anlagenkennung");
     }
-    // erste Zeile: Anschlussnummern 1 und 2 als ALT+STR
-    assert_eq!(stb[0].kids.iter().map(|k| k.tag_str().to_string()).collect::<Vec<_>>(), ["ALT", "STR", "ALT", "STR"]);
-    assert_eq!(stb[0].kids[2].i32(0), 2);
+    // erste Zeile: Anschlussnummern 1 und 2 als ALT mit STR-Unterblock ohne 0 (wie die Speicherroutine des Originals)
+    assert_eq!(stb[0].kids.iter().map(|k| k.tag_str().to_string()).collect::<Vec<_>>(), ["ALT", "ALT"]);
+    assert_eq!((stb[0].kids[0].i32(0), stb[0].kids[1].i32(0)), (1, 2));
+    assert_eq!(stb[0].kids[0].kids.iter().map(|k| (k.tag_str().to_string(), k.data.clone())).collect::<Vec<_>>(), [("STR".to_string(), b"13".to_vec())]);
 
     // wieder gelesen: gleiche Spule, gleiche Kontakte (über Kennzeichnung und Lage)
     let sp = spiegel_von(&back);
@@ -161,6 +162,8 @@ fn tabellenart_wird_gespeichert() {
     let (back, f) = reload(&p);
     let zcn: Vec<&Block> = blocks(&f, &|b| b.is("ZCN") && b.data.len() > 0x3c && b.data[0x3c] == 13);
     assert_eq!(zcn.iter().map(|b| (b.data[0x26], b.i32(6))).collect::<Vec<_>>(), [(2, 3), (1, 1)]);
+    // leere Zellen: kein STR (das Original schreibt keinen leeren STR und meldet ihn als Fehler)
+    assert!(zcn.iter().all(|b| !b.kids.iter().any(|k| k.is("STR"))));
     let got: Vec<(u8, u32)> = back.anlagen[0].sheets[0].objects.iter().filter_map(|o| if let Kind::Table { art, ab, .. } = o.kind { Some((art, ab)) } else { None }).collect();
     assert_eq!(got, [(2, 3), (1, 1)]);
 }

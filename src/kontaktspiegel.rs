@@ -9,7 +9,7 @@
 //!   Feld 4 = 0xFFFF, Feld 6 = X in 0,1 mm, Feld 7 = 0 (Y richtet sich nach dem Blatt), Feld 8/9 = Kennung der Spule
 //!   (VSY Byte 96), Byte 0x2c Bit 0 = Zeilen vorhanden. Je Zeile ein Unterblock **STB** (0x1c Byte: Kennung des
 //!   Kontakts, seines Blattes (BLT Byte 72) und seiner Anlage (ANL Byte 0x88), Byte 0x18 = Art 0 Schließer /
-//!   1 Öffner / 2 Wechsler), darin je eingetragener Anschlussnummer ALT (8 Byte) + STR. W2.epr enthält einen
+//!   1 Öffner / 2 Wechsler), darin je eingetragener Anschlussnummer ALT (8 Byte) mit Unterblock STR (ohne 0). W2.epr enthält einen
 //!   Spiegel ohne Zeilen (Blatt „Sicherungen -F10, -F1 und -F2“), dessen Spule gelöscht ist.
 //! - Übernehmen (0x4995ac): Zeilen ohne Eintrag entfallen; die Referenz einer Zeile ist der Kontakt im Projekt,
 //!   dessen Eigentümer damit die Spule wird.
@@ -33,7 +33,7 @@
 
 use crate::app::App;
 use crate::canvas::{bmk_ctx, times, DrawCtx};
-use crate::eprfile::{cstr_bytes, Block};
+use crate::eprfile::{encode_cp1252, Block};
 use crate::model::*;
 use crate::symbols::{self, Prim, SymDef};
 use eframe::egui::{self, Align2, Stroke};
@@ -281,9 +281,11 @@ pub fn lesen(k: &Block, sheet: &Sheet) -> Kind {
         .kids_of("STB")
         .map(|b| {
             let mut z = Zeile { art: b.data.get(0x18).copied().unwrap_or(0).min(2), kennung: [id_at(&b.data, 0), id_at(&b.data, 8), id_at(&b.data, 16)], ..Default::default() };
-            // ALT Feld 0 = Nummer des Feldes (1–3), danach STR = Text; ohne ALT der Reihe nach
+            // ALT Feld 0 = Nummer des Feldes (1–3), darin STR = Text; ohne ALT der Reihe nach (STR neben dem ALT
+            // schrieben ältere Fassungen des Nachbaus)
             let (mut nr, mut weiter) = (None, 0usize);
-            for kid in &b.kids {
+            let kinder = b.kids.iter().flat_map(|k| std::iter::once(k).chain(k.kids.iter().filter(|_| k.is("ALT"))));
+            for kid in kinder {
                 if kid.is("ALT") {
                     nr = usize::try_from(kid.i32(0) - 1).ok();
                 } else if kid.is("STR") {
@@ -372,8 +374,10 @@ pub fn block(p: &Project, o: &Obj, eigene: u64, kennung: &dyn Fn(&Obj) -> u64, o
         for (i, f) in z.felder.iter().enumerate().filter(|(_, f)| !f.trim().is_empty()) {
             let mut alt = Block::new("ALT", vec![0; 8]);
             alt.set_i32(0, i as i32 + 1);
+            // STR als Unterblock des ALT, ohne abschließende 0 (Speicherroutine 0x424fe2: STB › ALT › STR, Länge =
+            // Textlänge); als Geschwister des ALT meldete das Original „Fehler beim erzeugen des Objekts: STR“
+            alt.kids.push(Block::new("STR", encode_cp1252(f.trim())));
             stb.kids.push(alt);
-            stb.kids.push(Block::new("STR", cstr_bytes(f.trim())));
         }
         b.kids.push(stb);
     }
