@@ -42,6 +42,7 @@ pub mod leitung_fuehrung;
 pub mod leitung_stift;
 pub mod listen;
 pub mod mcp;
+pub mod meldungen;
 pub mod mcp_symbol;
 pub mod mehrfach;
 pub mod menus;

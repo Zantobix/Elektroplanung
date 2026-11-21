@@ -282,7 +282,7 @@ impl App {
     pub fn symboltext_eigenschaften(&mut self, id: u64, wert: bool) {
         let Some(Kind::Symbol { bmk, value, ext, .. }) = self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == id)).map(|o| o.kind.clone()) else { return };
         if !wert && ext.eigentuemer != 0 {
-            self.dialog = Some(crate::app::Dialog::Message("Der Titel wird durch den Eigentümer vorgegeben.\nBitte dessen Titel bearbeiten!".into()));
+            crate::meldungen::hinweis(crate::meldungen::T_GEHT_NICHT, crate::meldungen::TITEL_VOM_EIGENTUEMER);
             return;
         }
         let text = if wert { value } else { bmk };

@@ -953,6 +953,9 @@ impl App {
         }
         let xf0 = Xf { origin: area.min + self.view.offset, z: self.view.zoom };
         self.handle_canvas_input(ui, &resp, area, xf0);
+        // Statuszeile wie PaintBox1MouseMove: DeltaX/DeltaY beim Ziehen, Objekt unter der Maus (meldungen.rs)
+        let ueber = ui.input(|i| i.pointer.hover_pos()).map(|h| area.contains(h) && ui.ctx().layer_id_at(h) == Some(ui.layer_id())).unwrap_or(false);
+        self.statuszeile(ui.ctx(), ueber && !ui.ctx().any_popup_open());
         let xf = Xf { origin: area.min + self.view.offset, z: self.view.zoom };
         let (sw, sh) = self.sheet().map(|s| s.dims()).unwrap_or((SHEET_W, SHEET_H));
         self.sheet_screen_rect = Rect::from_min_max(xf.s(P::new(0.0, 0.0)), xf.s(P::new(sw, sh)));
@@ -2332,7 +2335,8 @@ impl App {
                     self.info = format!("PDF gespeichert: {} ({n} Blätter)", path.display());
                 }
             }
-            Err(e) => self.dialog = Some(Dialog::Message(format!("PDF konnte nicht geschrieben werden: {e}"))),
+            // Meldungen des Exports im Original (TFORM1.Export, Überschrift „Achtung“)
+            Err(e) => crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::exportfehler(&path, &e)),
         }
     }
 }
@@ -2464,14 +2468,28 @@ impl App {
 impl App {
     /// Rückfrage "Geänderte Daten Speichern?" (Ja / Nein / Abbrechen) und Schließen des Fensters abfangen.
     pub fn ask_save_ui(&mut self, ctx: &egui::Context) {
-        if ctx.input(|i| i.viewport().close_requested()) && self.dirty && !self.quit_ok && self.shot.is_none() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.ask_save = Some(crate::app::Pending::Quit);
+        if ctx.input(|i| i.viewport().close_requested()) && !self.quit_ok && self.shot.is_none() {
+            // Beenden wie das Original (FormClose › 0x47d2e4): erst offene Editoren, dann das geänderte Projekt
+            let editor = self.sym_edit.is_some() || matches!(self.xdlg, Some(crate::extra::XDialog::Title { .. }));
+            if editor || self.dirty {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                if !editor || self.editoren_abschliessen() {
+                    if self.dirty {
+                        self.ask_save = Some(crate::app::Pending::Quit);
+                    } else {
+                        self.quit_ok = true;
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                }
+            }
         }
         let Some(p) = self.ask_save.clone() else { return };
         let mut choice: Option<u8> = None;
-        let closed = crate::props::tool_window(ctx, "asksave", "Elektroplanung", [300.0, 70.0], egui::Order::Foreground, |ui| {
-            ui.label("Geänderte Daten Speichern?");
+        // Neu/Beenden: „Das Projekt wurde geändert! Änderungen Speichern?“ (Achtung); Öffnen: „Geänderte Daten Speichern?“
+        let neu_beenden = matches!(p, crate::app::Pending::New | crate::app::Pending::Quit);
+        let (titel, frage) = if neu_beenden { (crate::meldungen::T_ACHTUNG, crate::meldungen::SE_PROJEKT_GEAENDERT) } else { ("Elektroplanung", "Geänderte Daten Speichern?") };
+        let closed = crate::props::tool_window(ctx, "asksave", titel, [300.0, 70.0], egui::Order::Foreground, |ui| {
+            ui.label(frage);
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 if ui.add_sized([86.0, 24.0], egui::Button::new("Ja")).clicked() {

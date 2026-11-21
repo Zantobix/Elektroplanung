@@ -18,7 +18,7 @@ impl App {
     /// Datei › Vorlage speichern: Kopie des Projekts als .epv.
     pub fn save_template(&mut self) {
         let stem = self.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Vorlage".into());
-        let Some(p) = rfd::FileDialog::new().add_filter("Elektroplan Vorlage", &["epv"]).set_file_name(format!("{stem}.epv")).save_file() else { return };
+        let Some(p) = rfd::FileDialog::new().set_title("Elektroplanung Vorlage ").add_filter("Elektroplan Vorlage", &["epv"]).set_file_name(format!("{stem}.epv")).save_file() else { return };
         let p = if p.extension().is_none() { p.with_extension("epv") } else { p };
         let skipped = crate::epr_write::unsupported(&self.project);
         match crate::epr_write::save(&self.project, &p) {

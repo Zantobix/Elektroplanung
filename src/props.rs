@@ -649,7 +649,12 @@ impl App {
                         _ => 0,
                     };
                 }
-                // Inhaltsverzeichnis, Querverweise, Artikelliste: fehlende Folgeblätter anlegen (im Original nach Rückfrage)
+                // Inhaltsverzeichnis, Querverweise, Artikelliste: fehlende Folgeblätter anlegen – wie im Original nach
+                // der Rückfrage „Sollen alle nötigen Blätter erzeugt werden?“ (Nein = nur dieses Blatt)
+                if !crate::meldungen::folgeblaetter_frage(&self.project, s.r) {
+                    self.dirty = true;
+                    return;
+                }
                 match crate::berechnet::folgeblaetter_anlegen(&mut self.project, s.r) {
                     Ok(0) => {}
                     Ok(n) => self.info = format!("{n} Folgeblätter für die Liste angelegt"),
@@ -876,8 +881,13 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
                 });
             });
             if ui.add_enabled(items.len() > min, egui::Button::new(del).min_size(Vec2::new(99.0, 25.0))).clicked() && *sel < items.len() {
-                items.remove(*sel);
-                *sel = sel.saturating_sub(1);
+                if id == "seiten" && *sel == 0 {
+                    // TSymEigenschaften.Button3Click: die erste Seite bleibt
+                    crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::SE_ERSTE_SEITE);
+                } else {
+                    items.remove(*sel);
+                    *sel = sel.saturating_sub(1);
+                }
             }
         });
     };
