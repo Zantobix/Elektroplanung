@@ -323,7 +323,7 @@ pub fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             }
             Some(b)
         }
-        Kind::Busbar { a, x2, name, label, style, .. } => {
+        Kind::Busbar { a, x2, name, label, lage, versatz, .. } => {
             let ai = project.find_obj(o.id).map(|(r, _)| r.anlage).unwrap_or(0);
             let sms = PLAN.with(|p| p.borrow().sms.get(&(ai, name.clone())).copied().unwrap_or(0));
             let mut b = Block::new("OBJ", vec![0; 0x40]);
@@ -336,7 +336,9 @@ pub fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             b.set_i32(7, to01(a.y));
             b.data[32..40].copy_from_slice(&sms.to_le_bytes());
             b.set_i32(10, to01(*x2));
-            b.set_i32(15, (*style == 2) as i32);
+            // Feld 15 Byte 0 = Lage (Bit 0 unten, Bit 1 fest); die Strichart steht beim Stift der Schiene (SMS)
+            b.set_i32(15, *lage as i32);
+            b.data[0x2c..0x2e].copy_from_slice(&((versatz * 10.0).round() as i16).to_le_bytes());
             Some(b)
         }
         Kind::Spiegel { .. } => spiegel_block(project, o),

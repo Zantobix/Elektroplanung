@@ -36,7 +36,7 @@ fn main() {
         Kind::Image { a: P::new(180.0, 30.0), b: P::new(260.0, 90.0), path: "bld:1".into(), mode: 2, frame: true },
         Kind::Symbol { key, pos: P::new(200.0, 120.0), rot: 0, mirror_h: false, mirror_v: false, bmk: "-Q1".into(), value: "16A".into(), scale: 1.0, option: 0, title: Some((P::new(6.0, -4.0), false)), flags: 0, ext: SymExt { funktion: "Neu".into(), ..Default::default() } },
         Kind::Wire { pts: vec![P::new(150.0, 150.0), P::new(150.0, 170.0), P::new(230.0, 170.0)], leitung: 0, bez: vec![(P::new(180.0, 169.0), "sw".into())], opts: 0 },
-        Kind::Busbar { a: P::new(30.0, 150.0), x2: 140.0, name: "Neue Schiene".into(), label: P::new(0.0, -4.0), style: 0, sms: 0, xin: String::new(), xout: String::new() },
+        Kind::Busbar { a: P::new(30.0, 150.0), x2: 140.0, name: "Neue Schiene".into(), label: P::new(0.0, -4.0), style: 0, sms: 0, xin: String::new(), xout: String::new(), lage: 0, versatz: 0.0 },
     ];
     for kind in kinds {
         let id = p.alloc_id();

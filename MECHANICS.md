@@ -183,7 +183,13 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - OBJ Feld 4 unterscheidet: 0x1FFFF Verweis (ohne TIT = nur Pfeil, z. B. im Schriftfeld; Feld 14 = 900 → ▼,
   1800 → ►, jeweils mit Bit 0), 0x0101FFFF Verweis mit hochkant stehendem Text, **0xFFFF Sammelschiene**, **0x2FFFF Klemmstelle**.
 - Sammelschiene (OBJ 0xFFFF): Feld 6/7 Anfang, 10 Ende x, 2/3 Lage des Namens (linke obere Ecke) relativ zum
-  Anfang, 8/9 Kennung der SMS (SMS Feld 8/9, Name in SMS › TIT), 15 Byte 0 = 1 strichpunktiert (PE).
+  Anfang, 8/9 Kennung der SMS (SMS Feld 8/9, Name in SMS › TIT), 15 Byte 0 = Lage (Bit 0 unten gestapelt,
+  Bit 1 feste Lage), 11 Wort 0 = Y-Versatz (0,1 mm). Nicht die Strichart: PE ist strichpunktiert über den Stift
+  der Schiene; unten liegende N-Schienen (Seite 28) sind durchgezogen. Lage beim Zeichnen (0x438b94): Schienen
+  ohne Bit 1 der Reihe nach gestapelt, oben ab Rahmen + Strompfadleiste + 7 mm (`y = n + v; n += Abstand + v`),
+  unten ab Rahmen − Schriftfeld − 7 mm (`y = u + v; u -= Abstand − v`), Abstand = Option „Sammelschienen“ (5 mm);
+  ergibt alle Lagen in W2. Kontextmenü „Sammelschiene › Nach Oben/Nach Unten“ (0x433f30): Bit 0 umschalten,
+  Versatz 0 (`sammelschiene_lage.rs`).
   Querverweise "Blatt/Pfad" werden berechnet: am Anfang das vorige, am Ende das nächste Vorkommen derselben
   Schiene in der Anlage (Seite 6: N → "7/1"; Seite 18: -F1.L2 ← "4/10").
 - Klemmstelle (OBJ 0x2FFFF): Feld 6/7 Lage, 8 Klemmleiste (= KLM Feld 13), 9/10 Nummer, 11 Byte 0 Etage

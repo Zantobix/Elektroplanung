@@ -511,7 +511,16 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
             return;
         }
         // Sammelschiene: Anfang (6/7), Ende x (10), Namensversatz (2/3)
-        if let Kind::Busbar { a, x2, label, .. } = new {
+        if let Kind::Busbar { a, x2, label, lage, versatz, .. } = new {
+            // Lage (Feld 15 Byte 0) und Y-Versatz (Feld 11 Wort 0) nur bei Änderung, die übrigen Bytes bleiben
+            if let Kind::Busbar { lage: ol, versatz: ov, .. } = old {
+                if ol != lage && b.data.len() > 0x3c {
+                    b.data[0x3c] = (b.data[0x3c] & !3) | (lage & 3);
+                }
+                if ov != versatz && b.data.len() > 0x2e {
+                    b.data[0x2c..0x2e].copy_from_slice(&((versatz * 10.0).round() as i16).to_le_bytes());
+                }
+            }
             b.set_i32(6, to01(a.x));
             b.set_i32(7, to01(a.y));
             b.set_i32(10, to01(*x2));

@@ -457,6 +457,8 @@ impl App {
             }
         }
         if let Props::Symbol(sp) = &mut p {
+            // Feld „Bauteil“ folgt der Zuordnung sofort (z. B. nach „Bauteil zuordnen“ › OK)
+            sp.bauteil = self.project.part_of.get(&sp.id).and_then(|i| self.project.bauteile.get(*i)).map(|b| b.name.clone()).unwrap_or_default();
             if sp.edit_part {
                 sp.edit_part = false;
                 let (id, idx) = (sp.id, self.project.part_of.get(&sp.id).copied().unwrap_or(0));

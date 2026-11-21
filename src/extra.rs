@@ -61,6 +61,12 @@ pub struct SymEdit {
     pub frage: Option<usize>,
     /// eigene Stifte des Symbols (SIT, Nummer ab 4); Objekte im Editor tragen die Stiftnummer in `pen`
     pub pens: Vec<(u32, Stift)>,
+    /// per „Bezeichner setzen“ geänderte Anschlussbezeichnung: Anschluss-Objekt → Textnummer (bezeichner.rs)
+    pub pin_text: HashMap<u64, u32>,
+    /// „Bezeichner setzen“ wartet auf den Klick auf einen Text: Anschluss-Objekt
+    pub bezeichner_pick: Option<u64>,
+    /// Stiftauswahl des Hauptfensters beim Öffnen (der Editor benutzt `App::pen` für die Symbolstifte)
+    pub haupt_pen: usize,
 }
 
 impl SymEdit {
@@ -304,6 +310,9 @@ impl App {
             instanz: None,
             frage: None,
             pens: def.pens.clone(),
+            pin_text: HashMap::new(),
+            bezeichner_pick: None,
+            haupt_pen: self.pen,
         });
         self.selection.clear();
         self.tool = Tool::Select;
@@ -335,7 +344,7 @@ impl App {
     pub fn symbol_editor_commit(&mut self) {
         let Some(e) = self.sym_edit.take() else { return };
         self.raster_idx = e.prev_raster;
-        self.pen = 0;
+        self.pen = e.haupt_pen;
         let b = |p: P| P::new(((p.x - EDIT_C.x) / EDIT_K * 10.0).round() / 10.0, ((p.y - EDIT_C.y) / EDIT_K * 10.0).round() / 10.0);
         let mut prims = vec![];
         let mut pvis = vec![];
@@ -400,8 +409,10 @@ impl App {
                 Kind::Terminal { pos, nr, .. } => {
                     pins.push(b(*pos));
                     pin_vis.push(v);
-                    // Anschlussbezeichnung (Textnummer) des bisherigen Anschlusses beibehalten
-                    pin_info.push(symbols::find(&self.lib, &e.key).and_then(|d| d.pin_info.get((*nr as usize).wrapping_sub(1))).copied().unwrap_or((0, 0)));
+                    // Anschlussbezeichnung (Textnummer) des bisherigen Anschlusses beibehalten bzw. die per
+                    // „Bezeichner setzen“ gewählte
+                    let alt = symbols::find(&self.lib, &e.key).and_then(|d| d.pin_info.get((*nr as usize).wrapping_sub(1))).copied().unwrap_or((0, 0));
+                    pin_info.push((e.pin_text.get(&o.id).copied().unwrap_or(alt.0), alt.1));
                     None
                 }
                 _ => None,
@@ -475,7 +486,7 @@ impl App {
     pub fn symbol_editor_cancel(&mut self) {
         if let Some(e) = self.sym_edit.take() {
             self.raster_idx = e.prev_raster;
-            self.pen = 0;
+            self.pen = e.haupt_pen;
         }
         self.selection.clear();
         self.restore_view();
@@ -547,7 +558,9 @@ impl App {
             // Stifte des Symbols (eingebaute 0–3 und eigene ab 4)
             let pens: Vec<String> = self.edit_stifte().iter().map(|s| s.name.clone()).collect();
             let mut pen = self.pen;
-            if crate::view::auswahl(ui, "symstift", 74.0, &pens, &mut pen) {
+            let sr = ui.scope(|ui| crate::view::auswahl(ui, "symstift", 74.0, &pens, &mut pen));
+            sr.response.on_hover_text("Stiftliste");
+            if sr.inner {
                 self.pen = pen;
                 let sel = self.selection.clone();
                 if !sel.is_empty() {
@@ -556,8 +569,7 @@ impl App {
             }
             crate::view::sep(ui, 4.0);
             if gbtn(ui, I::NewPen, "Neuer Stift", true, false).clicked() {
-                self.new_pen();
-                self.open_pen_dialog(self.pen);
+                self.neuer_stift(true);
             }
             ui.add_space(6.0);
             if gbtn(ui, I::NewPage, "Neue Seite", true, false).clicked() {
@@ -590,7 +602,9 @@ impl App {
             let mut items: Vec<String> = e.options.iter().map(|o| format!("Seite: {o}")).collect();
             items.extend(e.flag_names.iter().map(|o| format!("Option: {o}")));
             let mut idx = if e.cur_flag > 0 { e.options.len() + e.cur_flag as usize - 1 } else { e.option as usize };
-            if crate::view::auswahl(ui, "symoption", 125.0, &items, &mut idx) {
+            let or = ui.scope(|ui| crate::view::auswahl(ui, "symoption", 125.0, &items, &mut idx));
+            or.response.on_hover_text("Optionsliste");
+            if or.inner {
                 if idx < e.options.len() {
                     e.option = idx as u16;
                     e.cur_flag = 0;
@@ -749,8 +763,10 @@ impl App {
         self.xdlg = Some(XDialog::Title { elems });
     }
 
+    /// Neues Bauteil (Bauteil1Click 0x486728 → 0x4867d4): ohne Gruppenknoten hat es im Original keine Gruppe
+    /// (Kennung 0, angezeigt als „Keine Zuordnung“); „Projekt“ ist keine Bauteilgruppe des Originals.
     pub fn new_bauteil_dialog(&mut self) {
-        self.xdlg = Some(XDialog::Bauteil { idx: None, b: Bauteil { gruppe: "Projekt".into(), ..Default::default() } });
+        self.xdlg = Some(XDialog::Bauteil { idx: None, b: Bauteil { gruppe: crate::epr_zusatz::KEINE_GRUPPE.into(), ..Default::default() } });
     }
 
     pub fn new_platzhalter(&mut self) {
@@ -844,21 +860,6 @@ impl App {
         self.selection = vec![id1, id2];
     }
 
-    /// Markierte Sammelschiene (waagerechte Leitung) an den unteren Rand über dem Schriftfeld legen.
-    pub fn busbar_down(&mut self) {
-        let Some((_, _, _, fy1)) = self.sheet().map(|s| s.frame()) else { return };
-        let target = self.snap(P::new(0.0, fy1 - TITLE_H - 5.0)).y;
-        let sel = self.selection.clone();
-        self.checkpoint();
-        self.with_sheet(|s, _| {
-            for o in s.objects.iter_mut().filter(|o| sel.contains(&o.id)) {
-                if let Kind::Wire { pts, .. } = &mut o.kind {
-                    let dy = target - pts[0].y;
-                    pts.iter_mut().for_each(|p| p.y += dy);
-                }
-            }
-        });
-    }
 
     /// Textgenerator: Betriebsmittelkennzeichnungen je Präfix neu nummerieren (Blatt, dann Strompfad, dann Höhe).
     pub fn regenerate_bmk(&mut self, whole_project: bool) {
@@ -942,34 +943,6 @@ impl App {
             self.selection = targets;
         }
         self.info = format!("Eigentümer {shown} gesetzt");
-    }
-
-    /// Eigentümer suchen: nächstes Symbol mit gleicher Kennzeichnung im Projekt öffnen und markieren.
-    pub fn find_same_bmk(&mut self, id: u64) {
-        let Some(o) = self.selected_objs().into_iter().find(|o| o.id == id) else { return };
-        let Kind::Symbol { bmk, .. } = &o.kind else { return };
-        let bmk = bmk.clone();
-        let mut all: Vec<(SheetRef, u64)> = vec![];
-        for (ai, a) in self.project.anlagen.iter().enumerate() {
-            for (si, s) in a.sheets.iter().enumerate() {
-                for x in &s.objects {
-                    if let Kind::Symbol { bmk: b, .. } = &x.kind {
-                        if *b == bmk {
-                            all.push((SheetRef { anlage: ai, sheet: si }, x.id));
-                        }
-                    }
-                }
-            }
-        }
-        if all.len() < 2 {
-            self.info = format!("Keine weiteren Symbole mit {bmk}");
-            return;
-        }
-        let pos = all.iter().position(|(_, i)| *i == id).unwrap_or(0);
-        let (r, nid) = all[(pos + 1) % all.len()];
-        self.open_sheet(r);
-        self.selection = vec![nid];
-        self.info = format!("{bmk}: {} von {}", (pos + 1) % all.len() + 1, all.len());
     }
 
     // ------------------------------------------------------------------ Bibliothek, Favoriten, zuletzt geöffnet
@@ -1465,11 +1438,15 @@ impl App {
                 let i = self.project.potentiale.len() - 1;
                 self.open_potential_dialog(i);
             }
-            ("Neuer Stift", _) => {
-                self.new_pen();
-                self.open_pen_dialog(self.pen);
+            ("Neuer Stift", _) => self.neuer_stift(false),
+            // wie im Original (0x4867d4): Gruppe des angeklickten Gruppenknotens als Vorgabe
+            ("Neues Bauteil", _) => {
+                let g = node.id.strip_prefix("bt/user/").map(|g| g.to_string());
+                self.new_bauteil_dialog();
+                if let (Some(g), Some(XDialog::Bauteil { b, .. })) = (g, self.xdlg.as_mut()) {
+                    b.gruppe = g;
+                }
             }
-            ("Neues Bauteil", _) => self.new_bauteil_dialog(),
             ("Neue Platzhaltergruppe", _) => self.new_platzhalter(),
             _ => {}
         }
@@ -1767,21 +1744,25 @@ impl App {
         match d {
             XDialog::Stift { idx, name, style, width, color } if idx > usize::MAX / 2 => {
                 // Stift des Symbols im Editor (Kennung usize::MAX − Stiftnummer)
+                // neuer Stift („Neuer Stift“) entsteht erst hier, beim OK (stift_neu.rs)
                 let nr = (usize::MAX - idx) as u32;
-                if let Some((_, s)) = self.sym_edit.as_mut().and_then(|e| e.pens.iter_mut().find(|(n, _)| *n == nr)) {
-                    s.name = name;
-                    s.style = style as u8;
-                    s.width = num(&width, 0.25).clamp(0.05, 5.0);
-                    s.color = from_c32(color);
+                let s = Stift { name, style: style as u8, width: num(&width, 0.25).clamp(0.05, 5.0), color: from_c32(color) };
+                if let Some(e) = self.sym_edit.as_mut() {
+                    if crate::stift_neu::symbol_setzen(&mut e.pens, nr, s) {
+                        self.pen = nr as usize;
+                    }
                 }
             }
             XDialog::Stift { idx, name, style, width, color } => {
                 self.checkpoint();
-                if let Some(s) = self.project.stifte.get_mut(idx) {
-                    s.name = name;
-                    s.style = style as u8;
-                    s.width = num(&width, 0.25).clamp(0.05, 5.0);
-                    s.color = from_c32(color);
+                let s = Stift { name, style: style as u8, width: num(&width, 0.25).clamp(0.05, 5.0), color: from_c32(color) };
+                if crate::stift_neu::projekt_setzen(&mut self.project.stifte, idx, s) {
+                    // neuer Projektstift wird gewählt (im Symboleditor nur in der Hauptleiste)
+                    match self.sym_edit.as_mut() {
+                        Some(e) => e.haupt_pen = idx,
+                        None => self.pen = idx,
+                    }
+                    self.dirty = true;
                 }
             }
             XDialog::Leitung { idx, name, color, quer, adern, kennz, width, style } => {

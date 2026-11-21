@@ -11,7 +11,8 @@
 //! - Objekt einfügen, Verweis einfügen: freie Fläche (nicht im Symboleditor); Objekt einfügen nur aktiv mit Projektsymbolen
 //! - Sammelschiene: Sammelschiene · Ziel setzen: Verweis · Bezeichner setzen: Anschluss im Symboleditor (Element Typ 7)
 //! - Bildindex/Optionen/Parameter: Symbol mit Bildnamen/Zusatzoptionen/Parametern
-//! - Alternativtext, Eigentümer, Symbol bearbeiten, Bauteilliste: Symbol (Eigentümer › Suchen nur mit Eigentümer)
+//! - Alternativtext, Eigentümer, Symbol bearbeiten: Symbol (Eigentümer › Suchen nur mit Eigentümer)
+//! - Bauteilliste: Symbol und Klemmstelle (0x41933b, 0x41a1d9; Bauteilliste1Click 0x49d57c nimmt beide)
 //! - Kontaktspiegel hinzufügen: Symbol, das noch keinen Kontaktspiegel hat
 //! - Ausrichtung: Symboltext (Titel/Wert) sowie Text und Textbox · Fixieren: Zeichenobjekte (auch Text, Tabelle, Bild)
 //! - Eigenschaften: immer (auf freier Fläche im Symboleditor gesperrt) · Pfadbezeichnung: freie Fläche eines Stromlaufplans
@@ -147,7 +148,8 @@ pub fn eintraege(l: &Lage) -> Vec<Eintrag> {
             Bildindex => sym && l.symbol.bilder,
             Optionen => sym && l.symbol.optionen,
             Parameter => sym && l.symbol.parameter,
-            Alternativtext | Eigentuemer | SymbolBearbeiten | Bauteilliste => sym,
+            Alternativtext | Eigentuemer | SymbolBearbeiten => sym,
+            Bauteilliste => sym || matches!(z, MenueZiel::Klemme(_)),
             ZielSetzen => matches!(z, MenueZiel::Verweis(_)),
             BezeichnerSetzen => matches!(z, MenueZiel::Anschluss(_)),
             Kontaktspiegel => sym && !l.symbol.hat_spiegel,
@@ -177,6 +179,14 @@ pub fn eintraege(l: &Lage) -> Vec<Eintrag> {
 /// „Eigenschaften“ aktiv (im Original auf freier Fläche eines Symbolblattes gesperrt).
 pub fn eigenschaften_aktiv(l: &Lage) -> bool {
     !(l.ziel == MenueZiel::Leer && l.symboleditor)
+}
+
+/// Blattreiter-Menü (PopupMenu3) wie PopupMenu3Popup 0x480fbc: aktiv sind [Blatt schliessen, Alle Blätter
+/// schließen, Alle Blätter dieser Anlage schließen, Eigenschaften]. Das Original prüft den **aktiven** Reiter
+/// (TabIndex), nicht den angeklickten: „Blatt schliessen“ nur, wenn einer aktiv ist und kein Symbolblatt
+/// (Blattart < 'a'); „… dieser Anlage …“ nur mit aktueller Anlage (Projekt +0xbc, deren Liste +0xec).
+pub fn blattreiter_aktiv(aktiv: bool, symbolblatt: bool, anlage: bool) -> [bool; 4] {
+    [aktiv && !symbolblatt, true, anlage, true]
 }
 
 fn speicher_id() -> egui::Id {
@@ -246,6 +256,27 @@ impl App {
         self.dirty = true;
     }
 
+    /// Eigentümer › Suchen wie im Original (Suchen2Click 0x480ba4): Blatt des Eigentümers öffnen (auch in einer
+    /// anderen Anlage) und nur ihn markieren.
+    pub fn eigentuemer_suchen(&mut self, id: u64) {
+        let owner = match self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == id)).map(|o| &o.kind) {
+            Some(Kind::Symbol { ext, .. }) => ext.eigentuemer,
+            _ => 0,
+        };
+        if owner == 0 {
+            return;
+        }
+        let Some((r, _)) = self.project.find_obj(owner) else {
+            self.info = "Eigentümer nicht gefunden".into();
+            return;
+        };
+        if self.cur() != Some(r) {
+            self.open_sheet(r);
+        }
+        self.selection = vec![owner];
+        self.info = format!("Eigentümer: {}", crate::kontaktspiegel::lage(&self.project, owner).unwrap_or_default());
+    }
+
     /// Eigenschaften eines Symboltextes wie im Original: Dialog „Texteigenschaft“ (TTextchange) für Titel bzw. Wert;
     /// gibt ein Eigentümer den Titel vor, erscheint stattdessen der Hinweis des Originals.
     pub fn symboltext_eigenschaften(&mut self, id: u64, wert: bool) {
@@ -311,6 +342,13 @@ mod tests {
     }
 
     #[test]
+    fn blattreiter() {
+        assert_eq!(blattreiter_aktiv(true, false, true), [true; 4]);
+        assert_eq!(blattreiter_aktiv(true, true, true), [false, true, true, true]);
+        assert_eq!(blattreiter_aktiv(false, false, false), [false, true, false, true]);
+    }
+
+    #[test]
     fn symbol() {
         let mut l = lage(MenueZiel::Symbol(1));
         assert_eq!(eintraege(&l), vec![Loeschen, Trenner, Alternativtext, Eigentuemer, Kontaktspiegel, Bauteilliste, Trenner, SymbolBearbeiten, Trenner, Eigenschaften]);
@@ -334,7 +372,7 @@ mod tests {
         assert_eq!(eintraege(&lage(MenueZiel::Leitung(1))), vec![Loeschen, Trenner, Eigenschaften]);
         assert_eq!(eintraege(&lage(MenueZiel::Sammelschiene(1))), vec![Loeschen, Trenner, Sammelschiene, Trenner, Eigenschaften]);
         assert_eq!(eintraege(&lage(MenueZiel::Verweis(1))), vec![Loeschen, Trenner, ZielSetzen, Trenner, Eigenschaften]);
-        assert_eq!(eintraege(&lage(MenueZiel::Klemme(1))), vec![Loeschen, Trenner, Eigenschaften]);
+        assert_eq!(eintraege(&lage(MenueZiel::Klemme(1))), vec![Loeschen, Trenner, Bauteilliste, Trenner, Eigenschaften]);
         assert_eq!(eintraege(&lage(MenueZiel::Kontaktspiegel(1))), vec![Loeschen, Trenner, Eigenschaften]);
         // Verbindungsobjekte zeigen Löschen auch ohne Markierung, Leitungen nicht
         let mut l = lage(MenueZiel::Verweis(1));
