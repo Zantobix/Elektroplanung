@@ -41,7 +41,7 @@ fn kinds() -> Vec<(&'static str, Kind, usize, bool)> {
         ("Polygon", Kind::Poly { pts: vec![P::new(60.0, 60.0), P::new(80.0, 60.0), P::new(70.0, 75.0)] }, 0, false),
         ("Kreis", Kind::Circle { a: P::new(100.0, 60.0), b: P::new(120.0, 80.0) }, 3, false),
         ("Text", text_kind(), 0, true),
-        ("Textbox", Kind::TextBox { a: P::new(130.0, 30.0), b: P::new(180.0, 50.0), text: "Zeile 1\nZeile 2".into(), size: 12.0 * 0.3528 }, 0, false),
+        ("Textbox", elektroplanung::textbox::neu(P::new(130.0, 30.0), P::new(180.0, 50.0), "Zeile 1\nZeile 2"), 0, false),
         (
             "Tabelle",
             Kind::Table { a: P::new(20.0, 100.0), b: P::new(120.0, 130.0), rows: 3, cols: 2, cells: ["Nr", "Name", "1", "Ä-Ö", "", "x"].map(String::from).to_vec(), header: true, fixed_w: true, art: 0, ab: 0 },
@@ -272,7 +272,10 @@ fn changed_new_objects_are_patched() {
         o.kind.translate(P::new(10.0, 5.0));
         match &mut o.kind {
             Kind::Table { cells, .. } => cells[1] = "Geändert".into(),
-            Kind::TextBox { text, .. } => *text = "Neu".into(),
+            Kind::Text { style, text, .. } if style.font.is_empty() => {
+                *text = "Neu".into();
+                style.wrap = true;
+            }
             Kind::Text { style, .. } => style.font = "Courier New".into(),
             _ => {}
         }

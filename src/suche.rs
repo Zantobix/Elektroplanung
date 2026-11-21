@@ -23,7 +23,7 @@ pub struct Treffer {
 pub fn objekt_texte(project: &Project, a: &Anlage, s: &Sheet, o: &Obj) -> Vec<(&'static str, String)> {
     let mut v: Vec<(&'static str, String)> = vec![];
     match &o.kind {
-        Kind::Text { text, .. } | Kind::TextBox { text, .. } => v.push(("Text", project.expand_placeholders(text))),
+        Kind::Text { text, .. } => v.push(("Text", project.expand_placeholders(text))),
         Kind::Table { cells, .. } => v.extend(cells.iter().map(|c| ("Tabelle", c.clone()))),
         Kind::Verweis { text, .. } => v.push(("Verweis", project.expand_placeholders(text))),
         Kind::Symbol { bmk, value, ext, .. } => {

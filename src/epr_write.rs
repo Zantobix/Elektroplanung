@@ -337,7 +337,7 @@ fn pure_shift(old: &Kind, new: &Kind) -> Option<P> {
 fn first_point(k: &Kind) -> Option<P> {
     Some(match k {
         Kind::Line { a, .. } | Kind::Curve { a, .. } | Kind::Rect { a, .. } | Kind::Triangle { a, .. } | Kind::Circle { a, .. } => *a,
-        Kind::TextBox { a, .. } | Kind::Table { a, .. } | Kind::Image { a, .. } => *a,
+        Kind::Table { a, .. } | Kind::Image { a, .. } => *a,
         Kind::Text { pos, .. } | Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } | Kind::Spiegel { pos, .. } => *pos,
         Kind::Wire { pts, .. } | Kind::Poly { pts } => *pts.first()?,
         Kind::Verweis { pos, .. } => *pos,
@@ -731,7 +731,7 @@ fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             Some(b)
         }
         Kind::Terminal { .. } => crate::klemmen::terminal_block(project, o),
-        // Textbox, Tabelle, Bild, Verweis, Sammelschiene
+        // Tabelle, Bild, Verweis, Sammelschiene (Texte und Textboxen oben)
         _ => crate::epr_neu::new_block(project, o),
     }
 }
@@ -955,7 +955,6 @@ pub fn kind_name(k: &Kind) -> &'static str {
         Kind::Triangle { .. } => "Dreieck",
         Kind::Circle { .. } => "Kreis",
         Kind::Text { .. } => "Text",
-        Kind::TextBox { .. } => "Textbox",
         Kind::Table { .. } => "Tabelle",
         Kind::Image { .. } => "Bild",
         Kind::Symbol { .. } => "Symbol",

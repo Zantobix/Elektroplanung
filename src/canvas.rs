@@ -223,7 +223,7 @@ pub fn obj_pins(o: &Obj, lib: &[SymDef]) -> Vec<P> {
 pub fn obj_bounds(o: &Obj, lib: &[SymDef]) -> (P, P) {
     match &o.kind {
         Kind::Line { a, b } | Kind::Rect { a, b } | Kind::Triangle { a, b } | Kind::Circle { a, b } => norm_rect(*a, *b),
-        Kind::TextBox { a, b, .. } | Kind::Table { a, b, .. } | Kind::Image { a, b, .. } => norm_rect(*a, *b),
+        Kind::Table { a, b, .. } | Kind::Image { a, b, .. } => norm_rect(*a, *b),
         Kind::Curve { a, c1, c2, b } => {
             let pts = bezier(*a, *c1, *c2, *b, 24);
             pts_bounds(&pts)
@@ -659,14 +659,6 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                 std::borrow::Cow::Borrowed(style)
             };
             draw_text_box(p, xf, *pos, &dc.project.expand_placeholders(text), *size, *align, *vertical, &style, col, stroke);
-        }
-        Kind::TextBox { a, b, text, size } => {
-            let (mn, mx) = norm_rect(*a, *b);
-            let r = Rect::from_min_max(xf.s(mn), xf.s(mx));
-            styled_line(p, &sp(&[mn, P::new(mx.x, mn.y), mx, P::new(mn.x, mx.y), mn]), stroke, style, z);
-            let job = egui::text::LayoutJob::simple(text.clone(), crate::schriften::font_id(&dc.project.schrift, size * z, false, false), tc, (r.width() - 1.0 * z).max(5.0));
-            let g = p.layout_job(job);
-            p.with_clip_rect(r).galley(r.min + Vec2::splat(0.5 * z), g, tc);
         }
         Kind::Spiegel { pos, rows, .. } => crate::kontaktspiegel::draw(dc, *pos, rows, stroke),
         Kind::Table { a, b, rows, cols, cells, header, fixed_w, art, ab } => {

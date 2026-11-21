@@ -238,6 +238,8 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Werkzeuge (Knopf-Tag = Elementtyp): Textbox = 11 (2 Klicks), Bild = 12, Tabelle = 13; im Symboleditor wird aus
   Klemmstelle 7 und Textbox 8 (Anschluss, Text).
 - Text (Typ 11): Feld 6 Byte 1 = Umbruch (Dialog TTextbox: Rahmen +0x1a, Umbruch +0x19, Ausrichtung +0x18, Drehung +0x14).
+  Neue Textbox (Anlegen der Elemente 0x406d70, Typ 0xb): Rahmen 1, Umbruch 0, 8 pt, Drehung 0, links, schwarz.
+  Text und Textbox sind dasselbe Element; im Nachbau beide `Kind::Text` mit `style.rect` (`src/textbox.rs`).
 - Bild (Typ 12): Feld 0–3 Rechteck, Feld 4 = Nummer des Projektbildes (BLD Feld 5), Feld 5 Byte 0 Rahmen,
   Byte 1 Ausrichtung (0 Zentriert, 1 Eingepasst, 2 Gestreckt), Feld 15 Bit 16 Fixiert.
 - Tabelle (Typ 13): Feld 6 „Ab“, Feld 9 Byte 0 Überschrift, Byte 1 Autobreite, Byte 2 Art (0 Benutzerdaten,

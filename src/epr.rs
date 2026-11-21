@@ -354,7 +354,7 @@ fn drawing(k: &Block) -> Option<(Kind, usize)> {
                 font: if e[0x3c] == 11 { crate::epr_neu::text_extras(k).1 } else { String::new() },
             };
             let pos = text_anchor(mn, mx, align, vertical);
-            crate::epr_neu::als_textbox(Kind::Text { pos, text, size, align, vertical, style })
+            Kind::Text { pos, text, size, align, vertical, style }
         }
         // Tabelle: Feld 0–3 Rechteck, 4 Spalten, 5 Zeilen, Zellen zeilenweise im STR-Unterblock (0-getrennt)
         13 => {
