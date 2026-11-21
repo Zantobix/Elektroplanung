@@ -300,3 +300,29 @@ fn table_cells_are_separated_like_original() {
     let Kind::Table { cells, .. } = &back.anlagen[0].sheets[0].objects[0].kind else { panic!() };
     assert_eq!(cells, &["Nr", "", "1", "a"]);
 }
+
+fn blatt_anlage_ok(f: &EprFile) -> bool {
+    f.root("PRJ").unwrap().kids_of("ANL").all(|a| a.kids_of("BLT").all(|b| b.data[0x50..0x58] == a.data[0x88..0x90]))
+}
+
+/// Jedes Blatt trägt die Kennung seiner Anlage (BLT 0x50 = ANL 0x88) – wie in W2; auch neue Blätter und Anlagen.
+#[test]
+fn sheets_carry_their_anlage_id() {
+    let mut p = Project::new_default();
+    p.anlagen[0].sheets.push(Sheet::new(2));
+    let mut a2 = p.anlagen[0].clone();
+    a2.name = "Anlage 2".into();
+    p.anlagen.push(a2);
+    let (_, f) = reload(&p);
+    assert!(blatt_anlage_ok(&f));
+    let ids: Vec<_> = f.root("PRJ").unwrap().kids_of("ANL").map(|a| a.data[0x88..0x90].to_vec()).collect();
+    assert_ne!(ids[0], ids[1], "neue Anlagen brauchen eigene Kennungen");
+    let Some(path) = sample() else { return };
+    let w2 = EprFile::read(&path).unwrap();
+    assert!(blatt_anlage_ok(&w2), "Annahme aus W2");
+    let mut p = epr::import(&path).unwrap();
+    let n = p.anlagen[3].sheets.len() as u32 + 1;
+    p.anlagen[3].sheets.push(Sheet::new(n));
+    let (_, f) = reload(&p);
+    assert!(blatt_anlage_ok(&f));
+}

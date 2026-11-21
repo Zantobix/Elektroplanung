@@ -22,6 +22,9 @@ use crate::model::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+/// Kennung der Anlage im Blatt (BLT Feld 20/21).
+pub const BLT_ANL_AT: usize = 0x50;
+
 fn to01(v: f32) -> i32 {
     (v * 10.0).round() as i32
 }
@@ -441,6 +444,19 @@ pub fn nachbereiten(prj: &mut Block) {
             let at = crate::epr::ANL_ID_AT;
             if a.data.len() >= at + 8 {
                 a.data[at..at + 8].copy_from_slice(&id.to_le_bytes());
+            }
+        }
+    }
+    // Jedes Blatt trägt die Kennung seiner Anlage (BLT Byte 0x50, in W2 ausnahmslos gleich ANL Byte 0x88).
+    // Neue Blätter und Blätter neuer Anlagen trugen sonst die Anlagenkennung der Vorlage; in solchen Projekten
+    // zeichnete das Original keine Tabellen (Gegenprobe 21.11.2026).
+    for &i in &anl {
+        let a = &mut prj.kids[i];
+        let at = crate::epr::ANL_ID_AT;
+        let Some(id) = a.data.get(at..at + 8).map(|d| d.to_vec()) else { continue };
+        for s in a.kids.iter_mut().filter(|k| k.is("BLT") && k.data.len() >= BLT_ANL_AT + 8) {
+            if s.data[BLT_ANL_AT..BLT_ANL_AT + 8] != id[..] {
+                s.data[BLT_ANL_AT..BLT_ANL_AT + 8].copy_from_slice(&id);
             }
         }
     }
