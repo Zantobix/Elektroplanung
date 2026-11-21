@@ -654,6 +654,7 @@ pub fn symdef_from_block(s: &Block) -> Option<SymDef> {
         title: el.title,
         vis: el.vis,
         pin_vis: el.pin_vis,
+        pin_info: el.pin_info,
         flag: el.flag,
         flag_names,
         text_idx: el.text_idx,

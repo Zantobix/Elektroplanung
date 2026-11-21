@@ -134,7 +134,7 @@ benutzen ein Beispielprojekt des Originals, das über die Umgebungsvariable `EP_
 | Neues Bibliothekssymbol vom Nachbau eingefügt | Das Original zeigt es |
 | Eigenschaftendialoge Text/Symbol/Blatt | Felder, Reihenfolge und Sperren wie im Original |
 | Kontextmenüs Symbol/Text/Fläche inkl. Optionen und Alternativtext | Einträge und Reihenfolge wie im Original |
-| Import-Vollständigkeit (`tests/import_vollstaendig.rs`) | Sammelschienen und Querverweise wie Ausdruck Seite 6/18, Klemmstellen, Aderfarben, Tabellen, Bilder, BMK-Vorlagen, Sicherungsübersicht Seite 5, Klemmplan Seite 12 |
+| Import-Vollständigkeit (`tests/import_vollstaendig.rs`) | Sammelschienen und Querverweise wie Ausdruck Seite 6/18, Klemmstellen, Aderfarben, Tabellen, Bilder, BMK-Vorlagen, Sicherungsübersicht Seite 5, Klemmplan Seite 12 mit allen Zielen und Brücken |
 | Symboltexte in gedrehten Symbolen (`tests/motor_lage.rs`) | "M" im gedrehten Motorsymbol (Seite 1) dreht mit, im Symbol "Motor" (Seite 7) bleibt es waagerecht; hochkant BMK "-M2.1" an derselben Stelle wie im Ausdruck |
 | Maustests in einer Projektkopie, Gegenprobe im Original | Kontextmenüs (Optionen, Bildindex, Symbol bearbeiten), Dialoge verschieben, Zoom/Bildlauf, Zeichnen, Verschieben, Rückgängig, Symbol setzen, Symboleditor mit Titel-/Wertfeld, Speichern → Original zeigt die Änderungen; Rückfrage „Geänderte Daten Speichern?“ |
 | Symboleditor über MCP (`tests/mcp_symbol.rs`) | neues Symbol mit Seiten, Zusatzoption, Alternativtext → .epr → wieder gelesen; geändertes W2-Symbol wird geschrieben, alle anderen bleiben gleich |
@@ -172,8 +172,11 @@ nicht. Gemessen werden stattdessen:
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
   neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
-- Klemmplan: Kopf, Klemmennummern und Brückenspalte werden berechnet, die Spalten "Von Ziel"/"Nach Ziel"
-  (Verfolgung der Verbindungen) noch nicht.
+- Klemmplan: "Von Ziel"/"Nach Ziel" und Brücken werden aus den Verbindungen verfolgt (Regeln in
+  `src/klemmplan.rs`); bei Klemmen mit mehr als zwei Zielen wählt das Original nach einer nicht geklärten
+  Reihenfolge, der Nachbau nach der Lage der Anschlüsse (oben vor rechts vor unten). Die Spalte "Funktion"
+  bleibt leer (Klemmenfunktion wird noch nicht aus dem .epr gelesen); "Alter Klemmenplan" zeigt die
+  8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken.
 - Neue Einstellungen der Dialoge (Tabellenkopf fett, Bildausrichtung, Verbindungsoptionen, Sammelschienen-
   Einstellungen, Begrenzungslinien, Schriftfeldhöhe) speichert der Nachbau im eigenen Format (.epj); ihre
   Ablage im .epr ist noch unbekannt.

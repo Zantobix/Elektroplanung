@@ -1604,6 +1604,7 @@ impl App {
             title: None,
             vis: vec![],
             pin_vis: vec![],
+            pin_info: vec![],
             flag: vec![],
             flag_names: vec![],
             text_idx: vec![],

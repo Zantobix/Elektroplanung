@@ -167,6 +167,7 @@ impl App {
                 title: None,
                 vis: vec![],
                 pin_vis: vec![],
+                pin_info: vec![],
             flag: vec![],
             flag_names: vec![],
             text_idx: vec![],
@@ -332,6 +333,7 @@ impl App {
         let mut pfill: Vec<bool> = vec![];
         let mut pins = vec![];
         let mut pin_vis = vec![];
+        let mut pin_info: Vec<(u32, u32)> = vec![];
         // freie Textnummern ab der höchsten vergebenen
         let mut next_text = e.text_idx.values().copied().max().unwrap_or(1).max(1) + 1;
         let style = |pen: usize| self.project.stifte.get(pen).map(|s| s.style).unwrap_or(0);
@@ -382,9 +384,11 @@ impl App {
                     let (mn, mx) = canvas::obj_bounds(o, &self.lib);
                     Some(Prim::TextBox(b(mn), b(mx), text.clone(), *align))
                 }
-                Kind::Terminal { pos, .. } => {
+                Kind::Terminal { pos, nr, .. } => {
                     pins.push(b(*pos));
                     pin_vis.push(v);
+                    // Anschlussbezeichnung (Textnummer) des bisherigen Anschlusses beibehalten
+                    pin_info.push(symbols::find(&self.lib, &e.key).and_then(|d| d.pin_info.get((*nr as usize).wrapping_sub(1))).copied().unwrap_or((0, 0)));
                     None
                 }
                 _ => None,
@@ -422,6 +426,7 @@ impl App {
             title,
             vis: pvis,
             pin_vis,
+            pin_info,
             options: e.options.clone(),
             flag: pflag,
             flag_names: e.flag_names.clone(),

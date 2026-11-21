@@ -117,6 +117,44 @@ fn generated_sheets_fuse_overview_and_terminal_plan() {
     assert_eq!((nrs.first(), nrs.last()), (Some(&3), Some(&19)), "Klemmen 3…19 wie im Ausdruck Seite 12");
 }
 
+/// Klemmplan -X1 (Ausdruck Seite 12): Von Ziel / Nach Ziel je Klemme und Brücken.
+#[test]
+fn terminal_plan_targets_like_original_print() {
+    use elektroplanung::klemmplan;
+    let Some(path) = sample() else { return };
+    let p = epr::import(&path).unwrap();
+    let (a, _) = sheet(&p, "Unterverteilung 1", "Klemmplan -X1");
+    let plan = klemmplan::plan(a, "-X1", &p.symdefs);
+    let f = |z: &Option<klemmplan::Ziel>| z.as_ref().map(|z| format!("{} {} {}", z.kennung, z.kl, z.pfad)).unwrap_or_default();
+    let rows: Vec<(u32, String, String)> = plan.zeilen.iter().map(|z| (z.nr, f(&z.von), f(&z.nach))).collect();
+    let want: &[(u32, &str, &str)] = &[
+        (3, "-F2.L (Schiene -F2.L)  3/1", "-Q1.1.1+W2 11 3/11"),
+        (4, "-Q1.2.1+W2 11 3/11", ""),
+        (5, "-Q1.3+W2 11 3/11", ""),
+        (6, "-Q1.1.1+W2 14 3/11", "-Q1.1.2+W2 14 3/11"),
+        (7, "-Q1.1.1+W2 12 3/11", "-Q1.1.2+W2 12 3/11"),
+        (8, "-Q1.2.1+W2 14 3/11", "-Q1.2.2+W2 14 3/11"),
+        (9, "-Q1.2.1+W2 12 3/11", "-Q1.2.2+W2 12 3/11"),
+        (10, "-Q1.1.2+W2 11 3/11", "-E1.1+W2 1 3/11"),
+        (11, "-Q1.2.2+W2 11 3/11", "-E1.2+W2 1 3/11"),
+        (12, "-Q1.1.1+W2 N 3/9", "-Q1.1.2+W2 N 3/10"),
+        (13, "-M1.1+W2 U1 3/15", "-Q1.2.2+W2 N 3/9"),
+        (14, "-E1.1+W2 2 3/11", "-M1.1+W2 U1 3/15"),
+        (15, "-E1.2+W2 2 3/11", "-F2.N (Schiene -F2.N)  3/1"),
+        (16, "-Q1.1.1+W2 PE 3/9", "-Q1.1.2+W2 PE 3/10"),
+        (17, "-M1.1+W2 PE 3/15", "-Q1.2.2+W2 PE 3/9"),
+        (18, "-E1.1+W2 PE 3/11", "-M1.1+W2 PE 3/15"),
+        (19, "-E1.3+W2 PE 3/14", "PE (Schiene PE)  3/1"),
+    ];
+    for (w, r) in want.iter().zip(&rows) {
+        assert_eq!((w.0, w.1, w.2), (r.0, r.1.as_str(), r.2.as_str()), "Klemme {}", w.0);
+    }
+    assert_eq!(rows.len(), want.len());
+    // Brücken 3–5, 12/14, 13/15 (zweite Spur), 16/18, 17/19 (zweite Spur)
+    let br: Vec<(Vec<u32>, usize)> = plan.bruecken.iter().map(|b| (b.rows.iter().map(|r| plan.zeilen[*r].nr).collect(), b.lane)).collect();
+    assert_eq!(br, vec![(vec![3, 4, 5], 0), (vec![12, 14], 0), (vec![13, 15], 1), (vec![16, 18], 0), (vec![17, 19], 1)]);
+}
+
 #[test]
 fn sheet_dates_like_original_print() {
     let Some(path) = sample() else { return };

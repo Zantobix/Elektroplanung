@@ -41,6 +41,11 @@ pub struct SymDef {
     pub vis: Vec<(u16, u16)>,
     #[serde(default)]
     pub pin_vis: Vec<(u16, u16)>,
+    /// Je Anschluss (Textnummer, Zusatzoption): Textnummer = Element Typ 7, Feld 5 (0 = keiner), die
+    /// Anschlussbezeichnung wie "11", "PE", die der Klemmplan in der Spalte "KL" zeigt; Zusatzoption wie `flag`
+    /// (z. B. der PE-Anschluss der Lampe nur mit Zusatzoption "PE")
+    #[serde(default)]
+    pub pin_info: Vec<(u32, u32)>,
     #[serde(default)]
     pub options: Vec<String>,
     /// Zusatzoption je Element (Feld 0x48 im Element): 0 = immer, n = nur wenn Bit n−1 der
@@ -366,6 +371,7 @@ pub fn load_db(dir: &Path) -> Result<Vec<SymDef>, String> {
             title: el.title,
             vis: el.vis,
             pin_vis: el.pin_vis,
+            pin_info: el.pin_info,
             flag: el.flag,
             flag_names,
             text_idx: el.text_idx,
@@ -390,6 +396,7 @@ pub struct Elements {
     pub vis: Vec<(u16, u16)>,
     pub pins: Vec<P>,
     pub pin_vis: Vec<(u16, u16)>,
+    pub pin_info: Vec<(u32, u32)>,
     pub title: Option<P>,
     pub value_pos: Option<P>,
     pub options: Vec<String>,
@@ -440,7 +447,7 @@ pub fn split_strings(b: &[u8]) -> Vec<String> {
 
 /// Elementliste (je 0x50 Byte) in Zeichenelemente umsetzen. Texte: 1-basiert, Text 1 = BMK-Vorlage.
 pub fn parse_elements(data: &[u8], texts: &[String]) -> Elements {
-    let mut el = Elements { prims: vec![], vis: vec![], pins: vec![], pin_vis: vec![], title: None, value_pos: None, options: vec![], flag: vec![], text_idx: vec![], text_mode: vec![], fill: vec![] };
+    let mut el = Elements { prims: vec![], vis: vec![], pins: vec![], pin_vis: vec![], pin_info: vec![], title: None, value_pos: None, options: vec![], flag: vec![], text_idx: vec![], text_mode: vec![], fill: vec![] };
     for e in data.chunks_exact(0x50) {
         let v = |i: usize| i32_at(e, i * 4) as f32 / 10.0;
         let pt = |i: usize| P::new(v(2 * i), v(2 * i + 1));
@@ -449,7 +456,7 @@ pub fn parse_elements(data: &[u8], texts: &[String]) -> Elements {
         let opt = u16_at(e, 0x44);
         let mode = u16_at(e, 0x46);
         let page = i32_at(e, 0x48);
-        if page < 0 || page > 32 || (page != 0 && matches!(t, 7 | 9)) {
+        if page < 0 || page > 32 || (page != 0 && t == 9) {
             continue;
         }
         let vv = (opt, mode);
@@ -495,6 +502,7 @@ pub fn parse_elements(data: &[u8], texts: &[String]) -> Elements {
                 }
                 el.pins.push(a);
                 el.pin_vis.push(vv);
+                el.pin_info.push((i32_at(e, 5 * 4).max(0) as u32, page as u32));
             }
             9 => el.title = Some(pt(0)),
             10 => el.value_pos = Some(pt(0)),
@@ -523,6 +531,7 @@ fn def(key: &str, name: &str, group: &[&str], bmk: &str, prims: Vec<Prim>, pins:
         title: None,
         vis: vec![],
         pin_vis: vec![],
+        pin_info: vec![],
         flag: vec![],
         flag_names: vec![],
         text_idx: vec![],
@@ -719,6 +728,7 @@ impl SymDef {
         self.text_mode.resize(n, 0);
         self.fill.resize(n, false);
         self.pin_vis.resize(self.pins.len(), (0, 1));
+        self.pin_info.resize(self.pins.len(), (0, 0));
     }
 
     /// Nächste freie Textnummer (Text 1 ist die BMK-Vorlage).
@@ -791,6 +801,7 @@ impl SymDef {
             if v.0 == page && v.1 == 0 {
                 self.pins.remove(k);
                 self.pin_vis.remove(k);
+                self.pin_info.remove(k);
                 continue;
             }
             if v.0 > page {
@@ -874,6 +885,7 @@ impl SymDef {
             title: None,
             vis: vec![],
             pin_vis: vec![],
+            pin_info: vec![],
             options: vec!["Standard".into()],
             flag: vec![],
             flag_names: vec![],
