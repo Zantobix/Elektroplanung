@@ -12,6 +12,10 @@ pub struct Zusatz {
     pub grafik: Option<crate::grafik::GrafikDlg>,
     /// Datei › Vorlage öffnen: diese Vorlage wird gerade geladen (vorlage.rs)
     pub template: Option<std::path::PathBuf>,
+    /// Kontaktspiegel (TSSpiegel, kontaktspiegel.rs)
+    pub spiegel: Option<crate::kontaktspiegel::SpiegelDlg>,
+    /// Letzte X-Lagen von Spule und Kontaktspiegel (kontaktspiegel::folgen)
+    pub spiegel_lagen: crate::kontaktspiegel::Lagen,
 }
 
 impl App {
@@ -20,6 +24,14 @@ impl App {
         self.param_dialog_ui(ctx);
         self.grafik_dialog_ui(ctx);
         self.template_loaded();
+        self.spiegel_ui(ctx);
+        // Kontaktspiegel folgen ihrer Spule (X) und ihren Kontakten (Lage, neue/gelöschte Kontakte)
+        if self.sym_edit.is_none() {
+            let x = crate::kontaktspiegel::folgen(&mut self.project, &mut self.zusatz.spiegel_lagen);
+            if crate::kontaktspiegel::nachfuehren(&mut self.project, &self.lib) || x {
+                self.dirty = true;
+            }
+        }
     }
 
     /// Nach jeder Änderung (checkpoint): das aktuelle Blatt gilt als heute geändert (Blattdaten „Geändert“,

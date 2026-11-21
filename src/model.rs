@@ -80,6 +80,13 @@ pub enum Kind {
         header: bool,
         #[serde(default)]
         fixed_w: bool,
+        /// Daten (TSTab „Daten“, ZCN Feld 9 Byte 2): 0 Benutzerdaten, 1 Inhaltsverzeichnis, 2 Querverweise –
+        /// berechnete Tabellen zeigen den aktuellen Stand des Projekts (`berechnet::tabelle`)
+        #[serde(default)]
+        art: u8,
+        /// „Ab“ (ZCN Feld 6): Inhaltsverzeichnis ab dieser Blattnummer, Querverweise ab diesem Eintrag
+        #[serde(default)]
+        ab: u32,
     },
     /// Bild (TBild): `mode` 0 Gestreckt, 1 Zentriert, 2 Eingepasst (Seitenverhältnis); `frame` = Rahmen
     Image {
@@ -166,6 +173,17 @@ pub enum Kind {
         vertical: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         ziel: Option<VerweisZiel>,
+    },
+    /// Kontaktspiegel (OBJ Art 5 im Original): unter der Spule `owner` (Objekt-Id) die Kontakte als kleine
+    /// Schaltzeichen mit Anschlussnummern und der Lage (Blatt/Pfad) des jeweiligen Kontakts; `pos.y` wird je Blatt
+    /// automatisch gesetzt (`kontaktspiegel::nachfuehren`).
+    Spiegel {
+        pos: P,
+        owner: u64,
+        rows: Vec<crate::kontaktspiegel::Zeile>,
+        /// Kontakte mit gleicher Kennzeichnung selbständig aufnehmen und entfernen (Nachbau)
+        #[serde(default = "yes")]
+        auto: bool,
     },
 }
 
@@ -330,6 +348,13 @@ pub struct Sheet {
     /// Klemmplan: Kennung der Klemmleiste (BLT Feld 32 ab Bit 8 = KLM Feld 13)
     #[serde(default)]
     pub klm: i32,
+    /// Zusatz der übrigen Blattarten (BLT Feld 32 Byte 1, Blattdialog des Originals): Deckblatt 0 mit / 1 ohne
+    /// Rahmen, Querverweise 1–3 Tabellen, Artikelliste 0 Summenliste / 1 Summe+BMK / 2 Einzelliste
+    #[serde(default)]
+    pub zusatz: u8,
+    /// Blattart ausdrücklich gewählt (sonst gilt ein im Nachbau angelegtes Blatt mit Art 0 als Schaltplan)
+    #[serde(default)]
+    pub art_fest: bool,
     /// Pfadbeschreibungen: Begrenzungslinien zwischen den Strompfaden über das ganze Blatt (TPfadDialog)
     #[serde(default)]
     pub pfad_linien: bool,
@@ -344,7 +369,7 @@ pub struct Sheet {
 
 impl Sheet {
     pub fn new(number: u32) -> Self {
-        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, pfad_linien: false, erstellt: today(), geaendert: String::new(), raw: None }
+        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, zusatz: 0, art_fest: false, pfad_linien: false, erstellt: today(), geaendert: String::new(), raw: None }
     }
 
     /// Blattgröße in mm (A4 quer oder hoch).
@@ -367,6 +392,16 @@ impl Sheet {
             let fh = if self.frame_h > 50.0 { self.frame_h } else { h - FRAME_BOTTOM - FRAME_TOP - COLUMN_BAR_H };
             let top = (h - FRAME_BOTTOM - fh - COLUMN_BAR_H).clamp(5.0, 60.0);
             (FRAME_LEFT, top, w - FRAME_RIGHT, h - FRAME_BOTTOM)
+        }
+    }
+
+    /// Blattart wie im Original (0 Deckblatt, 1 Inhaltsverzeichnis, 2 Querverweise, 3 Schaltplan, 4 Klemmplan,
+    /// 5 Sicherungsübersicht, 6 Artikelliste); im Nachbau angelegte Blätter ohne gewählte Art sind Schaltpläne.
+    pub fn blattart(&self) -> u8 {
+        if self.art == 0 && self.raw.is_none() && !self.art_fest {
+            3
+        } else {
+            self.art
         }
     }
 
@@ -779,7 +814,7 @@ impl Kind {
                     mv(b);
                 }
             }
-            Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } => mv(pos),
+            Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } | Kind::Spiegel { pos, .. } => mv(pos),
             Kind::Wire { pts, .. } | Kind::Poly { pts } => pts.iter_mut().for_each(mv),
             Kind::Verweis { pos, text_pos, .. } => {
                 mv(pos);
@@ -827,7 +862,7 @@ impl Kind {
                 m(a);
                 *x2 = anchor.x + (*x2 - anchor.x) * sx;
             }
-            Kind::Symbol { pos, .. } | Kind::Text { pos, .. } | Kind::Terminal { pos, .. } | Kind::Verweis { pos, .. } => {
+            Kind::Symbol { pos, .. } | Kind::Text { pos, .. } | Kind::Terminal { pos, .. } | Kind::Verweis { pos, .. } | Kind::Spiegel { pos, .. } => {
                 let d = f(*pos).sub(*pos);
                 self.translate(d);
             }

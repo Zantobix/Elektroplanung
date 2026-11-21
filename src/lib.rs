@@ -22,6 +22,7 @@ pub mod icons;
 pub mod inhalt;
 pub mod klemmen;
 pub mod klemmplan;
+pub mod kontaktspiegel;
 pub mod kuerzel;
 pub mod leitung_stift;
 pub mod listen;

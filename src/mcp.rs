@@ -137,6 +137,11 @@ fn obj_json(o: &Obj) -> Value {
             m.insert("points".into(), json!([p(a), [x2, a.y]]));
             m.insert("text".into(), json!(name));
         }
+        Kind::Spiegel { pos, owner, rows, .. } => {
+            m.insert("points".into(), json!([p(pos)]));
+            m.insert("owner".into(), json!(owner));
+            m.insert("contacts".into(), json!(rows.iter().map(|z| z.referenz).collect::<Vec<_>>()));
+        }
         Kind::Table { a, b, rows, cols, .. } => {
             m.insert("points".into(), json!([p(a), p(b)]));
             m.insert("rows".into(), json!(rows));

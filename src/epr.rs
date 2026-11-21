@@ -223,7 +223,11 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
             sh.ort = txt_at(&b.data, 51, 72);
             if sh.art == 4 {
                 sh.klm = b.i32(32) >> 8;
+            } else if matches!(sh.art, 0 | 2 | 6) {
+                // Zusatz: Deckblatt mit/ohne Rahmen, Querverweise 1–3 Tabellen, Stückliste (Feld 32 Byte 1)
+                sh.zusatz = b.data.get(0x81).copied().unwrap_or(0);
             }
+            sh.art_fest = true;
             if !sh.portrait && (500..2100).contains(&b.i32(24)) {
                 sh.frame_h = b.i32(24) as f32 / 10.0;
             }
@@ -242,6 +246,8 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
                     } else {
                         None
                     }
+                } else if crate::kontaktspiegel::ist_spiegel(k) {
+                    Some((crate::kontaktspiegel::lesen(k, &sh), 0))
                 } else if k.is("OBJ") {
                     match k.kid("TIT") {
                         _ if crate::klemmen::is_terminal(k) => Some((terminal(k, &klm), 0)),
@@ -275,6 +281,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
     }
     update_busbar_xrefs(&mut p);
     link_verweise(&mut p);
+    crate::kontaktspiegel::verknuepfen(&mut p);
     for a in &mut p.anlagen {
         if a.sheets.is_empty() {
             a.sheets.push(Sheet::new(1));
@@ -351,7 +358,8 @@ fn drawing(k: &Block) -> Option<(Kind, usize)> {
             let (mn, mx) = crate::canvas::norm_rect(pt(0), pt(1));
             let cells: Vec<String> = k.kid("STR").map(|n| table_cells(&n.data)).unwrap_or_default();
             let (header, fixed_w) = crate::epr_neu::tabelle_flags(k);
-            Kind::Table { a: mn, b: mx, rows: v(5).clamp(1, 500) as usize, cols: v(4).clamp(1, 50) as usize, cells, header, fixed_w }
+            // Daten (Feld 9 Byte 2) und „Ab“ (Feld 6)
+            Kind::Table { a: mn, b: mx, rows: v(5).clamp(1, 500) as usize, cols: v(4).clamp(1, 50) as usize, cells, header, fixed_w, art: e[0x26], ab: v(6).max(0) as u32 }
         }
         // Bild: Projektbild Feld 4, Rahmen/Ausrichtung Feld 5 (siehe epr_neu)
         12 => crate::epr_neu::bild_lesen(k),

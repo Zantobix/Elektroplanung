@@ -23,9 +23,22 @@ fn every_sheet_block_becomes_an_object() {
     let p = epr::import_file(&file).unwrap();
     let blocks: usize = file.root("PRJ").unwrap().kids_of("ANL").flat_map(|a| a.kids_of("BLT")).map(|b| b.kids.len()).sum();
     let objects: usize = p.anlagen.iter().flat_map(|a| &a.sheets).map(|s| s.objects.len()).sum();
-    // Ausnahmen ohne Darstellung: eine Sammelschiene ohne Länge ("Sicherungen -F10, -F1 und -F2") und
-    // zwei Verbindungen mit nur einem Punkt ("Sicherungen -F18, -Q1, -F1 bis -F4")
-    assert_eq!(objects + 3, blocks, "nicht umgesetzte Blöcke (cargo run --example unmapped)");
+    // Ausnahmen ohne Darstellung: zwei Verbindungen mit nur einem Punkt ("Sicherungen -F18, -Q1, -F1 bis -F4").
+    // Der frühere Ausreißer „Sammelschiene ohne Länge“ ist ein Kontaktspiegel (OBJ Art 5, siehe unten).
+    assert_eq!(objects + 2, blocks, "nicht umgesetzte Blöcke (cargo run --example unmapped)");
+}
+
+/// W2 enthält einen Kontaktspiegel ohne Zeilen, dessen Spule gelöscht ist (OBJ Art 5 auf „Sicherungen -F10, -F1
+/// und -F2“, X = 205 mm); er wird gelesen und unverändert wieder geschrieben.
+#[test]
+fn kontaktspiegel_aus_w2() {
+    let Some(path) = sample() else { return };
+    let p = epr::import(&path).unwrap();
+    let (_, s) = sheet(&p, "Unterverteilung 1", "Sicherungen -F10, -F1 und -F2");
+    let sp: Vec<(P, u64, usize)> = s.objects.iter().filter_map(|o| if let Kind::Spiegel { pos, owner, rows, .. } = &o.kind { Some((*pos, *owner, rows.len())) } else { None }).collect();
+    assert_eq!(sp.len(), 1);
+    assert!((sp[0].0.x - 205.0).abs() < 0.01, "{:?}", sp[0].0);
+    assert_eq!((sp[0].1, sp[0].2), (0, 0));
 }
 
 #[test]
