@@ -9,10 +9,32 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+## [0.1.2]
+
+Neu:
+- Eigene Vektor-Icons für alle Werkzeugleisten (scharf in jeder Größe); keine Grafiken des Originals mehr
+- Klemmplan: Spalten „Von Ziel“/„Nach Ziel“ (Verbindungen werden verfolgt) und Brücken; alter Klemmenplan
+  (Projektoption) mit 8 Spalten
+- Leitungen ziehen beim Verschieben von Symbolen und Klemmstellen mit
+- Fangpunkte: Anschlüsse in Mausnähe werden beim Zeichnen und Setzen markiert
+- Symbole lassen sich aus der Bibliothek direkt aufs Blatt ziehen
+- Eigenschaften für mehrere markierte Objekte (Stift, Fixierung, Textgröße/-stil)
 - Suchen über alle Blätter (Bearbeiten › Suchen…, Strg+F) mit Sprung zum Objekt
-- Tools › Projekt prüfen: offene Anschlüsse und doppelte BMK; Rückfrage vor dem Drucken (abschaltbar in Optionen)
+- Tools › Projekt prüfen: offene Anschlüsse und doppelte BMK; Rückfrage vor dem Drucken (abschaltbar)
 - Symbolvorschau als Tooltip im Symbolbaum
 - Datei › Als Bild exportieren…: PNG mit 150/300/600 dpi, aktuelles Blatt oder alle Blätter der Anlage
+- Sammelschienenassistent wie im Original (L1, L2, L3, N, PE, vorhandene Schienen werden wiederverwendet)
+- Bauteil zuordnen: neues Bauteil direkt aus dem Dialog anlegen
+
+Behoben / geändert wie im Original:
+- Strompfadausrichtung richtet Symbole beim Setzen und Verschieben auf die Mitte des Strompfads aus
+- Automatische Verbindungen ziehen Leitungen von freien Anschlüssen; Symbole auf einer Leitung trennen sie auf
+- Gedrückt halten von S/A kehrt Strompfadausrichtung/automatische Verbindungen vorübergehend um, Umschalt
+  schaltet den Rasterfang ab
+- Rahmen zur Größenänderung um Mehrfachmarkierungen mit Zeichenelementen (nicht um einzelne Symbole/Texte)
+- Fixierte Objekte lassen sich bei aktiver Fixierung nicht markieren
+- Eigentümer › Setzen: Eigentümer anklicken, auch auf einem anderen Blatt
+- Rastergitter besser sichtbar
 
 ## [0.1.1]
 
