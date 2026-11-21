@@ -283,7 +283,14 @@ fn schreibe_zcn(b: &mut Block, k: &Kind) {
             set_byte(b, 0x24, *header as u8);
             set_byte(b, 0x25, !*fixed_w as u8);
             set_byte(b, 0x26, *art);
-            set_kid(b, "STR", tabellen_str(*rows, *cols, cells), None);
+            // Das Original schreibt den STR nur bei nicht leerem Inhalt (Speicherroutine 0x424db5); ein leerer STR
+            // ließ es die Tabelle als fehlerhaft melden (Gegenprobe 21.11.2026, Tabellen ohne Zellen)
+            let d = tabellen_str(*rows, *cols, cells);
+            if d.is_empty() {
+                b.kids.retain(|k| !k.is("STR"));
+            } else {
+                set_kid(b, "STR", d, None);
+            }
         }
         _ => {}
     }

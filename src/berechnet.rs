@@ -16,7 +16,9 @@
 //! - Platz je Blatt: Tabellen von höchstens 80 mm Breite, Zeilen 5 mm, je Tabelle eine Kopfzeile; reicht das
 //!   Inhaltsverzeichnis nicht, stehen zwei Tabellen nebeneinander. „Zusammenhängende Blätter ergeben eine
 //!   zusammenhängende Liste“ (Anleitung 4.2); fehlende Folgeblätter legt `folgeblaetter_anlegen` an.
-//! Nicht belegt (kein Ausdruck vorhanden): die genauen Spaltenbreiten – sie sind hier geschätzt.
+//! Spaltenbreiten, Ränder und Zeilenhöhe (5 mm) vermessen an Bildschirmaufnahmen des Originals (21.11.2026).
+//! Offen: Das Original zeichnet den Rahmen der Listenblätter 10 mm unter der Blattkante, der Nachbau wie bei
+//! Schaltplänen nach BLT Feld 24 (bei 1800 also 20 mm).
 
 use crate::canvas::{bmk_ctx, draw_grid, natural_key, times, DrawCtx};
 use crate::model::*;
@@ -24,7 +26,9 @@ use crate::symbols;
 use eframe::egui::{Align2, Color32, Stroke};
 
 /// Zeilenhöhe der Listenblätter in mm (wie die Sicherungsübersicht im Original-Ausdruck)
-pub const ZEILE: f32 = 4.95;
+pub const ZEILE: f32 = 5.0;
+/// Abstand der Listentabellen vom oberen Rahmen in mm (Aufnahmen des Originals: 10,1 mm)
+const OBEN: f32 = 10.0;
 
 pub const KOPF_INHALT: [&str; 2] = ["Seite", "Bezeichnung"];
 pub const KOPF_QUER: [&str; 2] = ["Objekt", "Blatt/Pfad"];
@@ -200,7 +204,7 @@ pub fn quer_zellen(rows: &[Vec<String>], ab: u32, kopf: bool) -> Vec<Vec<String>
 /// Aufteilung eines Listenblattes: Anzahl Tabellen nebeneinander und Zeilen je Tabelle (mit Kopfzeile).
 fn aufteilung(p: &Project, sheet: &Sheet, eintraege: usize) -> (usize, usize) {
     let (fx0, fy0, fx1, fy1) = sheet.frame();
-    let zeilen = (((fy1 - p.title_h() - 3.0) - (fy0 + 9.5)) / ZEILE).floor().max(2.0) as usize;
+    let zeilen = (((fy1 - p.title_h() - 3.0) - (fy0 + OBEN)) / ZEILE).floor().max(2.0) as usize;
     let max_t = (((fx1 - fx0) - 12.0) / 80.0).floor().max(1.0) as usize;
     let t = match sheet.blattart() {
         2 => (sheet.zusatz.max(1) as usize).min(max_t),
@@ -215,15 +219,21 @@ type Liste = (Vec<&'static str>, Vec<f32>, Vec<Vec<String>>);
 /// Kopf, Spaltenbreiten (ohne die letzte, die den Rest füllt) und Zeilen eines Listenblattes.
 fn liste(p: &Project, sheet: &Sheet, a: &Anlage) -> Option<Liste> {
     Some(match sheet.blattart() {
-        1 => (KOPF_INHALT.to_vec(), vec![20.0], inhalt(a).into_iter().map(|(_, r)| r).collect()),
-        2 => (KOPF_QUER.to_vec(), vec![32.0], querverweise(a)),
+        1 => (KOPF_INHALT.to_vec(), vec![13.0], inhalt(a).into_iter().map(|(_, r)| r).collect()),
+        2 => (KOPF_QUER.to_vec(), vec![29.6], querverweise(a)),
         6 => {
             let (head, rows) = stueckliste(p, a, sheet.zusatz);
-            let w = match sheet.zusatz {
-                1 => vec![55.0, 14.0, 50.0, 45.0, 40.0],
-                2 => vec![45.0, 60.0, 50.0, 45.0],
-                _ => vec![70.0, 15.0, 50.0, 45.0],
-            };
+            // feste Breite je Spalte (Bildschirmaufnahmen des Originals vom 21.11.2026), die letzte füllt den Rest
+            let w = head[..head.len() - 1]
+                .iter()
+                .map(|h| match *h {
+                    "Betriebsmittelkennzeichen" => 56.8,
+                    "Menge" => 16.8,
+                    "Bezeichnung" => 28.9,
+                    "Typnummer" => 27.7,
+                    _ => 23.1,
+                })
+                .collect();
             (head, w, rows)
         }
         _ => return None,
@@ -298,11 +308,12 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) -> bool {
     let (fx0, fy0, fx1, _) = sheet.frame();
     let stroke = Stroke::new((0.18 * z).max(1.0), Color32::BLACK);
     let (tabellen, n) = aufteilung(dc.project, sheet, rows.len());
-    let (x0, x1, y0) = (fx0 + 4.5, fx1 - 7.5, fy0 + 9.5);
-    let abstand = 5.0;
+    // Lage wie in den Bildschirmaufnahmen des Originals: 5 mm vom Rahmen links, rechts 7,2 mm (Artikelliste) bzw.
+    // 5,3 mm, 10 mm unter dem Rahmen; mehrere Tabellen teilen die Breite mit 2,4 mm Abstand
+    let rechts = if sheet.blattart() == 6 { 7.2 } else { 5.3 };
+    let (x0, x1, y0) = (fx0 + 5.0, fx1 - rechts, fy0 + OBEN);
+    let abstand = 2.4;
     let tw = ((x1 - x0) - abstand * (tabellen - 1) as f32) / tabellen as f32;
-    // Stückliste über die ganze Breite, Inhaltsverzeichnis/Querverweise höchstens 80 mm je Tabelle wie im Original
-    let tw = if sheet.blattart() == 6 { tw } else { tw.min(80.0) };
     let mut w: Vec<f32> = widths.iter().map(|v| v.min(tw * 0.6)).collect();
     w.push((tw - w.iter().sum::<f32>()).max(10.0));
     let off = crate::klemmplan::folge_index(anlage, sheet) * je_blatt(dc.project, sheet, rows.len());
