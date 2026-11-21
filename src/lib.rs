@@ -10,6 +10,7 @@ pub mod dialoge3;
 pub mod druck;
 pub mod dxf;
 pub mod epr;
+pub mod epr_neu;
 pub mod epr_write;
 pub mod eprfile;
 pub mod extra;
