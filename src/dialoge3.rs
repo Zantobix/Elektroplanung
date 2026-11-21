@@ -368,7 +368,7 @@ impl App {
         // Tabelle › Daten „Inhaltsverzeichnis“: Blätter der aktuellen Anlage (inhalt.rs)
         let toc = if matches!(d, Dlg3::Tab { art: 1, .. }) { crate::inhalt::blaetter(&self.project, self.cur().map(|r| r.anlage).unwrap_or(0)) } else { vec![] };
         // … bzw. „Querverweise“ (berechnet.rs); auf dem Blatt wird beides bei jedem Zeichnen neu berechnet
-        let qv = if matches!(d, Dlg3::Tab { art: 2, .. }) { self.cur().and_then(|r| self.project.anlagen.get(r.anlage)).map(crate::berechnet::querverweise).unwrap_or_default() } else { vec![] };
+        let qv = if matches!(d, Dlg3::Tab { art: 2, .. }) { self.cur().and_then(|r| self.project.anlagen.get(r.anlage)).map(|a| crate::berechnet::querverweise(&self.project, a)).unwrap_or_default() } else { vec![] };
         let closed = tool_window(ctx, "dlg3", title, size, egui::Order::Middle, |ui| {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 5.0);
             match &mut d {

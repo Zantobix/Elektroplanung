@@ -470,13 +470,14 @@ pub fn natural_key(s: &str) -> Vec<(String, u64)> {
 
 /// Zeilen der Sicherungsübersicht einer Anlage: alle Symbole mit Freigabe "Sicherungsübersicht"
 /// (VSY Feld 20 Bit 24), sortiert nach Kennzeichen – Spalten Sicherung, Wert, Funktion (Original-Ausdruck Seite 5).
+/// Kennzeichen = angezeigte BMK (mit Eigentümer in der Anlage dessen, `eigentuemer::anzeige_in`).
 pub fn fuse_rows(anlage: &Anlage) -> Vec<[String; 3]> {
     let mut rows: Vec<[String; 3]> = vec![];
     for s in &anlage.sheets {
         let ctx = bmk_ctx(anlage, s);
         for o in &s.objects {
-            if let Kind::Symbol { bmk, value, ext, pos, .. } = &o.kind {
-                let bmk = symbols::display_bmk(bmk, ext.counter, &ctx);
+            if let Kind::Symbol { value, ext, pos, .. } = &o.kind {
+                let bmk = crate::eigentuemer::anzeige_in(std::slice::from_ref(anlage), o, &ctx);
                 if ext.sicherung && !bmk.is_empty() && !rows.iter().any(|r| r[0] == bmk) {
                     // Funktion des Symbols, sonst die Pfadbeschreibung seines Strompfades (Anleitung 4.2.5)
                     let f = if ext.funktion.trim().is_empty() { crate::klemmplan::pfad_text(s, pos.x) } else { ext.funktion.clone() };
@@ -673,7 +674,7 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             let (mn, mx) = norm_rect(*a, *b);
             let rows = (*rows).max(1);
             // Daten „Inhaltsverzeichnis“/„Querverweise“: Inhalt bei jedem Zeichnen aus dem Projekt (berechnet.rs)
-            let berechnet = dc.anlage.and_then(|an| crate::berechnet::tabelle(an, *art, *ab, *header, rows));
+            let berechnet = dc.anlage.and_then(|an| crate::berechnet::tabelle(dc.project, an, *art, *ab, *header, rows));
             let (cols, cells) = match &berechnet {
                 Some((c, z)) => (*c, z),
                 None => (*cols, cells),
