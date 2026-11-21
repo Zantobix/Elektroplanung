@@ -1,118 +1,106 @@
-//! Vektor-Icons der Werkzeugleisten: eigene SVG-Grafiken aus resources/icons (erzeugt mit
-//! tools/icons_erzeugen.py), gezeichnet über egui_extras in jeder Größe scharf.
+//! Vektor-Icons: eigene SVG-Grafiken aus resources/icons (erzeugt mit tools/icons_erzeugen.py), gezeichnet über
+//! egui_extras in jeder Größe scharf. Einheitliches System: je Objektart ein Grund-Icon (`obj_*`, hier die deutschen
+//! Namen wie `Klemmleiste`), das Werkzeugleisten, Projektbaum und Dialoge gemeinsam nutzen; „Neu“-Knöpfe zeigen
+//! dasselbe Grund-Icon mit grünem Plus unten rechts, „Bearbeiten“ mit Stift, „Entfernen“ mit rotem Minus.
 
 use eframe::egui::{self, Color32, Rect};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Icon {
-    NewProject,
-    Open,
-    Save,
-    SaveProject,
-    Print,
-    Cut,
-    Copy,
-    Paste,
-    Undo,
-    Redo,
-    NewPen,
-    Zoom,
-    Grid,
-    PathAlign,
-    AutoConn,
-    SizeFrame,
-    Fix,
-    NewSheet,
-    NewPotential,
-    NewBusbar,
-    Rotate,
-    MirrorV,
-    MirrorH,
-    Group,
-    Ungroup,
-    NewLeitung,
-    NewKlemme,
-    Select,
-    Klemmstelle,
-    Line,
-    Curve,
-    Rect,
-    Triangle,
-    Circle,
-    Text,
-    TextBox,
-    Table,
-    Image,
-    CaseSensitive,
-    Find,
-    NewPage,
-    NewOption,
-    Properties,
-    Apply,
-    Cancel,
-    OptionToggle,
-    AlignHor,
-    AlignVer,
-    SpaceHor,
-    SpaceVer,
-    PartList,
+macro_rules! icons {
+    ($($v:ident => $f:literal,)*) => {
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        pub enum Icon {
+            $($v,)*
+        }
+
+        /// Alle Icons (für Tests und Übersichten).
+        pub const ALLE: &[Icon] = &[$(Icon::$v,)*];
+
+        /// SVG-Quelle eines Icons (im Programm eingebettet).
+        pub fn source(icon: Icon) -> egui::ImageSource<'static> {
+            match icon {
+                $(Icon::$v => egui::include_image!(concat!("../resources/icons/", $f, ".svg")),)*
+            }
+        }
+
+        /// Dateiname (ohne .svg) eines Icons.
+        pub fn datei(icon: Icon) -> &'static str {
+            match icon {
+                $(Icon::$v => $f,)*
+            }
+        }
+    };
 }
 
-/// SVG-Quelle eines Icons (im Programm eingebettet).
-pub fn source(icon: Icon) -> egui::ImageSource<'static> {
-    match icon {
-        Icon::NewProject => egui::include_image!("../resources/icons/new_project.svg"),
-        Icon::Open => egui::include_image!("../resources/icons/open.svg"),
-        Icon::Save => egui::include_image!("../resources/icons/save.svg"),
-        Icon::SaveProject => egui::include_image!("../resources/icons/save_project.svg"),
-        Icon::Print => egui::include_image!("../resources/icons/print.svg"),
-        Icon::Cut => egui::include_image!("../resources/icons/cut.svg"),
-        Icon::Copy => egui::include_image!("../resources/icons/copy.svg"),
-        Icon::Paste => egui::include_image!("../resources/icons/paste.svg"),
-        Icon::Undo => egui::include_image!("../resources/icons/undo.svg"),
-        Icon::Redo => egui::include_image!("../resources/icons/redo.svg"),
-        Icon::NewPen => egui::include_image!("../resources/icons/new_pen.svg"),
-        Icon::Zoom => egui::include_image!("../resources/icons/zoom.svg"),
-        Icon::Grid => egui::include_image!("../resources/icons/grid.svg"),
-        Icon::PathAlign => egui::include_image!("../resources/icons/path_align.svg"),
-        Icon::AutoConn => egui::include_image!("../resources/icons/auto_conn.svg"),
-        Icon::SizeFrame => egui::include_image!("../resources/icons/size_frame.svg"),
-        Icon::Fix => egui::include_image!("../resources/icons/fix.svg"),
-        Icon::NewSheet => egui::include_image!("../resources/icons/new_sheet.svg"),
-        Icon::NewPotential => egui::include_image!("../resources/icons/new_potential.svg"),
-        Icon::NewBusbar => egui::include_image!("../resources/icons/new_busbar.svg"),
-        Icon::Rotate => egui::include_image!("../resources/icons/rotate.svg"),
-        Icon::MirrorV => egui::include_image!("../resources/icons/mirror_v.svg"),
-        Icon::MirrorH => egui::include_image!("../resources/icons/mirror_h.svg"),
-        Icon::Group => egui::include_image!("../resources/icons/group.svg"),
-        Icon::Ungroup => egui::include_image!("../resources/icons/ungroup.svg"),
-        Icon::NewLeitung => egui::include_image!("../resources/icons/new_leitung.svg"),
-        Icon::NewKlemme => egui::include_image!("../resources/icons/new_klemme.svg"),
-        Icon::Select => egui::include_image!("../resources/icons/select.svg"),
-        Icon::Klemmstelle => egui::include_image!("../resources/icons/klemmstelle.svg"),
-        Icon::Line => egui::include_image!("../resources/icons/line.svg"),
-        Icon::Curve => egui::include_image!("../resources/icons/curve.svg"),
-        Icon::Rect => egui::include_image!("../resources/icons/rect.svg"),
-        Icon::Triangle => egui::include_image!("../resources/icons/triangle.svg"),
-        Icon::Circle => egui::include_image!("../resources/icons/circle.svg"),
-        Icon::Text => egui::include_image!("../resources/icons/text.svg"),
-        Icon::TextBox => egui::include_image!("../resources/icons/text_box.svg"),
-        Icon::Table => egui::include_image!("../resources/icons/table.svg"),
-        Icon::Image => egui::include_image!("../resources/icons/image.svg"),
-        Icon::CaseSensitive => egui::include_image!("../resources/icons/case_sensitive.svg"),
-        Icon::Find => egui::include_image!("../resources/icons/find.svg"),
-        Icon::NewPage => egui::include_image!("../resources/icons/new_page.svg"),
-        Icon::NewOption => egui::include_image!("../resources/icons/new_option.svg"),
-        Icon::Properties => egui::include_image!("../resources/icons/properties.svg"),
-        Icon::Apply => egui::include_image!("../resources/icons/apply.svg"),
-        Icon::Cancel => egui::include_image!("../resources/icons/cancel.svg"),
-        Icon::OptionToggle => egui::include_image!("../resources/icons/option_toggle.svg"),
-        Icon::AlignHor => egui::include_image!("../resources/icons/align_hor.svg"),
-        Icon::AlignVer => egui::include_image!("../resources/icons/align_ver.svg"),
-        Icon::SpaceHor => egui::include_image!("../resources/icons/space_hor.svg"),
-        Icon::SpaceVer => egui::include_image!("../resources/icons/space_ver.svg"),
-        Icon::PartList => egui::include_image!("../resources/icons/part_list.svg"),
-    }
+icons! {
+    NewProject => "new_projekt",
+    Open => "open",
+    Save => "save",
+    SaveProject => "save_project",
+    Print => "print",
+    Cut => "cut",
+    Copy => "copy",
+    Paste => "paste",
+    Undo => "undo",
+    Redo => "redo",
+    Delete => "delete",
+    Zoom => "zoom",
+    Grid => "grid",
+    PathAlign => "path_align",
+    AutoConn => "auto_conn",
+    SizeFrame => "size_frame",
+    Fix => "fix",
+    Rotate => "rotate",
+    MirrorV => "mirror_v",
+    MirrorH => "mirror_h",
+    Group => "group",
+    Ungroup => "ungroup",
+    Select => "select",
+    Line => "line",
+    Curve => "curve",
+    Rect => "rect",
+    Triangle => "triangle",
+    Circle => "circle",
+    CaseSensitive => "case_sensitive",
+    Find => "find",
+    Apply => "apply",
+    Cancel => "cancel",
+    OptionToggle => "option_toggle",
+    AlignHor => "align_hor",
+    AlignVer => "align_ver",
+    SpaceHor => "space_hor",
+    SpaceVer => "space_ver",
+    Projekt => "obj_projekt",
+    Blatt => "obj_blatt",
+    Anlage => "obj_anlage",
+    Potential => "obj_potential",
+    Sammelschiene => "obj_sammelschiene",
+    Leitung => "obj_leitung",
+    Klemmleiste => "obj_klemmleiste",
+    Klemme => "obj_klemme",
+    Stift => "obj_stift",
+    Symbol => "obj_symbol",
+    Bauteil => "obj_bauteil",
+    Platzhalter => "obj_platzhalter",
+    Bild => "obj_bild",
+    Tabelle => "obj_tabelle",
+    Text => "obj_text",
+    TextBox => "obj_textbox",
+    Seite => "obj_seite",
+    Option => "obj_option",
+    Buch => "obj_buch",
+    Buecher => "obj_buecher",
+    NewSheet => "new_blatt",
+    NewPotential => "new_potential",
+    NewBusbar => "new_sammelschiene",
+    NewLeitung => "new_leitung",
+    NewKlemmleiste => "new_klemmleiste",
+    NewPen => "new_stift",
+    NewPage => "new_seite",
+    NewOption => "new_option",
+    EditSammelschiene => "edit_sammelschiene",
+    EditBauteil => "edit_bauteil",
+    EditSymbol => "edit_symbol",
+    DelZeile => "del_zeile",
 }
 
 /// Icon in `r` zeichnen; gesperrte Knöpfe blass.
@@ -124,4 +112,60 @@ pub fn draw(ui: &egui::Ui, r: Rect, icon: Icon, enabled: bool) {
 /// Icon als Bild für Knöpfe (`egui::Button::image`).
 pub fn image(icon: Icon, size: f32) -> egui::Image<'static> {
     egui::Image::new(source(icon)).fit_to_exact_size(egui::Vec2::splat(size))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(i: Icon) -> String {
+        match source(i) {
+            egui::ImageSource::Bytes { bytes, .. } => String::from_utf8_lossy(bytes.as_ref()).to_string(),
+            _ => panic!("{i:?} nicht eingebettet"),
+        }
+    }
+
+    #[test]
+    fn alle_eingebettet_im_einheitlichen_raster() {
+        for &i in ALLE {
+            let t = text(i);
+            assert!(t.starts_with("<svg") && t.contains(r#"viewBox="0 0 24 24""#), "{i:?}");
+        }
+    }
+
+    /// „Neu“-Knöpfe = Grund-Icon + Abzeichen: die Datei beginnt mit dem Inhalt des Grund-Icons.
+    #[test]
+    fn neu_knoepfe_zeigen_das_grund_icon() {
+        let inhalt = |i: Icon| {
+            let t = text(i);
+            let a = t.find('>').unwrap() + 1;
+            t[a..t.rfind("</svg>").unwrap()].to_string()
+        };
+        for (neu, grund) in [
+            (Icon::NewProject, Icon::Projekt),
+            (Icon::NewSheet, Icon::Blatt),
+            (Icon::NewPotential, Icon::Potential),
+            (Icon::NewBusbar, Icon::Sammelschiene),
+            (Icon::NewLeitung, Icon::Leitung),
+            (Icon::NewKlemmleiste, Icon::Klemmleiste),
+            (Icon::NewPen, Icon::Stift),
+            (Icon::NewPage, Icon::Seite),
+            (Icon::NewOption, Icon::Option),
+            (Icon::EditSammelschiene, Icon::Sammelschiene),
+            (Icon::EditBauteil, Icon::Bauteil),
+            (Icon::EditSymbol, Icon::Symbol),
+            (Icon::DelZeile, Icon::Tabelle),
+        ] {
+            let (n, g) = (inhalt(neu), inhalt(grund));
+            assert!(n.starts_with(&g) && n.len() > g.len(), "{neu:?} enthält nicht {grund:?}");
+        }
+    }
+
+    #[test]
+    fn dateinamen_eindeutig() {
+        let mut n: Vec<&str> = ALLE.iter().map(|&i| datei(i)).collect();
+        n.sort();
+        n.dedup();
+        assert_eq!(n.len(), ALLE.len());
+    }
 }

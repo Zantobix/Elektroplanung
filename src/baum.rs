@@ -1,12 +1,14 @@
-//! Projektexplorer: Symbole der Baumknoten (eigene SVG-Grafiken `resources/icons/tree_*.svg`, erzeugt mit
+//! Projektexplorer: Symbole der Baumknoten (die gemeinsamen Grund-Icons aus `icons.rs`, erzeugt mit
 //! tools/icons_erzeugen.py) und das Suchfeld darunter (Original: Komponente TSuchfeld mit Verlaufsliste,
 //! Knopf „Aa“ für Groß-/Kleinschreibung und Fernglas für „weitersuchen“).
 
 use crate::app::TNode;
+use crate::icons::Icon;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 
-/// Werte für `TNode::icon`. 0–4 behalten ihre bisherige Bedeutung (Gruppe = Buch, Favoriten = Buch mit Stern);
-/// Blätter und Anlagen haben wie im Original kein Symbol.
+/// Werte für `TNode::icon`. 0–4 behalten ihre bisherige Bedeutung (Gruppe = Buch, Favoriten = Buch mit Stern).
+/// Gruppenknoten und Anlagen tragen das Grund-Icon ihrer Objektart (dasselbe wie in den Werkzeugleisten),
+/// Einzeleinträge wie im Original keins.
 pub mod ico {
     pub const KEINS: u8 = 0;
     pub const BUCH: u8 = 1;
@@ -25,63 +27,26 @@ pub mod ico {
     pub const BLAETTER: u8 = 14;
 }
 
-/// Grafik eines Baumknotens.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum BaumIcon {
-    Potentiale,
-    Leitungen,
-    Objektkatalog,
-    Stifte,
-    Grafiken,
-    Bauteile,
-    Platzhalter,
-    Sammelschienen,
-    Klemmleisten,
-    Blaetter,
-    /// Gruppe der Bibliothek, zugeklappt
-    Buch,
-    /// Gruppe der Bibliothek, aufgeklappt (Bücherstapel)
-    Buecher,
-}
-
 /// Symbol zu einem Knotenwert; `offen` = Knoten aufgeklappt (Bibliotheksgruppen wechseln dann das Bild).
 /// Zweiter Wert: zusätzlich den Favoriten-Stern zeichnen.
-pub fn icon_fuer(code: u8, offen: bool) -> (Option<BaumIcon>, bool) {
-    use BaumIcon::*;
-    let buch = if offen { Buecher } else { Buch };
+pub fn icon_fuer(code: u8, offen: bool) -> (Option<Icon>, bool) {
+    let buch = if offen { Icon::Buecher } else { Icon::Buch };
     let i = match code {
         ico::BUCH | ico::FAVORITEN => Some(buch),
-        ico::POTENTIALE => Some(Potentiale),
-        ico::LEITUNGEN => Some(Leitungen),
-        ico::OBJEKTKATALOG => Some(Objektkatalog),
-        ico::STIFTE => Some(Stifte),
-        ico::GRAFIKEN => Some(Grafiken),
-        ico::BAUTEILE => Some(Bauteile),
-        ico::PLATZHALTER => Some(Platzhalter),
-        ico::SAMMELSCHIENEN => Some(Sammelschienen),
-        ico::KLEMMLEISTEN => Some(Klemmleisten),
-        ico::BLAETTER => Some(Blaetter),
+        ico::ANLAGE => Some(Icon::Anlage),
+        ico::POTENTIALE => Some(Icon::Potential),
+        ico::LEITUNGEN => Some(Icon::Leitung),
+        ico::OBJEKTKATALOG => Some(Icon::Symbol),
+        ico::STIFTE => Some(Icon::Stift),
+        ico::GRAFIKEN => Some(Icon::Bild),
+        ico::BAUTEILE => Some(Icon::Bauteil),
+        ico::PLATZHALTER => Some(Icon::Platzhalter),
+        ico::SAMMELSCHIENEN => Some(Icon::Sammelschiene),
+        ico::KLEMMLEISTEN => Some(Icon::Klemmleiste),
+        ico::BLAETTER => Some(Icon::Blatt),
         _ => None,
     };
     (i, code == ico::FAVORITEN)
-}
-
-/// SVG-Quelle (im Programm eingebettet).
-pub fn source(i: BaumIcon) -> egui::ImageSource<'static> {
-    match i {
-        BaumIcon::Potentiale => egui::include_image!("../resources/icons/tree_potentiale.svg"),
-        BaumIcon::Leitungen => egui::include_image!("../resources/icons/tree_leitungen.svg"),
-        BaumIcon::Objektkatalog => egui::include_image!("../resources/icons/tree_objektkatalog.svg"),
-        BaumIcon::Stifte => egui::include_image!("../resources/icons/tree_stifte.svg"),
-        BaumIcon::Grafiken => egui::include_image!("../resources/icons/tree_grafiken.svg"),
-        BaumIcon::Bauteile => egui::include_image!("../resources/icons/tree_bauteile.svg"),
-        BaumIcon::Platzhalter => egui::include_image!("../resources/icons/tree_platzhalter.svg"),
-        BaumIcon::Sammelschienen => egui::include_image!("../resources/icons/tree_sammelschienen.svg"),
-        BaumIcon::Klemmleisten => egui::include_image!("../resources/icons/tree_klemmleisten.svg"),
-        BaumIcon::Blaetter => egui::include_image!("../resources/icons/tree_blaetter.svg"),
-        BaumIcon::Buch => egui::include_image!("../resources/icons/tree_buch.svg"),
-        BaumIcon::Buecher => egui::include_image!("../resources/icons/tree_buecher.svg"),
-    }
 }
 
 /// Größe der Baumsymbole in Pixeln (wie im Original 16 × 16).
@@ -93,7 +58,7 @@ pub fn zeichne(ui: &egui::Ui, code: u8, offen: bool, x: f32, mid: f32) -> f32 {
     let mut w = 0.0;
     if let Some(i) = icon {
         let r = Rect::from_min_size(Pos2::new(x, (mid - GROESSE / 2.0).round()), Vec2::splat(GROESSE));
-        egui::Image::new(source(i)).fit_to_exact_size(r.size()).paint_at(ui, r);
+        egui::Image::new(crate::icons::source(i)).fit_to_exact_size(r.size()).paint_at(ui, r);
         w += GROESSE + 1.0;
     }
     if stern {
@@ -287,25 +252,14 @@ mod tests {
 
     #[test]
     fn symbole_der_knoten() {
-        assert_eq!(icon_fuer(ico::BUCH, false), (Some(BaumIcon::Buch), false));
-        assert_eq!(icon_fuer(ico::BUCH, true), (Some(BaumIcon::Buecher), false));
-        assert_eq!(icon_fuer(ico::FAVORITEN, true), (Some(BaumIcon::Buecher), true));
+        assert_eq!(icon_fuer(ico::BUCH, false), (Some(Icon::Buch), false));
+        assert_eq!(icon_fuer(ico::BUCH, true), (Some(Icon::Buecher), false));
+        assert_eq!(icon_fuer(ico::FAVORITEN, true), (Some(Icon::Buecher), true));
         assert_eq!(icon_fuer(ico::BLATT, false), (None, false));
-        assert_eq!(icon_fuer(ico::ANLAGE, false), (None, false));
-        assert_eq!(icon_fuer(ico::KLEMMLEISTEN, false), (Some(BaumIcon::Klemmleisten), false));
-    }
-
-    #[test]
-    fn svg_eingebettet() {
-        use BaumIcon::*;
-        for i in [Potentiale, Leitungen, Objektkatalog, Stifte, Grafiken, Bauteile, Platzhalter, Sammelschienen, Klemmleisten, Blaetter, Buch, Buecher] {
-            match source(i) {
-                egui::ImageSource::Bytes { bytes, .. } => {
-                    let t = String::from_utf8_lossy(bytes.as_ref()).to_string();
-                    assert!(t.starts_with("<svg") && t.contains(r#"viewBox="0 0 16 16""#), "{i:?}");
-                }
-                _ => panic!("{i:?} nicht eingebettet"),
-            }
-        }
+        assert_eq!(icon_fuer(ico::ANLAGE, false), (Some(Icon::Anlage), false));
+        // dieselben Grund-Icons wie die „Neu“-Knöpfe der Werkzeugleiste
+        assert_eq!(icon_fuer(ico::KLEMMLEISTEN, false), (Some(Icon::Klemmleiste), false));
+        assert_eq!(icon_fuer(ico::SAMMELSCHIENEN, false), (Some(Icon::Sammelschiene), false));
+        assert_eq!(icon_fuer(ico::BLAETTER, true), (Some(Icon::Blatt), false));
     }
 }

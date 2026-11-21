@@ -377,7 +377,7 @@ impl App {
                         lbl(ui, 76.0, "S-Schiene");
                         combo(ui, "sms", sliste, sel, 150.0);
                         // Knopf "Bearbeiten" (SammelS1NeuClick): Einstellungen der gewählten Schiene
-                        let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::PartList, 20.0));
+                        let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::EditSammelschiene, 20.0));
                         if ui.add(btn.min_size(Vec2::new(31.0, 24.0))).on_hover_text("Bearbeiten").clicked() {
                             rail_edit = sliste.get(*sel).cloned();
                         }
@@ -484,16 +484,16 @@ impl App {
                     ui.horizontal(|ui| {
                         lbl(ui, 50.0, "Daten");
                         combo(ui, "tart", &strs(TAB_ARTEN), art, 130.0);
-                        if ui.small_button("📂").on_hover_text("Liste laden").clicked() {
+                        if ui.add(egui::Button::image(crate::icons::image(crate::icons::Icon::Open, 16.0))).on_hover_text("Liste laden").clicked() {
                             act = 1;
                         }
-                        if ui.small_button("💾").on_hover_text("Liste speichern").clicked() {
+                        if ui.add(egui::Button::image(crate::icons::image(crate::icons::Icon::Save, 16.0))).on_hover_text("Liste speichern").clicked() {
                             act = 2;
                         }
-                        if ui.small_button("🗑").on_hover_text("Alles löschen").clicked() {
+                        if ui.add(egui::Button::image(crate::icons::image(crate::icons::Icon::Delete, 16.0))).on_hover_text("Alles löschen").clicked() {
                             act = 3;
                         }
-                        if ui.small_button("➖").on_hover_text("Zeile löschen").clicked() {
+                        if ui.add(egui::Button::image(crate::icons::image(crate::icons::Icon::DelZeile, 16.0))).on_hover_text("Zeile löschen").clicked() {
                             act = 4;
                         }
                     });
@@ -601,7 +601,7 @@ impl App {
                         lbl(ui, 76.0, "Bauteil");
                         let mut bt = self.project.part_of.get(id).and_then(|i| self.project.bauteile.get(*i)).map(|b| b.name.clone()).unwrap_or_default();
                         ui.add_enabled(false, egui::TextEdit::singleline(&mut bt).desired_width(150.0).background_color(egui::Color32::from_rgb(255, 255, 225)));
-                        let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::PartList, 20.0));
+                        let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::EditBauteil, 20.0));
                         if ui.add(btn.min_size(Vec2::new(31.0, 24.0))).on_hover_text("Bearbeiten").clicked() {
                             part_edit = Some(*id);
                         }

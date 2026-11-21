@@ -571,7 +571,7 @@ impl App {
                 }
             }
             crate::view::sep(ui, 4.0);
-            if gbtn(ui, I::Properties, "Symboleigenschaften", true, false).clicked() {
+            if gbtn(ui, I::EditSymbol, "Symboleigenschaften", true, false).clicked() {
                 self.open_sym_eigenschaften();
             }
             crate::view::sep(ui, 4.0);
