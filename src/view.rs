@@ -228,7 +228,7 @@ impl App {
             if kr.inner {
                 self.klemme = ki;
             }
-            if tool_button(ui, Icon::NewKlemme, "Neue Klemmleiste", true, false).clicked() {
+            if tool_button(ui, Icon::NewKlemmleiste, "Neue Klemmleiste", true, false).clicked() {
                 self.new_klemmleiste();
             }
         });
@@ -237,7 +237,7 @@ impl App {
     fn left_toolbar(&mut self, ui: &mut egui::Ui) {
         let tools = [
             (Tool::Select, Icon::Select, "Auswahl"),
-            (Tool::Klemmstelle, Icon::Klemmstelle, "Neue Klemmstelle"),
+            (Tool::Klemmstelle, Icon::Klemme, "Neue Klemmstelle"),
             (Tool::Line, Icon::Line, "Neue Linie"),
             (Tool::Curve, Icon::Curve, "Neue Kurve"),
             (Tool::Rect, Icon::Rect, "Neues Rechteck"),
@@ -245,8 +245,8 @@ impl App {
             (Tool::Circle, Icon::Circle, "Neuer Kreis"),
             (Tool::Text, Icon::Text, "Neuer Text"),
             (Tool::TextBox, Icon::TextBox, "Neue Textbox"),
-            (Tool::Table, Icon::Table, "Neue Tabelle"),
-            (Tool::Image, Icon::Image, "Neues Bild"),
+            (Tool::Table, Icon::Tabelle, "Neue Tabelle"),
+            (Tool::Image, Icon::Bild, "Neues Bild"),
         ];
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
@@ -1837,10 +1837,11 @@ impl App {
                     self.save_titleblock_default();
                 }
                 ui.separator();
-                // Reihenfolge wie im Original-Menü: Export › PDF (Beta), Bitmapexport, DXF Import
+                // Reihenfolge wie im Original-Menü: Export › PDF (dort „PDF (Beta)“; hier geprüft, siehe CHANGELOG),
+                // Bitmapexport, DXF Import
                 ui.menu_button("Export", |ui| {
                     // wie das Original (Export.dll): Exporteinstellung mit Projektliste
-                    if ui.button("PDF (Beta)").clicked() {
+                    if ui.button("PDF").clicked() {
                         self.open_pexport();
                     }
                 });

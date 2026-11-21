@@ -147,9 +147,10 @@ Quelle: Elektroplanung.exe über REA (`execute_rizin_command`), Kennungstabelle 
   breit) liegt zwischen der Lage und 2,4 mm in Richtung Feld 14; ohne Bit 0 zeigt die Spitze dorthin, mit Bit 0 liegt
   sie an der Lage und zeigt zurück. Vermessen an allen 13 Verweisen der Installationspläne (Ausdruck Seiten 1–4,
   Stand 21.11.2026; die frühere Deutung „Bit 0 hochkant, 0x0101FFFF = Querverweis mit versetzter Richtung“ ist ersetzt).
-- Werkzeugleisten-Bilder: eigene Vektor-Icons (resources/icons, erzeugt mit tools/icons_erzeugen.py); Reihenfolge der Knöpfe wie in TFORM1
+- Werkzeugleisten-Bilder: eigene Vektor-Icons (resources/icons, erzeugt mit tools/icons_erzeugen.py; je Objektart ein Grund-Icon
+  `obj_*`, „Neu“ = Grund-Icon + grünes Plus `new_*`, „Bearbeiten“ + Stift `edit_*`, auch im Projektbaum); Reihenfolge der Knöpfe wie in TFORM1
   (z. B. 0 Auswahl, 14 Neues Projekt, 15 Laden, 38 Gitter, 42/43 Gruppieren/Auflösen).
-- Menü Datei des Originals: … Schriftfeld speichern | Export › PDF (Beta), Bitmapexport, DXF Import | Beenden (Menü-IDs über Win32 ausgelesen).
+- Menü Datei des Originals: … Schriftfeld speichern | Export › PDF (Beta) (im Nachbau „PDF“), Bitmapexport, DXF Import | Beenden (Menü-IDs über Win32 ausgelesen).
 - Startparameter: Das Original öffnet keine Datei aus der Kommandozeile (immer "Neues Projekt").
 
 ## Nachtrag 18.11.2026 (2) – Eigenschaften, Kontextmenüs, Dekompilierung

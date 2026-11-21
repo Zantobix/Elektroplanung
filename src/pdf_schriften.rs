@@ -51,6 +51,18 @@ impl Schriften {
         if crate::schriften::ist_times(name) {
             return None;
         }
+        self.laden(name, bold, italic)
+    }
+
+    /// Eingebettete Ersatzschrift für ein Zeichen, das die Standardschriften (WinAnsi) nicht kennen (z. B. Ω, →, ✓):
+    /// Times New Roman, sonst Schriften mit vielen Symbolen.
+    pub fn ersatz(&mut self, c: char, bold: bool, italic: bool) -> Option<usize> {
+        ["Times New Roman", "Segoe UI Symbol", "DejaVu Sans", "Arial Unicode MS"]
+            .iter()
+            .find_map(|n| self.laden(n, bold, italic).filter(|&k| self.glyphe(k, c).is_some()))
+    }
+
+    fn laden(&mut self, name: &str, bold: bool, italic: bool) -> Option<usize> {
         let key = (name.trim().to_ascii_lowercase(), bold, italic);
         if let Some(k) = self.nach_name.get(&key) {
             return *k;
@@ -166,7 +178,7 @@ impl Schriften {
 }
 
 /// Datenstrom (mit Flate gepackt) als PDF-Objekt
-fn strom(extra: &str, daten: &[u8]) -> Vec<u8> {
+pub(crate) fn strom(extra: &str, daten: &[u8]) -> Vec<u8> {
     use std::io::Write;
     let mut z = flate2::write::ZlibEncoder::new(vec![], flate2::Compression::default());
     let _ = z.write_all(daten);

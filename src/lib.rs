@@ -43,6 +43,7 @@ pub mod model;
 pub mod optionen;
 pub mod parameter;
 pub mod pdf;
+pub mod pdf_bilder;
 pub mod pdf_schriften;
 pub mod props;
 pub mod pruefen;
@@ -88,6 +89,7 @@ pub fn load_font(name: &str) -> Option<Vec<u8>> {
             "timesbi.ttf" => &["LiberationSerif-BoldItalic.ttf", "Tinos-BoldItalic.ttf", "DejaVuSerif-BoldItalic.ttf", "Times New Roman Bold Italic.ttf"],
             "segoeui.ttf" => &["LiberationSans-Regular.ttf", "DejaVuSans.ttf", "Arial.ttf"],
             "segoeuib.ttf" | "arialbd.ttf" => &["LiberationSans-Bold.ttf", "DejaVuSans-Bold.ttf", "Arial Bold.ttf"],
+            "seguisym.ttf" => &["DejaVuSans.ttf", "Symbola.ttf", "Apple Symbols.ttf"],
             _ => &[],
         };
         let mut dirs: Vec<PathBuf> = vec!["/usr/share/fonts".into(), "/usr/local/share/fonts".into(), "/Library/Fonts".into(), "/System/Library/Fonts/Supplemental".into()];
@@ -168,6 +170,12 @@ pub fn setup_style(ctx: &egui::Context) {
     }
     let mut prop = ui_list.clone();
     prop.extend(defaults_prop.iter().cloned());
+    // letzter Rückfall für Symbole (✓, ⏚, ⚡ …), die weder Segoe/Times noch die egui-Schriften enthalten –
+    // sonst erschiene ein leeres Kästchen (die PDF-Ausgabe nutzt dieselbe Schrift, `pdf_schriften::ersatz`)
+    if let Some(d) = load("seguisym.ttf") {
+        fonts.font_data.insert("symbole".into(), Arc::new(egui::FontData::from_owned(d)));
+        prop.push("symbole".to_string());
+    }
     fonts.families.insert(egui::FontFamily::Proportional, prop.clone());
     times_list.extend(prop.iter().cloned());
     fonts.families.insert(egui::FontFamily::Name("times".into()), times_list.clone());

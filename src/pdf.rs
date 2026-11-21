@@ -16,6 +16,8 @@ pub struct Page {
     pub h_mm: f32,
     /// Verknüpfungen (Verweise, Querverweise der Sammelschienen): Fläche in mm und Zielseite (Index in den Seiten)
     pub links: Vec<Link>,
+    /// Pixel der Bildobjekte auf dieser Seite (`pdf_bilder`)
+    pub bilder: crate::pdf_bilder::Pixel,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,6 +54,9 @@ pub fn render_sheets(
     use crate::canvas::{self, DrawCtx, SheetColors, Xf};
     let z = 10.0;
     let mut pages = vec![];
+    // Bildobjekte: vorhandene Texturen, fehlende (z. B. Bilder anderer Blätter) laden; Pixel für das PDF
+    let mut images = images.clone();
+    let mut pixel: std::collections::HashMap<String, std::sync::Arc<egui::ColorImage>> = Default::default();
     let mut n = 0usize;
     // ausgegebene Blätter in Seitenreihenfolge (Ziele der Verknüpfungen)
     let refs: Vec<crate::model::SheetRef> = project
@@ -68,10 +73,26 @@ pub fn render_sheets(
             }
             let layer = egui::LayerId::new(egui::Order::Background, egui::Id::unique(("pdf-page", n)));
             let origin = Pos2::new(-400000.0, -400000.0 + n as f32 * 4000.0);
+            let mut bilder = crate::pdf_bilder::Pixel::new();
+            for o in &sheet.objects {
+                let crate::model::Kind::Image { path, .. } = &o.kind else { continue };
+                if path.is_empty() {
+                    continue;
+                }
+                if !pixel.contains_key(path) {
+                    if let Some(ci) = crate::bildexport::bild_laden(project, path) {
+                        images.entry(path.clone()).or_insert_with(|| ctx.load_texture(path.clone(), ci.clone(), Default::default()));
+                        pixel.insert(path.clone(), std::sync::Arc::new(ci));
+                    }
+                }
+                if let (Some(t), Some(ci)) = (images.get(path), pixel.get(path)) {
+                    bilder.insert(t.id(), ci.clone());
+                }
+            }
             let (sw, sh) = sheet.dims();
             let painter = egui::Painter::new(ctx.clone(), layer, Rect::from_min_size(origin, egui::Vec2::new(sw * z, sh * z)));
             let xf = Xf { origin, z };
-            let dc = DrawCtx { painter: &painter, xf, lib, project, images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage) };
+            let dc = DrawCtx { painter: &painter, xf, lib, project, images: &images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage) };
             let colors = SheetColors { sheet: Color32::WHITE, grid: Color32::WHITE, print: true };
             canvas::draw_sheet_base(&dc, sheet, anlage, &colors, None);
             for o in &sheet.objects {
@@ -87,7 +108,7 @@ pub fn render_sheets(
                     Some(Link { mn: f.mn, mx: f.mx, page: refs.iter().position(|r| *r == ziel)? })
                 })
                 .collect();
-            pages.push(Page { shapes: collect(ctx, layer), origin, z, w_mm: sw, h_mm: sh, links });
+            pages.push(Page { shapes: collect(ctx, layer), origin, z, w_mm: sw, h_mm: sh, links, bilder });
             n += 1;
         }
     }
@@ -114,6 +135,8 @@ struct W<'a> {
     page: &'a Page,
     /// eingebettete Schriften (Texte mit eigener Schrift, `pdf_schriften`)
     schriften: &'a mut crate::pdf_schriften::Schriften,
+    /// eingebettete Bilder (`pdf_bilder`)
+    bilder: &'a mut crate::pdf_bilder::Bilder,
 }
 
 impl W<'_> {
@@ -191,7 +214,11 @@ impl W<'_> {
             }
             Shape::Ellipse(e) => {
                 let fill = if e.fill.a() > 0 { Some(e.fill) } else { None };
-                self.ellipse(e.center, e.radius.x, e.radius.y, e.stroke.width, e.stroke.color, fill);
+                // ohne Strich und Füllung nichts ausgeben (sonst zeichnete `s` eine Linie in Mindestbreite)
+                if (e.stroke.width > 0.0 && e.stroke.color.a() > 0) || fill.is_some() {
+                    let w = if e.stroke.color.a() > 0 { e.stroke.width } else { 0.0 };
+                    self.ellipse(e.center, e.radius.x, e.radius.y, w, e.stroke.color, fill);
+                }
             }
             Shape::Rect(r) => {
                 let rr = r.rect;
@@ -203,6 +230,16 @@ impl W<'_> {
                 }
             }
             Shape::Text(t) => self.text(t),
+            // Bildobjekt: Pixel als XObject an der Lage des Textur-Netzes
+            Shape::Mesh(m) => {
+                if let Some(ci) = self.page.bilder.get(&m.texture_id) {
+                    let name = self.bilder.nutzen(m.texture_id, ci);
+                    let r = m.calc_bounds();
+                    let (x, y) = (self.x(r.left_bottom()), self.y(r.left_bottom()));
+                    let (w, h) = (r.width() / self.page.z * PT_PER_MM, r.height() / self.page.z * PT_PER_MM);
+                    self.s.push_str(&format!("q {w:.3} 0 0 {h:.3} {x:.3} {y:.3} cm /{name} Do Q\n"));
+                }
+            }
             _ => {}
         }
     }
@@ -233,7 +270,14 @@ impl W<'_> {
             // Läufe gleicher Schrift: (Glyphe ab, Glyphe bis, eingebettet)
             let mut laeufe: Vec<(usize, usize, Option<usize>)> = vec![];
             for (i, gl) in glyphs.iter().enumerate() {
-                let k = eigen.filter(|&k| self.schriften.glyphe(k, gl.chr).is_some());
+                // Zeichen außerhalb von WinAnsi (Ω, →, …): eingebettete Ersatzschrift statt „?“
+                let k = eigen.filter(|&k| self.schriften.glyphe(k, gl.chr).is_some()).or_else(|| {
+                    if winansi(gl.chr).is_none() && !gl.chr.is_whitespace() {
+                        self.schriften.ersatz(gl.chr, bold, italic)
+                    } else {
+                        None
+                    }
+                });
                 match laeufe.last_mut() {
                     Some(l) if l.2 == k => l.1 = i + 1,
                     _ => laeufe.push((i, i + 1, k)),
@@ -278,20 +322,23 @@ impl W<'_> {
     }
 }
 
+/// Zeichen in WinAnsi (Kodierung der PDF-Standardschriften); `None`, wenn es dort fehlt.
+fn winansi(ch: char) -> Option<u8> {
+    // 0x80–0x9F: Sonderbelegung von Windows-1252 (Lücken bei 0x81, 0x8D, 0x8F, 0x90, 0x9D)
+    const C1: [char; 32] = [
+        '€', '\0', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\0', 'Ž', '\0', '\0', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\0', 'ž', 'Ÿ',
+    ];
+    match ch as u32 {
+        0x20..=0x7e | 0xa0..=0xff => Some(ch as u8),
+        _ => C1.iter().position(|&c| c == ch && c != '\0').map(|i| 0x80 + i as u8),
+    }
+}
+
 /// Text in WinAnsi kodieren und für PDF maskieren.
 fn pdf_string(s: &str) -> String {
     let mut out = String::new();
     for ch in s.chars() {
-        let b: u32 = match ch {
-            '€' => 0x80,
-            '„' => 0x84,
-            '“' => 0x93,
-            '”' => 0x94,
-            '–' => 0x96,
-            '—' => 0x97,
-            c if (c as u32) < 256 => c as u32,
-            _ => '?' as u32,
-        };
+        let b = winansi(ch).unwrap_or(b'?') as u32;
         match b {
             0x28 => out.push_str("\\("),
             0x29 => out.push_str("\\)"),
@@ -333,11 +380,12 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
             .fold("<<".to_string(), |a, b| a + " " + &b);
     objs.push(String::new());
     let mut schriften = crate::pdf_schriften::Schriften::default();
+    let mut bilder = crate::pdf_bilder::Bilder::default();
     // Verknüpfungen als eigene Objekte hinter allen Seiten (Nummern ab 4 + 2n)
     let mut annot_nr = 4 + 2 * n;
     let mut annots: Vec<String> = vec![];
     for (i, pg) in pages.iter().enumerate() {
-        let mut w = W { s: String::from("1 J 1 j\n"), page: pg, schriften: &mut schriften };
+        let mut w = W { s: String::from("1 J 1 j\n"), page: pg, schriften: &mut schriften, bilder: &mut bilder };
         let page_rect = Rect::from_min_max(pg.origin, Pos2::new(pg.origin.x + pg.w_mm * pg.z, pg.origin.y + pg.h_mm * pg.z));
         for cs in &pg.shapes {
             let clip = cs.clip_rect.intersect(page_rect.expand(2.0));
@@ -366,7 +414,7 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
         }
         let annots_entry = if refs.is_empty() { String::new() } else { format!(" /Annots [{}]", refs.join(" ")) };
         objs.push(format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font 3 0 R >> /Contents {} 0 R{annots_entry} >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font 3 0 R{{XOBJ}} >> /Contents {} 0 R{annots_entry} >>",
             pg.w_mm * PT_PER_MM,
             pg.h_mm * PT_PER_MM,
             5 + i * 2
@@ -376,8 +424,15 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
     objs.extend(annots);
     let (font_objs, eintraege) = schriften.objekte(objs.len() + 1);
     objs[2] = eintraege.iter().fold(standard, |a, b| a + " " + b) + " >>";
+    let (bild_objs, verz) = bilder.objekte(objs.len() + font_objs.len() + 1);
+    // Bilder für alle Seiten in einem gemeinsamen XObject-Verzeichnis
+    let xobj = if bilder.anzahl() > 0 { format!(" /XObject <<{verz} >>") } else { String::new() };
+    for o in objs.iter_mut().skip(3).step_by(2).take(n) {
+        *o = o.replace("{XOBJ}", &xobj);
+    }
     let mut objs: Vec<Vec<u8>> = objs.into_iter().map(String::into_bytes).collect();
     objs.extend(font_objs);
+    objs.extend(bild_objs);
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec();
     let mut offsets = vec![];
     for (i, o) in objs.iter().enumerate() {

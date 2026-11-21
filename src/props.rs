@@ -712,7 +712,7 @@ fn symbol_ui(ui: &mut egui::Ui, s: &mut SymProps) {
         ui.horizontal(|ui| {
             ui.add_enabled(false, egui::TextEdit::singleline(&mut s.bauteil).desired_width(126.0).background_color(Color32::from_rgb(255, 255, 225)));
             // Knopf "Bearbeiten" (TSpeedButton LO_Liste): Bauteilzuordnung
-            let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::PartList, 20.0));
+            let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::EditBauteil, 20.0));
             if ui.add(btn.min_size(Vec2::new(31.0, 24.0))).on_hover_text("Bearbeiten").clicked() {
                 s.edit_part = true;
             }

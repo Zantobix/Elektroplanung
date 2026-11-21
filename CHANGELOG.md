@@ -9,7 +9,32 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Geändert:
+- Einheitliche Icons: je Objektart ein Grund-Icon (Klemmleiste, Sammelschiene, Leitung, Potential, Stift, Blatt,
+  Anlage, Projekt, Symbol, Bauteil, Platzhalter, Bild, Tabelle, Text, Textbox …), das Werkzeugleisten,
+  Projektbaum und Dialoge gemeinsam nutzen; „Neu“-Knöpfe zeigen das Grund-Icon mit grünem Plus, „Bearbeiten“
+  mit Stift, „Entfernen“ mit rotem Minus; ein Raster, drei Strichstärken, eine Farbpalette
+  (`tools/icons_erzeugen.py --uebersicht` erzeugt eine Übersichtsseite). Anlagen tragen im Projektbaum das
+  Schaltschrank-Icon; die Tabellen-Knöpfe Laden/Speichern/Löschen nutzen Icons statt Emoji
+- Menü Datei › Export › „PDF“ ohne den Zusatz „(Beta)“ des Originals: Das PDF wurde gegen den Bildexport
+  geprüft (alle 39 Blätter von W2 und ein Prüfprojekt mit sieben Schriften in vier Schnitten, Sonderzeichen,
+  senkrechtem Text, Bild und Hochformat-Blatt; gerendert mit pdftoppm): Seitengrößen A4 quer/hoch, Linien,
+  Texte und Umlaute stimmen überein, Text ist auswählbar und durchsuchbar (pdftotext), eingebettete Schriften
+  als Teilmenge mit ToUnicode, Verknüpfungen zeigen auf gültige Seiten. Die dabei gefundenen Fehler sind behoben
+  (siehe „Behoben“)
+
+Behoben:
+- PDF: Bildobjekte fehlten (nur der Rahmen erschien); sie werden jetzt als Bild eingebettet (auch Bilder
+  anderer Blätter und Projektgrafiken, Transparenz als Maske, jedes Bild nur einmal)
+- PDF: Zeichen außerhalb von WinAnsi (Ω, ≥, →, ✓ …) erschienen als „?“; sie kommen jetzt aus einer
+  eingebetteten Ersatzschrift (Times New Roman, sonst Segoe UI Symbol/DejaVu Sans). Typografische Zeichen wie
+  ‚ ‘ ’ • ™ … nutzen die vollständige WinAnsi-Tabelle
+- PDF: Ellipsen ohne Strich und Füllung wurden als dünne Linie ausgegeben
+- Oberfläche: Symbole wie ✓, die weder Segoe UI noch die egui-Schriften enthalten, erschienen als leeres
+  Kästchen; letzter Rückfall ist jetzt Segoe UI Symbol (Linux/macOS: DejaVu Sans, Symbola, Apple Symbols)
+
 Neu:
+- `examples/pdf_export.rs`: Projekt ohne Fenster als PDF und jedes Blatt als PNG ausgeben (Vergleich)
 - PDF: Texte mit eigener Schrift betten die installierte TrueType-Schrift als Teilmenge ein (statt Helvetica/
   Courier/Times); Rückfall auf die Standardschriften wie bisher
 - Umriss, Treffertest, Markierung und Griffe von Texten passen zur gezeichneten Schrift (Metrik der
@@ -36,7 +61,7 @@ Neu:
 - Drucken: „Änderung seit …“ und „seit dem letzten Ausdruck“ wählen die Blätter nach ihrem Änderungsdatum
 - Projektgrafiken: Hinzufügen › Grafik legt eine Grafik aus einer Bilddatei an; Eigenschaften (Name, Laden)
   und Löschen im Projektbaum
-- Datei › Export › PDF (Beta) öffnet die Exporteinstellung mit der Projektliste; Vorlagen als `.epv`
+- Datei › Export › PDF öffnet die Exporteinstellung mit der Projektliste; Vorlagen als `.epv`
 - Blattnummer: Regeln des Originals für Nummer 0, Subindex 0 und Deckblatt
 - Sammelschienen-Objekt: Knopf „Bearbeiten“ für die Schiene; Leitung: Darstellung über einen Stift
 - Kontaktspiegel als verknüpftes Objekt unter der Spule (Dialog wie im Original, Lage der Kontakte als
