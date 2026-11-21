@@ -9,35 +9,7 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
-Geändert:
-- Einheitliche Icons: je Objektart ein Grund-Icon (Klemmleiste, Sammelschiene, Leitung, Potential, Stift, Blatt,
-  Anlage, Projekt, Symbol, Bauteil, Platzhalter, Bild, Tabelle, Text, Textbox …), das Werkzeugleisten,
-  Projektbaum und Dialoge gemeinsam nutzen; „Neu“-Knöpfe zeigen das Grund-Icon mit grünem Plus, „Bearbeiten“
-  mit Stift, „Entfernen“ mit rotem Minus; ein Raster, drei Strichstärken, eine Farbpalette
-  (`tools/icons_erzeugen.py --uebersicht` erzeugt eine Übersichtsseite). Anlagen tragen im Projektbaum das
-  Schaltschrank-Icon; die Tabellen-Knöpfe Laden/Speichern/Löschen nutzen Icons statt Emoji
-- Menü Datei › Export › „PDF“ ohne den Zusatz „(Beta)“ des Originals: Das PDF wurde gegen den Bildexport
-  geprüft (alle 39 Blätter von W2 und ein Prüfprojekt mit sieben Schriften in vier Schnitten, Sonderzeichen,
-  senkrechtem Text, Bild und Hochformat-Blatt; gerendert mit pdftoppm): Seitengrößen A4 quer/hoch, Linien,
-  Texte und Umlaute stimmen überein, Text ist auswählbar und durchsuchbar (pdftotext), eingebettete Schriften
-  als Teilmenge mit ToUnicode, Verknüpfungen zeigen auf gültige Seiten. Die dabei gefundenen Fehler sind behoben
-  (siehe „Behoben“)
-
-Behoben:
-- PDF: Bildobjekte fehlten (nur der Rahmen erschien); sie werden jetzt als Bild eingebettet (auch Bilder
-  anderer Blätter und Projektgrafiken, Transparenz als Maske, jedes Bild nur einmal)
-- PDF: Zeichen außerhalb von WinAnsi (Ω, ≥, →, ✓ …) erschienen als „?“; sie kommen jetzt aus einer
-  eingebetteten Ersatzschrift (Times New Roman, sonst Segoe UI Symbol/DejaVu Sans). Typografische Zeichen wie
-  ‚ ‘ ’ • ™ … nutzen die vollständige WinAnsi-Tabelle
-- PDF: Ellipsen ohne Strich und Füllung wurden als dünne Linie ausgegeben
-- Oberfläche: Symbole wie ✓, die weder Segoe UI noch die egui-Schriften enthalten, erschienen als leeres
-  Kästchen; letzter Rückfall ist jetzt Segoe UI Symbol (Linux/macOS: DejaVu Sans, Symbola, Apple Symbols)
-Geändert (Vergleich mit dem Original-Ausdruck):
-- Textboxen: Text 0,2 mm eingerückt, Zeilenabstand 1,13 Geviert, hochkante Zeilen ab dem linken Boxrand
-- Schriftfeld: Schrift 0,88 × Feldhöhe (statt 0,72), „Von“ aus „Erstellt von“ der Anlage; Spaltennummern 12 pt
-- Klemmplan: Zeilen 5 mm, Schrift 3,43 mm, Spaltenbreiten nach dem längsten Text, Klemmenkreise und
-  Brückenspuren wie im Ausdruck; je Anschlussrichtung höchstens eine Brücke; verbundene Brücken innerhalb einer
-  Kette bleiben in deren Spur (Klemmplan -X3: 3–6, 4–5, 5–6 als eine Kette)
+## [0.2.0]
 
 Neu:
 - `examples/pdf_export.rs`: Projekt ohne Fenster als PDF und jedes Blatt als PNG ausgeben (Vergleich)
@@ -101,7 +73,35 @@ Neu:
 - Bibliotheksverwaltung › Symbolgruppen › Hinzufügen legt eine leere Gruppe ohne Platzhalter-Symbol an (gemerkt in
   `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
+Geändert:
+- Einheitliche Icons: je Objektart ein Grund-Icon (Klemmleiste, Sammelschiene, Leitung, Potential, Stift, Blatt,
+  Anlage, Projekt, Symbol, Bauteil, Platzhalter, Bild, Tabelle, Text, Textbox …), das Werkzeugleisten,
+  Projektbaum und Dialoge gemeinsam nutzen; „Neu“-Knöpfe zeigen das Grund-Icon mit grünem Plus, „Bearbeiten“
+  mit Stift, „Entfernen“ mit rotem Minus; ein Raster, drei Strichstärken, eine Farbpalette
+  (`tools/icons_erzeugen.py --uebersicht` erzeugt eine Übersichtsseite). Anlagen tragen im Projektbaum das
+  Schaltschrank-Icon; die Tabellen-Knöpfe Laden/Speichern/Löschen nutzen Icons statt Emoji
+- Menü Datei › Export › „PDF“ ohne den Zusatz „(Beta)“ des Originals: Das PDF wurde gegen den Bildexport
+  geprüft (alle 39 Blätter von W2 und ein Prüfprojekt mit sieben Schriften in vier Schnitten, Sonderzeichen,
+  senkrechtem Text, Bild und Hochformat-Blatt; gerendert mit pdftoppm): Seitengrößen A4 quer/hoch, Linien,
+  Texte und Umlaute stimmen überein, Text ist auswählbar und durchsuchbar (pdftotext), eingebettete Schriften
+  als Teilmenge mit ToUnicode, Verknüpfungen zeigen auf gültige Seiten. Die dabei gefundenen Fehler sind behoben
+  (siehe „Behoben“)
+
 Behoben:
+- PDF: Bildobjekte fehlten (nur der Rahmen erschien); sie werden jetzt als Bild eingebettet (auch Bilder
+  anderer Blätter und Projektgrafiken, Transparenz als Maske, jedes Bild nur einmal)
+- PDF: Zeichen außerhalb von WinAnsi (Ω, ≥, →, ✓ …) erschienen als „?“; sie kommen jetzt aus einer
+  eingebetteten Ersatzschrift (Times New Roman, sonst Segoe UI Symbol/DejaVu Sans). Typografische Zeichen wie
+  ‚ ‘ ’ • ™ … nutzen die vollständige WinAnsi-Tabelle
+- PDF: Ellipsen ohne Strich und Füllung wurden als dünne Linie ausgegeben
+- Oberfläche: Symbole wie ✓, die weder Segoe UI noch die egui-Schriften enthalten, erschienen als leeres
+  Kästchen; letzter Rückfall ist jetzt Segoe UI Symbol (Linux/macOS: DejaVu Sans, Symbola, Apple Symbols)
+Geändert (Vergleich mit dem Original-Ausdruck):
+- Textboxen: Text 0,2 mm eingerückt, Zeilenabstand 1,13 Geviert, hochkante Zeilen ab dem linken Boxrand
+- Schriftfeld: Schrift 0,88 × Feldhöhe (statt 0,72), „Von“ aus „Erstellt von“ der Anlage; Spaltennummern 12 pt
+- Klemmplan: Zeilen 5 mm, Schrift 3,43 mm, Spaltenbreiten nach dem längsten Text, Klemmenkreise und
+  Brückenspuren wie im Ausdruck; je Anschlussrichtung höchstens eine Brücke; verbundene Brücken innerhalb einer
+  Kette bleiben in deren Spur (Klemmplan -X3: 3–6, 4–5, 5–6 als eine Kette)
 - Textboxen und Raumnamen: der Eckgriff ändert wie im Original Breite und Höhe der Box frei, die Schrift bleibt
   gleich; neue Textboxen beginnen wie im Original ohne Text
 - Schriftfeld bearbeiten: das Fenster wuchs über den Bildschirm hinaus und die Elementliste lag übereinander

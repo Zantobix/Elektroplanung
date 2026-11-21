@@ -6,6 +6,8 @@
 # - Push auf main: ebenso; ist die Version aus Cargo.toml neu (noch kein Tag v<Version>), legt die Pipeline
 #   nach erfolgreichem Bauen das Tag v<Version> und ein GitHub-Release mit den drei Programmen an.
 #   Text des Releases: der Abschnitt "## [<Version>]" aus CHANGELOG.md.
+# - Push auf main ohne neue Version: das Vorab-Release "entwicklung" (Tag `entwicklung`) wird durch den neuen
+#   Stand ERSETZT – so gibt es immer einen aktuellen Download. Veröffentlichte Versionen bleiben unverändert.
 name: Bauen
 
 on:
@@ -162,3 +164,31 @@ jobs:
           name: Elektroplanung ${{ needs.version.outputs.version }}
           body_path: notizen.md
           files: pakete/*
+
+  # Aktueller Stand von main als Vorab-Release (wird bei jedem Push ersetzt, nie "Latest")
+  entwicklung:
+    needs: [version, bauen]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.neu == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: pakete
+          merge-multiple: true
+      - name: Vorab-Release "entwicklung" ersetzen
+        run: |
+          KURZ=$(echo "$GITHUB_SHA" | cut -c1-7)
+          {
+            echo "Automatisch gebauter Stand von \`main\` (Commit $KURZ, $(date -u +%Y-%m-%d)) – nicht getestet wie eine Version."
+            echo
+            awk 'index($0, "## [Unveröffentlicht]") == 1 {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md
+          } > notizen.md
+          gh release delete entwicklung --yes --cleanup-tag || true
+          gh release create entwicklung pakete/* --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "Entwicklungsstand ($KURZ)" --notes-file notizen.md

@@ -23,7 +23,9 @@ und die Original-Icons aus [BYTE-RANGER-Software/Elektroplanung](https://github.
 ## Herunterladen
 
 Fertige Programme gibt es unter [Releases](https://github.com/Zantobix/Elektroplanung/releases), jeweils als
-einzelne Datei ohne Installation:
+einzelne Datei ohne Installation. Neben den Versionen gibt es das Vorab-Release
+[Entwicklungsstand](https://github.com/Zantobix/Elektroplanung/releases/tag/entwicklung) mit dem jeweils neuesten
+Stand von `main` (wird bei jeder Änderung ersetzt).
 
 | System | Datei | Hinweis |
 |---|---|---|
@@ -110,7 +112,8 @@ Protokoll 2025-06-18). Für Claude Code ist er in [.mcp.json](.mcp.json) eingetr
   werden daraus abgeleitet. Für eine neue Version: Nummer in `Cargo.toml` erhöhen, Abschnitt
   `## [<Version>]` in [CHANGELOG.md](CHANGELOG.md) schreiben, auf `main` bringen. Die Pipeline legt dann nach
   erfolgreichem Bauen selbst das Tag `v<Version>` und ein Release mit den Programmen für alle drei Systeme an.
-  Tags werden nicht von Hand gesetzt.
+  Tags werden nicht von Hand gesetzt. Ohne neue Nummer ersetzt jeder Push auf `main` nur das Vorab-Release
+  `entwicklung`; veröffentlichte Versionen bleiben unverändert.
 - Neue Funktionen entstehen auf eigenen Zweigen und kommen per Pull Request nach `main`.
 
 ## Nachweise
