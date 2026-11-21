@@ -30,3 +30,24 @@ fn bruecken_der_zweistoeckigen_leiste_als_ketten() {
         ]
     );
 }
+
+/// Spuren und Ketten der einstöckigen Leisten wie im Ausdruck „Elektroplanung Wohnung 2“ (Seite 12: -X1 und
+/// Seite 13: -X2 der Unterverteilung 1, Seite 22: -X3 der Unterverteilung 2).
+#[test]
+fn bruecken_wie_im_ausdruck() {
+    let path = std::env::var("EP_SAMPLE").map(PathBuf::from).unwrap_or_default();
+    if !path.exists() {
+        return;
+    }
+    let p = epr::import(&path).unwrap();
+    let ketten = |anlage: &str, leiste: &str| -> Vec<(usize, Vec<u32>)> {
+        let a = p.anlagen.iter().find(|a| a.name == anlage).expect("Anlage");
+        let plan = klemmplan::plan(a, leiste, &p.symdefs);
+        plan.bruecken.iter().map(|b| (b.lane, b.rows.iter().map(|r| plan.zeilen[*r].nr).collect())).collect()
+    };
+    assert_eq!(ketten("Unterverteilung 1", "-X1"), vec![(0, vec![3, 4, 5]), (0, vec![12, 14]), (1, vec![13, 15]), (0, vec![16, 18]), (1, vec![17, 19])]);
+    assert_eq!(ketten("Unterverteilung 1", "-X2"), vec![(0, vec![1, 2]), (0, vec![3, 4]), (0, vec![5, 6, 7, 8]), (0, vec![10, 11, 12]), (0, vec![13, 14, 15])]);
+    // 3–6, 4–5 und 5–6: eine Kette in der ersten Spur (vorher 3, 5, 6 und 4, 5 in zwei Spuren)
+    assert_eq!(ketten("Unterverteilung 2", "-X3"), vec![(0, vec![1, 2]), (0, vec![3, 4, 5, 6])]);
+    assert!(ketten("Unterverteilung 2", "-X1").is_empty() && ketten("Unterverteilung 2", "-X2").is_empty());
+}

@@ -189,7 +189,10 @@ nicht. Gemessen werden stattdessen:
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
 - Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",
   Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); Brücken als Ketten in Spuren wie in den
-  Original-Ausdrucken (Seiten 12 und 39), die Ordnungsroutine des Originals ist nur teilweise entschlüsselt.
+  Original-Ausdrucken (Seiten 12, 13, 20–22, 39; je Anschlussrichtung höchstens eine Brücke), die
+  Ordnungsroutine des Originals ist nur teilweise entschlüsselt (Seite 39 zeigt eine Brücke 10B–6B nicht).
+  Tabelle wie im Ausdruck: Zeilen 5 mm (auf die Höhe verteilt), Schrift 3,43 mm, Kennung-Spalten so breit wie der
+  längste Text, Klemmenkreise und Brückenspuren im Abstand 2,45 mm.
   "Alter Klemmenplan" zeigt die
   8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken. Folgeblätter: direkt folgende
   Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
@@ -206,8 +209,10 @@ nicht. Gemessen werden stattdessen:
   Spule (Ausdruck Seite 10: „-K1“ mit „/5“); ob die Freigabe „Querverweise“ den Verweis abschaltet, ist nicht
   belegt (der Nachbau richtet sich nach der Freigabe des Kontakts). Die Querverweisliste (Blattart 2) und der
   Klemmplan für im Nachbau gesetzte Eigentümer nutzen noch die eigene Kennzeichnung bzw. nur das gelesene OWR.
-- Mehrzeilige große Texte (Raumnamen der Installationspläne) stehen bis etwa 0,5 mm tiefer als im
-  Original-Ausdruck, der Zeilenabstand ist etwas größer (Schriftmaße der egui-Schrift).
+- Textboxen (Raumnamen der Installationspläne) stehen wie im Original-Ausdruck: oben links in der Box, 0,2 mm
+  eingerückt, Zeilenabstand 1,13 Geviert, hochkant ab dem linken Rand (`src/schriftlage.rs`, Abweichung
+  ≤ 0,1 mm). Schriftfeld-Texte 0,88 × Feldhöhe, Spaltennummern 12 pt, „Von“ aus der Anlage. Noch abweichend:
+  Kennzeichnungen 2,5 statt 2,62 mm, einige Symboltexte (SPD, M, Dusch/WC) im Original 5–20 % größer.
 - Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
   Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift), Blattart
   (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Weitere Angaben (`src/epr_zusatz.rs`): Bauteile samt

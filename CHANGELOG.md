@@ -32,6 +32,12 @@ Behoben:
 - PDF: Ellipsen ohne Strich und Füllung wurden als dünne Linie ausgegeben
 - Oberfläche: Symbole wie ✓, die weder Segoe UI noch die egui-Schriften enthalten, erschienen als leeres
   Kästchen; letzter Rückfall ist jetzt Segoe UI Symbol (Linux/macOS: DejaVu Sans, Symbola, Apple Symbols)
+Geändert (Vergleich mit dem Original-Ausdruck):
+- Textboxen: Text 0,2 mm eingerückt, Zeilenabstand 1,13 Geviert, hochkante Zeilen ab dem linken Boxrand
+- Schriftfeld: Schrift 0,88 × Feldhöhe (statt 0,72), „Von“ aus „Erstellt von“ der Anlage; Spaltennummern 12 pt
+- Klemmplan: Zeilen 5 mm, Schrift 3,43 mm, Spaltenbreiten nach dem längsten Text, Klemmenkreise und
+  Brückenspuren wie im Ausdruck; je Anschlussrichtung höchstens eine Brücke; verbundene Brücken innerhalb einer
+  Kette bleiben in deren Spur (Klemmplan -X3: 3–6, 4–5, 5–6 als eine Kette)
 
 Neu:
 - `examples/pdf_export.rs`: Projekt ohne Fenster als PDF und jedes Blatt als PNG ausgeben (Vergleich)

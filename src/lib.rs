@@ -50,6 +50,7 @@ pub mod props;
 pub mod pruefen;
 pub mod raster;
 pub mod schriften;
+pub mod schriftlage;
 pub mod schriftmass;
 pub mod schriftfeld_editor;
 pub mod suche;
