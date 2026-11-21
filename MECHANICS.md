@@ -241,3 +241,18 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - VBG: Feld 2/3 und 6/7 = Kennungen der verbundenen Objekte, 10/11 eigene Kennung (fortlaufende Zeitstempel), 13 Leitung.
   BZD (44 Byte): 0/1 Versatz, 3/4 und 5/6 Punkt, 9/10 meist 80/2 (Bedeutung offen).
 - Neue Kennungen (OBJ, VBG, SMS, ANL Byte 0x88) vergibt der Nachbau als Delphi-Zeitstempel im Millisekundenabstand.
+
+## Weitere Projektangaben im .epr (src/epr_zusatz.rs, aus Speicher- und Laderoutine; Gegenprobe im Original offen)
+
+- BTL (Bauteil, 232 Byte, ohne Unterblöcke, im PRJ vor ERS): 0 Kennung (Zeitstempel), 8 Bauteilgruppe und 0x10 Hersteller
+  (Kennungen aus Gruppen.tfi, 0 = „Projekt“ bzw. kein Hersteller), Feld 8/9/10 Breite/Höhe/Tiefe in mm (Vorgabe
+  500/800/700), Texte je 40 Byte: 0x2C Name, 0x54 Typ, 0x7C Artikel-Nr., 0xA4 interne Nr.; 0xD0 Symbol, 0xD8 Bild,
+  0xE0 Erstellungszeit. Zuordnung: VSY › IDL bzw. OBJ (Klemmstelle) › IDL vor TIT, 8 Byte = Kennung des Bauteils.
+- ERS (Platzhaltergruppe, 12 Byte Name) › TLI (8 Byte Suchtext) › STR (Ersetzungstext, fehlt bei leerem Text).
+- PRJ Byte 0x90 = 1 Projekt abgeschlossen; Byte 0x70 Bit 0 = 0 „Alter Klemmenplan“. FUS Feld 1 = 2 Maßangaben
+  relativ, 0 absolut.
+- SMS Byte 0x30 Querverweise, 0x31 Klemmen, 0x33 Durchschleifung, 0x34 mit Pfeilen, 0x35 Autoende; Kennung bei 0x38
+  ≠ 0 = Einspeisung (setzt das Original).
+- VBG Feld 14 Bit 0x40 Zielführung links/oben, 0x80 rechts/unten, 0x100 Brücke; BZD Byte 0x0B Bit 0 Hochkant,
+  Feld 7 Bit 0 Markierung, Bit 1 Unterstrichen, Bit 2 Durch Markierung.
+- VSY Feld 37 = Rackposition (−1 = keine).
