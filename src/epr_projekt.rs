@@ -502,6 +502,8 @@ fn write_stifte(project: &Project, prj: &mut Block, tpl: &Block) {
 fn write_schriftfeld(project: &Project, prj: &mut Block, tpl: &Block) {
     let soll = if project.titleblock.is_empty() { crate::titleblock::default_owned() } else { project.titleblock.clone() };
     let h = (project.title_h() * 10.0).round() as i32;
+    // Maßangaben „Absolut“: Koordinaten in 0,1 mm (das Modell führt sie immer relativ, epr_zusatz)
+    let soll = if project.tb_absolut { crate::titleblock::nach_absolut(&soll, h) } else { soll };
     let Some(fi) = prj.kids.iter().position(|k| k.is("FUS")).or_else(|| {
         let f = tpl.kid("FUS")?.clone();
         let at = prj.kids.iter().position(|k| k.is("ANL") || k.is("BLD")).unwrap_or(prj.kids.len());

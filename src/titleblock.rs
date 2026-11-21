@@ -132,3 +132,52 @@ pub fn expand(template: &str, v: &MacroValues) -> String {
     }
     s
 }
+
+/// Breite des Schriftfelds bei Maßangaben „Absolut“ in 0,1 mm (Rahmenbreite A4 quer). Abgeleitet aus einer vom
+/// Original umgeschalteten Datei: x absolut = x relativ · 2870 / 10000, y absolut = y relativ · Höhe / 10000
+/// (Höhe in 0,1 mm, FUS Feld 0), jeweils gerundet.
+pub const ABS_BREITE: i32 = 2870;
+
+fn umrechnen(tb: &[TbOwned], fx: f64, fy: f64) -> Vec<TbOwned> {
+    let x = |v: i32| (v as f64 * fx).round() as i32;
+    let y = |v: i32| (v as f64 * fy).round() as i32;
+    tb.iter()
+        .map(|e| match e {
+            TbOwned::Line(a, b, c, d) => TbOwned::Line(x(*a), y(*b), x(*c), y(*d)),
+            TbOwned::Logo(a, b, c, d) => TbOwned::Logo(x(*a), y(*b), x(*c), y(*d)),
+            TbOwned::Text(a, b, c, d, t, al, n) => TbOwned::Text(x(*a), y(*b), x(*c), y(*d), t.clone(), *al, *n),
+        })
+        .collect()
+}
+
+/// Relative Koordinaten (0..10000) in absolute (0,1 mm) umrechnen, wie das Original beim Umschalten auf „Absolut“.
+pub fn nach_absolut(tb: &[TbOwned], hoehe: i32) -> Vec<TbOwned> {
+    umrechnen(tb, ABS_BREITE as f64 / 10000.0, hoehe.max(1) as f64 / 10000.0)
+}
+
+/// Absolute Koordinaten (0,1 mm) in relative (0..10000) umrechnen. Für ganzzahlige absolute Werte verlustfrei:
+/// `nach_absolut(nach_relativ(x)) == x`.
+pub fn nach_relativ(tb: &[TbOwned], hoehe: i32) -> Vec<TbOwned> {
+    umrechnen(tb, 10000.0 / ABS_BREITE as f64, 10000.0 / hoehe.max(1) as f64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absolut_wie_im_original() {
+        // Werte aus W2 (relativ) und der vom Original auf „Absolut“ umgeschalteten Datei, Höhe 150
+        let rel = vec![TbOwned::Line(0, 3333, 1306, 3333), TbOwned::Line(9195, 333, 9195, 7333), TbOwned::Text(4958, 466, 7989, 4000, "%Name".into(), Align::Center, 1), TbOwned::Logo(8689, 7333, 9958, 10666)];
+        let abs = nach_absolut(&rel, 150);
+        assert_eq!(abs[0], TbOwned::Line(0, 50, 375, 50));
+        assert_eq!(abs[1], TbOwned::Line(2639, 5, 2639, 110));
+        assert_eq!(abs[2], TbOwned::Text(1423, 7, 2293, 60, "%Name".into(), Align::Center, 1));
+        assert_eq!(abs[3], TbOwned::Logo(2494, 110, 2858, 160));
+        // zurück und wieder hin: dieselben absoluten Werte
+        for h in [150, 200, 87] {
+            let a = nach_absolut(&default_owned(), h);
+            assert_eq!(nach_absolut(&nach_relativ(&a, h), h), a);
+        }
+    }
+}

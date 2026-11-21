@@ -3,7 +3,7 @@
 //!
 //! - **Bauteile** (PRJ › BTL, 232 Byte = die ersten 0xE8 Byte des Speicherobjekts, keine Unterblöcke; angelegt in
 //!   0x403740, Dialog TSBauteil 0x4871cc): 0 Kennung (u64, Zeitstempel), 8 Gruppe (u64, Kennung einer Bauteilgruppe
-//!   aus Gruppen.tfi, 0 = „nur Projekt“), 0x10 Hersteller (u64, Kennung aus Gruppen.tfi), 0x18 frei, 0x20/0x24/0x28
+//!   aus Gruppen.tfi, 0 = „Keine Zuordnung“, im Nachbau „Projekt“), 0x10 Hersteller (u64, Kennung aus Gruppen.tfi), 0x18 frei, 0x20/0x24/0x28
 //!   Breite/Höhe/Tiefe in mm (Vorgabe 500/800/700), 0x2C Name, 0x54 Typ, 0x7C Artikel-Nr., 0xA4 interne Nr.
 //!   (je 40 Zeichen), 0xD0 Kennung des Symbols und 0xD8 Bild (Darstellung), 0xE0 Erstellungszeit (Delphi-Datum).
 //! - **Bauteilzuordnung**: VSY › IDL bzw. OBJ (Klemmstelle) › IDL, je 8 Byte = Kennung des Bauteils (Liste, VSY+0xBC).
@@ -16,7 +16,8 @@
 //!   0x35 Autoende; „Einspeisung“ zeigt das Original nur an: Kennung bei 0x38 ≠ 0) – Dialog TSSchiene 0x44e9b7 ff.
 //! - **Rackposition** des Symbols (VSY Feld 37, −1 = keine) – Feld LO_RekY, 0x44d22e.
 //! - **Projektstatus** (PRJ Byte 0x90: 1 = abgeschlossen) und **Alter Klemmenplan** (PRJ Byte 0x70 Bit 0 = 0) –
-//!   Dialog TPrjEigen 0x457d56; **Schriftfeld relativ/absolut** (FUS Feld 1 = 2 relativ, 0 absolut) – 0x47b991.
+//!   Dialog TPrjEigen 0x457d56; **Schriftfeld relativ/absolut** (FUS Feld 1 = 2 relativ, 0 absolut) – 0x47b991;
+//!   absolut stehen die Koordinaten in 0,1 mm (`titleblock::nach_absolut`), das Modell führt sie immer relativ.
 //! - **Projektgrafiken**: Umbenennen, Ersetzen und Löschen vorhandener PRJ › BLD › JPG.
 //!
 //! Unveränderte Angaben lassen die Blöcke Byte für Byte unverändert.
@@ -120,16 +121,20 @@ fn tfi_id(art: u8, name: &str) -> Option<u64> {
     v.sort_by_key(|(id, _)| **id);
     v.first().map(|(id, _)| **id)
 }
+/// Anzeige des Originals für Gruppe/Hersteller 0.
+const KEINE: &str = "Keine Zuordnung";
+
 fn gruppe_id(name: &str) -> Option<u64> {
     let n = name.trim();
-    if n.is_empty() || n == "Projekt" {
+    // 0 zeigt das Original als „Keine Zuordnung“; der Nachbau führt solche Bauteile unter „Projekt“
+    if n.is_empty() || n == "Projekt" || n == KEINE {
         return Some(0);
     }
     tfi_id(1, n)
 }
 fn firma_id(name: &str) -> Option<u64> {
     let n = name.trim();
-    if n.is_empty() {
+    if n.is_empty() || n == KEINE {
         return Some(0);
     }
     tfi_id(2, n)
@@ -210,6 +215,10 @@ pub fn import(prj: &Block, p: &mut Project) {
     p.alter_klemmenplan = prj.data.get(PRJ_KLEMMENPLAN).map(|v| v & 1 == 0).unwrap_or(false);
     if let Some(f) = prj.kid("FUS").filter(|f| f.data.len() >= 8) {
         p.tb_absolut = f.i32(1) & 2 == 0;
+        // das Modell führt das Schriftfeld immer relativ (0..10000); absolut = 0,1 mm (titleblock::nach_absolut)
+        if p.tb_absolut && !p.titleblock.is_empty() {
+            p.titleblock = crate::titleblock::nach_relativ(&p.titleblock, (p.title_h() * 10.0).round() as i32);
+        }
     }
     let btl: Vec<&Block> = prj.kids_of("BTL").collect();
     if !btl.is_empty() {
@@ -521,7 +530,10 @@ pub fn nicht_gespeichert(project: &Project) -> Vec<String> {
     let mut v = vec![];
     for b in &project.bauteile {
         let alt = (b.gruppe.trim(), b.firma.trim());
-        if gruppe_id(alt.0).is_none() && !alt.0.starts_with("Gruppe ") {
+        // „Projekt“ ist keine Bauteilgruppe des Originals (Gruppen.tfi Art 1): gespeichert wird 0
+        if alt.0.is_empty() || alt.0 == "Projekt" {
+            v.push(format!("Bauteil \u{201e}{}\u{201c}: Gruppe \u{201e}Projekt\u{201c} kennt das Original nicht (es zeigt \u{201e}{KEINE}\u{201c})", b.name));
+        } else if gruppe_id(alt.0).is_none() && !alt.0.starts_with("Gruppe ") {
             v.push(format!("Bauteil \u{201e}{}\u{201c}: Gruppe \u{201e}{}\u{201c} ist keine Bauteilgruppe der Bibliothek", b.name, alt.0));
         }
         if firma_id(alt.1).is_none() && !alt.1.starts_with("Hersteller ") {

@@ -158,7 +158,7 @@ fn neues_projekt_mit_projektwerten() {
 fn warnt_vor_nicht_speicherbarem() {
     let mut p = Project::new_default();
     assert!(epr_projekt::nicht_gespeichert(&p).is_empty());
-    p.bauteile.push(Bauteil { name: "Schütz".into(), ..Default::default() });
+    p.bauteile.push(Bauteil { name: "Schütz".into(), gruppe: "Keine Zuordnung".into(), ..Default::default() });
     p.platzhalter.push(Platzhalter { name: "SPS".into(), werte: vec![("A".into(), "1".into())] });
     p.abgeschlossen = true;
     p.tb_absolut = true;

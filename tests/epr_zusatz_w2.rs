@@ -90,7 +90,9 @@ fn aenderungen_kommen_an() {
     p.alter_klemmenplan = true;
     p.tb_absolut = true;
     p.bilder[0].name = "Umbenannt".into();
-    assert!(epr_projekt::nicht_gespeichert(&p).is_empty(), "{:?}", epr_projekt::nicht_gespeichert(&p));
+    // Gruppe „Projekt“ gibt es im Original nicht (gespeichert wird 0 = „Keine Zuordnung“)
+    let w = epr_projekt::nicht_gespeichert(&p);
+    assert!(w.len() == 1 && w[0].contains("Keine Zuordnung"), "{w:?}");
 
     let (b, bytes) = rundreise(&p, "ep_zusatz_w2.epr");
     assert_eq!(b.bauteile, p.bauteile);
@@ -140,6 +142,8 @@ fn aenderungen_kommen_an() {
     for (x, y) in c.anlagen.iter_mut().flat_map(|a| a.sheets.iter_mut()).flat_map(|s| s.objects.iter_mut()).zip(objekte(&orig)) {
         x.kind = y.kind.clone();
     }
+    // relativ → absolut → relativ rundet (wie im Original): Schriftfeld der Ausgangsdatei
+    c.titleblock = orig.titleblock.clone();
     for (x, y) in c.anlagen.iter_mut().zip(&orig.anlagen) {
         x.schienen = y.schienen.clone();
     }
@@ -186,4 +190,52 @@ fn neues_projekt_mit_bauteil_und_platzhalter() {
     assert_eq!(b.bauteile, p.bauteile);
     assert_eq!(b.platzhalter, p.platzhalter);
     assert!(b.abgeschlossen);
+}
+
+fn fixture(n: &str) -> Option<PathBuf> {
+    let p = PathBuf::from(std::env::var("EP_FIXTURES").ok()?).join(n);
+    p.exists().then_some(p)
+}
+
+/// Koordinaten der Schriftfeld-Elemente (GRS, je 0x50 Byte: Feld 0–3) und FUS Feld 1.
+fn schriftfeld_roh(bytes: &[u8]) -> (i32, Vec<[i32; 4]>) {
+    let f = EprFile::parse(bytes).unwrap();
+    let fus = f.root("PRJ").unwrap().kid("FUS").unwrap().clone();
+    let v = fus.kids_of("GRS").flat_map(|g| g.data.chunks_exact(0x50).map(|e| std::array::from_fn(|i| elektroplanung::eprfile::i32_at(e, i * 4))).collect::<Vec<_>>()).collect();
+    (fus.i32(1), v)
+}
+
+#[test]
+fn schriftfeld_absolut_wie_im_original() {
+    // x_schriftfeld_absolut.epr: W2, im Original auf Maßangaben „Absolut“ umgeschaltet und gespeichert
+    let (Some(path), Some(fx)) = (sample(), fixture("x_schriftfeld_absolut.epr")) else { return };
+    let orig = std::fs::read(&fx).unwrap();
+    let soll = schriftfeld_roh(&orig);
+    assert_eq!(soll.0, 0);
+    // Umschalten im Nachbau: dieselben Koordinaten wie das Original
+    let mut p = epr::import(&path).unwrap();
+    p.tb_absolut = true;
+    let (_, bytes) = rundreise(&p, "ep_zusatz_sf_abs.epr");
+    assert_eq!(schriftfeld_roh(&bytes), soll);
+    // die Datei des Originals: absolut gelesen, als dasselbe relative Schriftfeld wie W2, unverändert byteidentisch
+    let q = epr::import(&fx).unwrap();
+    assert!(q.tb_absolut);
+    assert_eq!(q.titleblock.len(), p.titleblock.len());
+    for (a, b) in q.titleblock.iter().zip(&p.titleblock) {
+        let k = |e: &elektroplanung::titleblock::TbOwned| match e {
+            elektroplanung::titleblock::TbOwned::Line(a, b, c, d) | elektroplanung::titleblock::TbOwned::Logo(a, b, c, d) | elektroplanung::titleblock::TbOwned::Text(a, b, c, d, ..) => [*a, *b, *c, *d],
+        };
+        // Rundung der Umrechnung: höchstens 0,05 mm in x (17 Einheiten), 0,05 mm in y (34 Einheiten)
+        assert!(k(a).iter().zip(k(b)).all(|(x, y)| (x - y).abs() <= 34), "{a:?} {b:?}");
+    }
+    assert_eq!(epr_write::to_bytes(&q).unwrap(), orig);
+    // zurück auf relativ: Koordinaten wie W2 bis auf die Rundung, FUS Feld 1 = 2
+    let mut r = q.clone();
+    r.tb_absolut = false;
+    let (_, back) = rundreise(&r, "ep_zusatz_sf_rel.epr");
+    let w2 = schriftfeld_roh(&std::fs::read(&path).unwrap());
+    let rel = schriftfeld_roh(&back);
+    assert_eq!(rel.0, 2);
+    assert_eq!(rel.1.len(), w2.1.len());
+    assert!(rel.1.iter().zip(&w2.1).all(|(a, b)| a.iter().zip(b).all(|(x, y)| (x - y).abs() <= 34)));
 }

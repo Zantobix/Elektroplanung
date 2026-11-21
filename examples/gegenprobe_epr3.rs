@@ -40,12 +40,13 @@ fn main() {
     let mut p = epr::import(&kopie).expect("Lesen");
     let mut wo: Vec<String> = vec![];
 
-    // 1. Bauteil (Gruppe „Projekt“) und Zuordnung zum ersten Symbol, dort auch Rackposition 3
+    // 1. Bauteil (Bauteilgruppe und Hersteller aus Gruppen.tfi) und Zuordnung zum ersten Symbol, dort auch
+    //    Rackposition 3. „Projekt“ ist keine Bauteilgruppe des Originals (dort „Keine Zuordnung“).
     p.bauteile.push(Bauteil {
-        gruppe: "Projekt".into(),
+        gruppe: "Schütze".into(),
         name: "Gegenprobe Schütz".into(),
         typ: "DILM12-10".into(),
-        firma: String::new(),
+        firma: "Siemens".into(),
         artikel: "276830".into(),
         breite: "45".into(),
         hoehe: "68".into(),
@@ -64,7 +65,7 @@ fn main() {
             }
         }
     }
-    wo.push("Projekt › Bauteile: \u{201e}Gegenprobe Schütz\u{201c}, Gruppe Projekt, Typ DILM12-10, Hersteller leer, Artikel-Nr. 276830, B/H/T 45/68/75 mm, interne Nr. 4711".into());
+    wo.push("Projekt › Bauteile: \u{201e}Gegenprobe Schütz\u{201c}, Gruppe Schütze, Typ DILM12-10, Hersteller Siemens, Artikel-Nr. 276830, B/H/T 45/68/75 mm, interne Nr. 4711".into());
 
     // 2. Platzhalter: Einträge in der vorhandenen Gruppe SPS und eine neue Gruppe
     if let Some(g) = p.platzhalter.first_mut() {
@@ -144,9 +145,10 @@ fn main() {
     p.alter_klemmenplan = true;
     p.tb_absolut = true;
     wo.push("Projekteigenschaften: Status \u{201e}Projekt ist abgeschlossen\u{201c}, \u{201e}Alter Klemmenplan\u{201c} angehakt".into());
-    wo.push("Schriftfeld bearbeiten: Maßangaben \u{201e}Absolut\u{201c} statt \u{201e}Relativ\u{201c}".into());
+    wo.push("Schriftfeld: Maßangaben absolut (FUS Feld 1 = 0, Koordinaten in 0,1 mm umgerechnet wie im Original); Blätter und Schriftfeld-Editor zeigen das Schriftfeld wie in W2".into());
 
     let fehlt = epr_projekt::nicht_gespeichert(&p);
+    assert!(fehlt.is_empty(), "nicht speicherbar (Gruppen.tfi lesbar? sonst EP_DATENBANK auf eine Kopie setzen): {fehlt:?}");
     epr_write::save(&p, &ziel).expect("Speichern");
     // Gegenprobe im Nachbau
     let back = epr::import(&ziel).expect("Lesen");
