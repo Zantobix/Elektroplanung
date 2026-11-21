@@ -26,11 +26,23 @@ fn bearbeitetes_schriftfeld_rundreise() {
         *al = Align::Left;
     }
     p.titleblock.push(t);
+    // mehrzeiliger, rechtsbündiger Text mit 3 Zeilen
+    p.titleblock.push(TbOwned::Text(7000, 0, 10000, 5000, "Zeile 1
+Zeile 2
+%Datum".into(), Align::Right, 3));
+    p.titleblock.push(neu(2));
     let erwartet = p.titleblock.clone();
     let out = std::env::temp_dir().join(format!("ep_sfedit_{}.epr", std::process::id()));
     epr_write::save(&p, &out).unwrap();
     let q = epr::import(&out).unwrap();
+    // nochmals gespeichert: dieselben Bytes (das bearbeitete Schriftfeld ist stabil)
+    let out2 = out.with_extension("2.epr");
+    epr_write::save(&q, &out2).unwrap();
+    let gleich = std::fs::read(&out).unwrap() == std::fs::read(&out2).unwrap();
     let _ = std::fs::remove_file(&out);
+    let _ = std::fs::remove_file(&out2);
+    assert!(gleich, "zweites Speichern ändert die Datei");
+    assert_eq!(q.titleblock, erwartet);
     assert_eq!(q.titleblock.len(), erwartet.len());
     for (a, b) in q.titleblock.iter().zip(&erwartet) {
         assert_eq!(koord(a), koord(b));

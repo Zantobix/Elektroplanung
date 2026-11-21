@@ -76,8 +76,11 @@ pub fn ziehen(start: &TbOwned, griff: Griff, dx: i32, dy: i32, raster: bool) -> 
     let [a, b, c, d] = koord(start);
     let k = match griff {
         Griff::Ganz => {
-            // linke obere Ecke auf das Raster, Größe bleibt
-            let (nx, ny) = (f(a + dx), f(b + dy));
+            // linke obere Ecke auf das Raster, Größe bleibt, das Element bleibt im Schriftfeld (0…10000)
+            let (lo_x, hi_x) = (-a.min(c), 10000 - a.max(c));
+            let (lo_y, hi_y) = (-b.min(d), 10000 - b.max(d));
+            let nx = a + (f(a + dx) - a).clamp(lo_x.min(0), hi_x.max(0));
+            let ny = b + (f(b + dy) - b).clamp(lo_y.min(0), hi_y.max(0));
             [nx, ny, c + nx - a, d + ny - b]
         }
         Griff::Punkt(i) if ist_linie(start) => {
@@ -353,7 +356,8 @@ pub fn ui(ui: &mut egui::Ui, elems: &mut Vec<TbOwned>, w_mm: f32, h_mm: f32) {
                     }
                     ui.separator();
                     ui.label("Zeilen");
-                    ui.add(egui::DragValue::new(lines).range(1..=9));
+                    // wie das Original höchstens 8 Zeilen (FUS › GRS Feld 9)
+                    ui.add(egui::DragValue::new(lines).range(1..=8));
                 });
             }
         });
@@ -377,6 +381,9 @@ mod tests {
         assert_eq!(koord(&ziehen(&l, Griff::Punkt(1), -1234, 7, false)), [0, 5000, 8766, 5007]);
         assert_eq!(griffe(&t).len(), 4);
         assert_eq!(griffe(&l), vec![(0, 5000), (10000, 5000)]);
+        // nicht über den Rand hinaus verschieben
+        assert_eq!(koord(&ziehen(&t, Griff::Ganz, -5000, 9000, true)), [0, 6000, 2000, 10000]);
+        assert_eq!(koord(&ziehen(&l, Griff::Ganz, 300, 0, true)), [0, 5000, 10000, 5000]);
         assert_eq!(fang(74), 50);
         assert_eq!(fang(76), 100);
     }
