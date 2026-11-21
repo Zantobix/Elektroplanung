@@ -12,7 +12,12 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Optionen {
     // Programm › Starteinstellung
+    /// Index in `crate::app::RASTER` (ohne "Kein"; gespeichert als "raster")
+    #[serde(rename = "raster")]
     pub raster_idx: usize,
+    /// Rasterindex älterer Versionen mit "Kein" an Stelle 0 (nur lesen, siehe `migrieren`)
+    #[serde(rename = "raster_idx", skip_serializing)]
+    pub alt_raster_idx: Option<usize>,
     pub rand_ursprung: bool,
     pub gitter: bool,
     pub pfadfang: bool,
@@ -69,7 +74,8 @@ impl Default for Optionen {
     fn default() -> Self {
         let a = AnlSettings::default();
         Optionen {
-            raster_idx: 6,
+            raster_idx: 5,
+            alt_raster_idx: None,
             rand_ursprung: true,
             gitter: true,
             pfadfang: true,
@@ -114,6 +120,17 @@ impl Default for Optionen {
 
 impl Optionen {
     /// Anlagen-Vorgaben für neue Anlagen.
+    /// Gespeicherte Optionen älterer Versionen umrechnen: dort stand "Kein" an Stelle 0 der Rasterauswahl.
+    /// "Kein" wird zu ausgeschaltetem Rasterfang (Gitterknopf aus) mit 1,0 mm.
+    pub fn migrieren(&mut self) {
+        if let Some(a) = self.alt_raster_idx.take() {
+            if a == 0 {
+                self.gitter = false;
+            }
+            self.raster_idx = a.saturating_sub(1).min(crate::app::RASTER.len() - 1);
+        }
+    }
+
     pub fn anlage(&self) -> AnlSettings {
         AnlSettings {
             format: self.format,
@@ -246,7 +263,7 @@ impl App {
                                         });
                                     });
                                     mark(ui, &mut o.rand_ursprung, "Rand ist Ursprung");
-                                    mark(ui, &mut o.gitter, "Gitter anzeigen");
+                                    mark(ui, &mut o.gitter, "Rasterfang ein (Gitter anzeigen)");
                                     mark(ui, &mut o.pfadfang, "Pfadfang");
                                     mark(ui, &mut o.autoverbindung, "Autoverbindung");
                                     mark(ui, &mut o.rahmen_groesse, "Rahmen für Größe");
@@ -536,6 +553,7 @@ impl App {
 
     /// Starteinstellungen der Optionen auf das Programm anwenden (beim Start).
     pub fn apply_start_options(&mut self) {
+        self.opt.migrieren();
         let o = self.opt.clone();
         self.raster_idx = o.raster_idx.min(crate::app::RASTER.len() - 1);
         self.grid = o.gitter;
@@ -570,5 +588,22 @@ mod tests {
         let j = serde_json::to_string(&Optionen { raster_farbe: rgb(RASTER_HELL), ..Default::default() }).unwrap();
         let back: Optionen = serde_json::from_str(&j).unwrap();
         assert_eq!(back.raster_farbe, rgb(RASTER_HELL));
+    }
+
+    #[test]
+    fn rasterindex_ohne_kein() {
+        assert_eq!(crate::app::RASTER[Optionen::default().raster_idx].0, "10,0mm");
+        // alte Einstellungen: Index 6 = 10 mm, 2 = 2,5 mm, 0 = "Kein" → Rasterfang aus
+        for (alt, neu, gitter) in [(6, "10,0mm", true), (2, "2,5mm", true), (0, "1,0mm", false), (7, "14,0mm", true)] {
+            let mut o: Optionen = serde_json::from_str(&format!(r#"{{"raster_idx": {alt}, "gitter": true}}"#)).unwrap();
+            o.migrieren();
+            assert_eq!((crate::app::RASTER[o.raster_idx].0, o.gitter), (neu, gitter));
+        }
+        // neu gespeichert: nur "raster", wird unverändert gelesen
+        let j = serde_json::to_string(&Optionen { raster_idx: 1, ..Default::default() }).unwrap();
+        assert!(!j.contains("raster_idx"));
+        let mut o: Optionen = serde_json::from_str(&j).unwrap();
+        o.migrieren();
+        assert_eq!(o.raster_idx, 1);
     }
 }

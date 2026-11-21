@@ -150,7 +150,7 @@ impl App {
             if rr.inner {
                 self.raster_idx = ri;
             }
-            if tool_button(ui, Icon::Grid, "Rasterfanggitter anzeigen", true, self.grid).clicked() {
+            if tool_button(ui, Icon::Grid, "Rasterfang ein/aus", true, self.grid).clicked() {
                 self.grid = !self.grid;
             }
             sep(ui, 5.0);
@@ -984,7 +984,11 @@ impl App {
             let r = Rect::from_min_max(xf.s(mn), xf.s(mx));
             clip.add(egui::Shape::dashed_line(&[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()], Stroke::new(1.0, Color32::from_rgb(0, 90, 200)), 4.0, 3.0));
             let hs = (FRAME_HANDLE * xf.z).max(5.0);
-            for q in crate::app::frame_handles(mn, mx) {
+            let nur_ecken = crate::groesse::proportional(&self.selected_objs());
+            for (i, q) in crate::app::frame_handles(mn, mx).into_iter().enumerate() {
+                if nur_ecken && i % 2 == 1 {
+                    continue;
+                }
                 let hr = Rect::from_center_size(xf.s(q), Vec2::splat(hs));
                 clip.rect_filled(hr, 0.0, Color32::from_rgb(0, 90, 200));
                 clip.rect_stroke(hr, 0.0, Stroke::new(1.0, Color32::WHITE), StrokeKind::Inside);
@@ -1014,12 +1018,9 @@ impl App {
             _ => {}
         }
         if let Some(ring) = &self.ring {
-            // Variantenrad: Ring mit den Bildern, im Loch das abgesetzte Symbol (Bild 0) an der Absetzstelle
+            // Variantenrad: Ring mit den Bildern, im Loch das gewählte Bild um die Absetzstelle zentriert
             if let Some(def) = symbols::find(&self.lib, &ring.key) {
-                let pin0 = def.pins.first().copied().unwrap_or_default();
-                let pos = self.align_to_path(self.snap(ring.at.add(pin0)).sub(pin0));
-                crate::variantenrad::zeichnen(&clip, xf.s(ring.at), def, ring);
-                canvas::draw_symbol(&clip, xf, def, pos, 0, false, false, 1.0, 0, Stroke::new((0.25 * xf.z).max(1.0), PREVIEW));
+                crate::variantenrad::zeichnen(&clip, xf.s(ring.at), def, ring, xf.z, PREVIEW);
             }
         } else if let (Some(key), Some(h)) = (self.placing.clone(), hover) {
             if area.contains(h) {
@@ -1226,12 +1227,26 @@ impl App {
             return;
         }
 
+        // Strg über einem Verweis: Hand als Mauszeiger, Strg+Klick springt zum Ziel
+        if inside && ctrl && self.tool == Tool::Select && matches!(self.drag, Drag::None) && self.verweis_unter(m, tol).is_some() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            resp.clone().on_hover_text_at_pointer("Strg+Klick: zum Ziel springen");
+            if pressed_l && self.verweis_strg_klick(m, tol) {
+                return;
+            }
+        }
+
         if inside && pressed_l {
             match self.tool {
                 Tool::Select => {
+                    // Titel/Wert eines markierten Symbols ziehen
+                    if !shift && !ctrl && self.beschriftung_greifen(m, tol) {
+                        return;
+                    }
                     if let Some((mn, mx)) = self.sel_frame() {
                         let r = (FRAME_HANDLE / 2.0).max(2.5 / xf.z) + 0.5 / xf.z;
-                        if let Some(hi) = frame_handles(mn, mx).iter().position(|q| (q.x - m.x).abs() <= r && (q.y - m.y).abs() <= r) {
+                        let nur_ecken = crate::groesse::proportional(&self.selected_objs());
+                        if let Some(hi) = frame_handles(mn, mx).iter().enumerate().position(|(i, q)| !(nur_ecken && i % 2 == 1) && (q.x - m.x).abs() <= r && (q.y - m.y).abs() <= r) {
                             self.checkpoint();
                             let orig = self.selected_objs();
                             self.drag = Drag::Scale { handle: hi, start: (mn, mx), orig };
@@ -1327,17 +1342,10 @@ impl App {
             }
         }
         if let Drag::Scale { handle, start, orig } = self.drag.clone() {
-            let (anchor, sx, sy) = frame_scale(handle, start.0, start.1, self.snap(m));
-            let fix = self.fix_active;
-            self.with_sheet(|s, _| {
-                for o0 in orig.iter().filter(|o| !(o.fixed && fix)) {
-                    if let Some(o) = s.objects.iter_mut().find(|o| o.id == o0.id) {
-                        let mut k = o0.kind.clone();
-                        k.scale_about(anchor, sx, sy);
-                        o.kind = k;
-                    }
-                }
-            });
+            self.rahmen_ziehen(handle, start, &orig, self.snap(m));
+        }
+        if matches!(self.drag, Drag::Beschriftung { .. }) {
+            self.beschriftung_ziehen(m);
         }
         if let Drag::Resize { id, corner } = self.drag.clone() {
             let cur = self.snap(m);
@@ -1779,7 +1787,7 @@ impl App {
         // Gehaltene Tasten wie im Original: S kehrt die Strompfadausrichtung, A die automatischen Verbindungen um,
         // solange sie gedrückt sind; Umschalt schaltet den Rasterfang ab. Ein kurzer Druck ohne Setzen/Ziehen
         // schaltet beim Loslassen wie bisher um. Gilt nur für Belegungen ohne Strg/Umschalt/Alt.
-        let busy = self.placing.is_some() || matches!(self.drag, Drag::Move { .. } | Drag::Create { .. } | Drag::Wire { .. } | Drag::Resize { .. } | Drag::Scale { .. });
+        let busy = self.placing.is_some() || matches!(self.drag, Drag::Move { .. } | Drag::Create { .. } | Drag::Wire { .. } | Drag::Resize { .. } | Drag::Scale { .. } | Drag::Beschriftung { .. });
         let hold_keys: [Option<Key>; 2] = ["pfadfang", "autoverb"].map(|id| {
             crate::kuerzel::parse(&crate::kuerzel::belegung(&eigene, id)).filter(|(m, _)| !m.ctrl && !m.shift && !m.alt && !m.command).map(|(_, k)| k)
         });
@@ -1846,7 +1854,7 @@ impl App {
             self.paste();
         }
         if arrows.iter().any(|b| *b) && !self.selection.is_empty() {
-            let st = if shift || self.raster() <= 0.0 { 1.0 } else { self.raster() };
+            let st = if shift || self.fang() <= 0.0 { 1.0 } else { self.fang() };
             let d = if arrows[0] {
                 P::new(-st, 0.0)
             } else if arrows[1] {
@@ -2336,9 +2344,9 @@ impl App {
             "gruppieren" if self.selection.len() > 1 => self.group_selection(true),
             "aufloesen" if has_sel => self.group_selection(false),
             "symbol_bearbeiten" => {
-                let key = self.selected_objs().iter().find_map(|o| if let Kind::Symbol { key, .. } = &o.kind { Some(key.clone()) } else { None });
-                if let Some(k) = key {
-                    self.open_symbol_editor(Some(k));
+                let id = self.selected_objs().iter().find(|o| matches!(o.kind, Kind::Symbol { .. })).map(|o| o.id);
+                if let Some(id) = id {
+                    self.open_symbol_editor_fuer(id);
                 }
             }
             "einpassen" => {

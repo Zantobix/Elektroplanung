@@ -172,7 +172,7 @@ impl App {
             });
             ui.separator();
             if ui.button("Symbol bearbeiten").clicked() {
-                self.open_symbol_editor(Some(key.clone()));
+                self.open_symbol_editor_fuer(id);
                 ui.close();
             }
             ui.separator();

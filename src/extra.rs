@@ -56,6 +56,9 @@ pub struct SymEdit {
     pub value_pos: Option<P>,
     /// Anfangslage von Titel- und Wertfeld im Editor (nur verschobene Felder ändern das Symbol)
     pub boxes0: (P, P),
+    /// gesetztes Symbol, aus dem der Editor geöffnet wurde, und offene Frage "auf alle N übernehmen?" (symbol_kopie.rs)
+    pub instanz: Option<u64>,
+    pub frage: Option<usize>,
 }
 
 impl SymEdit {
@@ -268,7 +271,7 @@ impl App {
         }
         if std::env::var("EP_DEBUG").is_ok() { for o in &sheet.objects { eprintln!("{:?} vis={:?}", o.kind, vis.get(&o.id)); } }
         let prev_raster = self.raster_idx;
-        self.raster_idx = 2; // 2,5 mm Arbeitsfläche = 0,5 mm im Symbol
+        self.raster_idx = 1; // 2,5 mm Arbeitsfläche = 0,5 mm im Symbol
         let options = if def.options.is_empty() { vec!["Standard".into()] } else { def.options.clone() };
         self.sym_edit = Some(SymEdit {
             key: def.key.clone(),
@@ -295,6 +298,8 @@ impl App {
             params: def.params.clone(),
             value_pos: def.value_pos,
             boxes0: (e(tpos), e(vpos)),
+            instanz: None,
+            frage: None,
         });
         self.selection.clear();
         self.tool = Tool::Select;
@@ -497,6 +502,8 @@ impl App {
             resp.on_hover_text(hint)
         }
         use crate::icons::Icon as I;
+        let ctx = ui.ctx().clone();
+        self.symbol_frage_ui(&ctx);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             ui.add_space(29.0);
@@ -559,7 +566,7 @@ impl App {
             }
             crate::view::sep(ui, 4.0);
             if gbtn(ui, I::Apply, "Übernehmen", true, false).clicked() {
-                self.symbol_editor_commit();
+                self.symbol_editor_uebernehmen();
                 return;
             }
             if gbtn(ui, I::Cancel, "Abbruch", true, false).clicked() {
