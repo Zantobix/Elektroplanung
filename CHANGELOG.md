@@ -10,6 +10,8 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 ## [Unveröffentlicht]
 
 Neu:
+- `examples/gegenprobe_plaene.rs`: Testdatei für das Original mit Kontaktspiegel, Querverweis-, Artikellisten- und
+  Inhaltsverzeichnis-Blättern, Tabellenarten, Symbol-Freigaben, Symbol-Stift und bearbeitetem Schriftfeld
 - Texte werden in ihrem eigenen Schriftnamen (sonst der Standardschrift des Projekts) gezeichnet – auf der
   Zeichenfläche, im Bildexport und im PDF (dort als Times/Helvetica/Courier); der Schriftdialog listet die
   installierten Schriften
@@ -51,6 +53,12 @@ Neu:
   Verweis (VBG Feld 2/3 bzw. 6/7), Leitungen ziehen beim Verschieben des Verweises mit
 
 Behoben:
+- Verweise wie im Original-Ausdruck der Installationspläne: Pfeil 2,4 mm lang zwischen Lage und Richtung,
+  OBJ Feld 15 Bit 0 = Spitze an der Lage, Feld 4 Byte 3 = Text hochkant (bisher als Querverweis gedeutet,
+  „=S1+W2“ stand falsch), Textversatz = Mitte der Textoberkante
+- Klemmplan: Brücken als Ketten in Spuren wie im Original statt als zusammengefasste Gruppen (mehrstöckige Leisten)
+- Kontaktspiegel bleiben wie im Original stehen, wenn die Spule verschoben wird, und werden nicht mitkopiert;
+  OBJ Feld 14 = Höhe des Spiegels wie beim Übernehmen im Original
 - Elemente mit eigenem Symbolstift (Nummer ab 4) wurden gepunktet gezeichnet und als Stift 3 gespeichert
 - Schriftfeld bearbeiten: Elemente lassen sich nicht mehr über den Rand schieben; Zeilenzahl wie im Original
   höchstens 8
