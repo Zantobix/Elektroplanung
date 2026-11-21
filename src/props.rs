@@ -127,6 +127,8 @@ pub enum Props {
     Anlage(AnlProps),
     /// Zeichenobjekte (TZeichen): Koordinaten- und Eigenschaftstabelle, siehe zeichen_dialog.rs
     Zeichen(crate::zeichen_dialog::ZeichenProps),
+    /// Eigentümer wählen (TSOwner), siehe eigentuemer_dialog.rs
+    Owner(crate::eigentuemer_dialog::OwnerProps),
 }
 
 fn mm1(v: i32) -> String {
@@ -310,6 +312,16 @@ impl App {
         }
     }
 
+    /// Eigentümer › Eigenschaften: Dialog TSOwner für die markierten Symbole (bzw. das Symbol `id`).
+    pub fn open_eigentuemer_dialog(&mut self, id: u64) {
+        let Some(r) = self.cur() else { return };
+        let mut ids: Vec<u64> = self.selected_objs().iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).map(|o| o.id).collect();
+        if !ids.contains(&id) {
+            ids = vec![id];
+        }
+        self.props = Some(Props::Owner(crate::eigentuemer_dialog::OwnerProps::neu(&self.project, ids, r)));
+    }
+
     /// Dialog "Symboleigenschaften" des Symboleditors öffnen (Knopf mit Werkzeug-Icon).
     pub fn open_sym_eigenschaften(&mut self) {
         let Some(e) = &self.sym_edit else { return };
@@ -410,6 +422,7 @@ impl App {
                     Props::Anlage(a) => anlage_ui(ui, a),
                     Props::SymEigen(s) => symeigen_ui(ui, s),
                     Props::Zeichen(z) => crate::zeichen_dialog::ui(ui, z, &stifte),
+                    Props::Owner(d) => crate::eigentuemer_dialog::ui(ui, d),
                 }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -463,6 +476,11 @@ impl App {
     fn apply_props(&mut self, p: Props) {
         self.checkpoint();
         match p {
+            Props::Owner(d) => {
+                if crate::eigentuemer_dialog::anwenden(&mut self.project, &d) {
+                    self.dirty = true;
+                }
+            }
             Props::Zeichen(z) => {
                 self.with_sheet(|sh, _| {
                     if let Some(o) = sh.objects.iter_mut().find(|o| o.id == z.id) {

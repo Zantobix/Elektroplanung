@@ -15,6 +15,7 @@ pub mod dialog_regeln;
 pub mod druck;
 pub mod dxf;
 pub mod eigentuemer;
+pub mod eigentuemer_dialog;
 pub mod epr;
 pub mod epr_neu;
 pub mod epr_projekt;
