@@ -283,3 +283,20 @@ fn changed_new_objects_are_patched() {
         assert_same("geändert", w, &g.kind);
     }
 }
+
+/// Zellen wie das Original: durch 0 getrennt, ohne abschließende 0, leere Zellen am Ende entfallen
+/// (eine abschließende 0 = eine Zelle zu viel, das Original zeigte die Tabelle dann nicht).
+#[test]
+fn table_cells_are_separated_like_original() {
+    let mut p = Project::new_default();
+    let cells = ["Nr", "", "1", "a", "", ""].map(String::from).to_vec();
+    let k = Kind::Table { a: P::new(20.0, 20.0), b: P::new(80.0, 50.0), rows: 3, cols: 2, cells, header: true, fixed_w: false };
+    let o = obj(&mut p, k, 0, false);
+    p.anlagen[0].sheets[0].objects.push(o);
+    let (back, f) = reload(&p);
+    let blt = f.root("PRJ").unwrap().kids_of("ANL").next().unwrap().kids_of("BLT").next().unwrap();
+    let s = &blt.kids.last().unwrap().kid("STR").unwrap().data;
+    assert_eq!(s.as_slice(), b"Nr\0\x001\0a");
+    let Kind::Table { cells, .. } = &back.anlagen[0].sheets[0].objects[0].kind else { panic!() };
+    assert_eq!(cells, &["Nr", "", "1", "a"]);
+}

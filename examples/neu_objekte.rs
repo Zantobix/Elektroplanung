@@ -42,7 +42,11 @@ fn main() {
         let id = p.alloc_id();
         p.anlagen[0].sheets[0].objects.push(Obj { id, kind, pen: 0, fixed: false, group: None, raw: None });
     }
-    let v = |pos: P, text: &str, blatt: u32, obj: u64| Kind::Verweis { pos, text_pos: P::new(pos.x + 7.0, pos.y - 1.0), text: text.into(), dir: 0, vertical: false, ziel: Some(VerweisZiel { anlage: anl.clone(), blatt, obj }) };
+    // Textversatz zeigt auf die Textmitte (wie im Original): rechts neben das Dreieck, um die halbe Textbreite versetzt
+    let v = |pos: P, text: &str, blatt: u32, obj: u64| {
+        let dx = 3.0 + 0.7 * text.chars().count() as f32;
+        Kind::Verweis { pos, text_pos: P::new(pos.x + dx, pos.y - 1.0), text: text.into(), dir: 0, vertical: false, ziel: Some(VerweisZiel { anlage: anl.clone(), blatt, obj }) }
+    };
     p.anlagen[0].sheets[0].objects.push(Obj { id: ida, kind: v(P::new(240.0, 150.0), "nach Blatt 2", 2, idb), pen: 0, fixed: false, group: None, raw: None });
     p.anlagen[0].sheets[1].objects.push(Obj { id: idb, kind: v(P::new(40.0, 60.0), "von Blatt 1", 1, ida), pen: 0, fixed: false, group: None, raw: None });
     let fehlt = epr_write::unsupported(&p);

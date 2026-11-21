@@ -217,12 +217,20 @@ fn set_kid(b: &mut Block, tag: &str, data: Vec<u8>, after: Option<&str>) {
     b.kids.insert(at, Block::new(tag, data));
 }
 
-/// Zellen einer Tabelle als STR-Inhalt (je Zelle 0-terminiert, genau Zeilen × Spalten).
+/// Zellen einer Tabelle als STR-Inhalt wie in W2: durch 0 getrennt, **ohne** abschließende 0, leere Zellen am Ende
+/// entfallen (höchstens Zeilen × Spalten). Mit abschließender 0 zeigte das Original die Tabelle nicht an
+/// (Gegenprobe 21.11.2026: eine Zelle zu viel).
 fn tabellen_str(rows: usize, cols: usize, cells: &[String]) -> Vec<u8> {
+    let mut used: Vec<&String> = cells.iter().take(rows.max(1) * cols.max(1)).collect();
+    while used.last().is_some_and(|c| c.is_empty()) {
+        used.pop();
+    }
     let mut d = vec![];
-    for i in 0..rows.max(1) * cols.max(1) {
-        d.extend(encode_cp1252(&cells.get(i).map(|c| c.replace("\r\n", "\n").replace('\n', "\r\n")).unwrap_or_default()));
-        d.push(0);
+    for (i, c) in used.iter().enumerate() {
+        if i > 0 {
+            d.push(0);
+        }
+        d.extend(encode_cp1252(&c.replace("\r\n", "\n").replace('\n', "\r\n")));
     }
     d
 }
