@@ -266,12 +266,12 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .fixed_size([116.0, 156.0])
+            .fixed_size([164.0, 156.0])
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 ui.label("Referenzpunkt");
                 let cur = names.get(self.align_ref).cloned().unwrap_or_default();
-                egui::ComboBox::from_id_salt("refp").width(112.0).selected_text(cur).show_ui(ui, |ui| {
+                egui::ComboBox::from_id_salt("refp").width(158.0).selected_text(cur).show_ui(ui, |ui| {
                     for (i, n) in names.iter().enumerate() {
                         ui.selectable_value(&mut self.align_ref, i, n);
                     }
