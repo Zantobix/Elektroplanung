@@ -31,6 +31,8 @@ pub fn to_bytes(project: &Project) -> Result<Vec<u8>, String> {
 pub fn build(project: &Project) -> Result<EprFile, String> {
     // Umriss (VSY Feld 32–35) für Symbole ohne gültigen Umriss aus der Symboldefinition berechnen
     let mut filled = project.clone();
+    // Kennungen der Klemmleisten (KLM Feld 13) für neue Leisten vergeben
+    crate::klemmen::ensure_ids(&mut filled);
     for o in filled.anlagen.iter_mut().flat_map(|a| a.sheets.iter_mut()).flat_map(|s| s.objects.iter_mut()) {
         if let Kind::Symbol { ext, pos, .. } = &o.kind {
             if ext.bounds.is_none() && crate::symbols::find(&project.symdefs, match &o.kind { Kind::Symbol { key, .. } => key, _ => unreachable!() }).is_some() {
@@ -233,6 +235,7 @@ fn anlage_block(project: &Project, a: &Anlage, tpl_prj: &Block) -> Result<Block,
             blk.kids.push(sheet_block(project, s, tpl_blt));
         }
     }
+    crate::klemmen::sync_klm(a, &mut blk);
     Ok(blk)
 }
 
@@ -276,6 +279,7 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
             blk.data[120..128].copy_from_slice(&today.to_le_bytes());
         }
     }
+    crate::klemmen::patch_blt(&mut blk, s);
     let by_id: std::collections::HashMap<u64, &Obj> = s.objects.iter().map(|o| (o.id, o)).collect();
     let mut written = std::collections::HashSet::new();
     for (i, k) in src.kids.iter().enumerate() {
@@ -303,6 +307,9 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
 
 /// Block für ein Objekt: Original unverändert, verschoben oder aus den Daten neu erzeugt.
 pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
+    if matches!(o.kind, Kind::Terminal { .. }) {
+        return crate::klemmen::terminal_block(project, o);
+    }
     if let Some(r) = o.raw.as_deref() {
         if r.kind == o.kind && r.pen == o.pen && r.fixed == o.fixed {
             return Some(r.block.clone());
@@ -576,7 +583,7 @@ fn write_ziel(project: &Project, b: &mut Block, ziel: Option<&crate::model::Verw
 }
 
 /// Kennung eines neuen Blattes (Zeitstempel wie im Original, je Blattnummer eine Sekunde später).
-fn new_sheet_id(s: &Sheet) -> f64 {
+pub(crate) fn new_sheet_id(s: &Sheet) -> f64 {
     crate::epr::delphi_from_text(&crate::model::today()).unwrap_or(0.0) + (s.number as f64) / 86_400.0
 }
 
@@ -722,6 +729,7 @@ fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             b.set_i32(16, o.pen as i32);
             Some(b)
         }
+        Kind::Terminal { .. } => crate::klemmen::terminal_block(project, o),
         // Textbox, Tabelle, Bild und Klemmstelle haben im Original eigene Formate, die der Nachbau noch nicht schreibt
         _ => None,
     }

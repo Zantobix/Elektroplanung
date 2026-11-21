@@ -151,6 +151,9 @@ pub enum Kind {
         text_off: Option<P>,
         #[serde(default)]
         tpl: String,
+        /// Einstellungen des Klemmen-Dialogs (Funktion, Ziel Wechsel, Korrektur, Position, Gruppenautomatik …)
+        #[serde(default)]
+        opt: crate::klemmen::KlemmOpt,
     },
     /// Verweis (OBJ im Original): gefülltes Dreieck an `pos`, Spitze in Richtung `dir` (Grad, 0 = rechts,
     /// 90 = oben), Text an `text_pos`; `vertical` = Text hochkant.
@@ -415,11 +418,19 @@ pub struct Anlage {
 }
 
 /// Klemmleiste aus .epr: KLM Feld 13 = Kennung (Verweis aus dem Klemmplan-Blatt), KFO Feld 4 = Klemmennummer.
+/// `name` = Titel (KLM › TIT, %O der Klemmstellen), `intern` = Name im Dialog (KLM Byte 0–43), `etagen` = Feld 15,
+/// `titel_off` = Titelposition X/Y (Feld 10/11, 0,1 mm). Aufbau siehe `crate::klemmen`.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct KlemmInfo {
     pub id: i32,
     pub name: String,
     pub nrs: Vec<u32>,
+    #[serde(default)]
+    pub intern: String,
+    #[serde(default)]
+    pub etagen: i32,
+    #[serde(default)]
+    pub titel_off: (i32, i32),
 }
 
 /// Verbindungsdialog (TSVerbindung): Bits in `Kind::Wire::opts`.

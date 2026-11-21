@@ -814,14 +814,17 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                 }
             }
         }
-        Kind::Terminal { pos, nr, leiste, level, text_off, tpl } => {
+        Kind::Terminal { pos, nr, text_off, opt, .. } => {
             let c = xf.s(*pos);
             match text_off {
-                // aus .epr: Kreis Ø 1,4 mm, Bezeichnung rechtsbündig über der Leitung (Original-Ausdruck Seite 18)
+                // aus .epr: Kreis Ø 1,4 mm, Bezeichnung über der Leitung (Original-Ausdruck Seite 18), Ausrichtung
+                // und Gruppenautomatik wie im Klemmen-Dialog
                 Some(off) => {
                     p.circle_stroke(c, 0.7 * z, stroke);
-                    let t = crate::epr::terminal_label(tpl, leiste, *nr, *level);
-                    p.text(xf.s(pos.add(*off)), Align2::RIGHT_TOP, t, times(2.3 * z), tc);
+                    let sheet = dc.anlage.and_then(|a| a.sheets.iter().find(|s| s.objects.iter().any(|x| x.id == o.id)));
+                    let t = crate::klemmen::label_on_sheet(sheet, o);
+                    let al = [Align2::LEFT_TOP, Align2::CENTER_TOP, Align2::RIGHT_TOP][opt.align.min(2) as usize];
+                    p.text(xf.s(pos.add(*off)), al, t, times(2.3 * z), tc);
                 }
                 None => {
                     p.circle_stroke(c, 1.0 * z, stroke);

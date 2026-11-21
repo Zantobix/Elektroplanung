@@ -1149,10 +1149,9 @@ impl App {
     pub fn new_klemmleiste(&mut self) {
         let a = self.cur().map(|r| r.anlage).unwrap_or(0);
         self.checkpoint();
-        if let Some(anl) = self.project.anlagen.get_mut(a) {
-            let n = anl.klemmleisten.len() + 1;
-            anl.klemmleisten.push(format!("Klemme {n}"));
-            self.klemme = anl.klemmleisten.len() - 1;
+        // mit Kennung (KLM Feld 13), damit Klemmstellen und Klemmplan-Blätter sie im .epr finden
+        if let Some(i) = crate::klemmen::new_leiste(&mut self.project, a) {
+            self.klemme = i;
             self.tree_open.insert(format!("prj/a{a}/kl"));
         }
     }

@@ -165,31 +165,34 @@ impl App {
                 let grid: Vec<Vec<String>> = (0..*rows).map(|r| (0..*cols).map(|c| cells.get(r * cols + c).cloned().unwrap_or_default()).collect()).collect();
                 Dlg3::Tab { id, art: 0, spalten: cols.to_string(), zeilen: rows.to_string(), header: *header, auto: !*fixed_w, fixiert: o.fixed, ab: "1".into(), cells: grid, sel_row: 0 }
             }
-            Kind::Terminal { leiste, nr, level, text_off, tpl, .. } => {
+            Kind::Terminal { leiste, nr, level, text_off, tpl, opt, .. } => {
                 let mut leisten = anl.klemmleisten.clone();
-                leisten.extend(anl.klemmen.iter().map(|k| k.name.clone()));
-                leisten.dedup();
+                for k in &anl.klemmen {
+                    if !leisten.contains(&k.name) {
+                        leisten.push(k.name.clone());
+                    }
+                }
                 if !leisten.contains(leiste) {
                     leisten.push(leiste.clone());
                 }
-                let t = text_off.unwrap_or(P::new(-1.0, -4.0));
+                let t = text_off.unwrap_or(P::new(-1.0, -2.0));
                 Dlg3::Klemme {
                     id,
                     leiste: leisten.iter().position(|l| l == leiste).unwrap_or(0),
                     leisten,
                     titel: if tpl.is_empty() { "%O%B.%C".into() } else { tpl.clone() },
-                    gr_auto: false,
-                    align: 2,
+                    gr_auto: opt.gr_auto,
+                    align: opt.align.min(2) as usize,
                     tx: f1(t.x),
                     ty: f1(t.y),
                     nummer: nr.to_string(),
-                    auto: false,
-                    korr: false,
-                    position: nr.to_string(),
-                    posk: false,
+                    auto: opt.auto,
+                    korr: opt.korr,
+                    position: opt.pos(*nr).to_string(),
+                    posk: opt.posk,
                     ebene: (*level as usize).saturating_sub(1),
-                    funktion: String::new(),
-                    ziel_wechsel: false,
+                    funktion: opt.funktion.clone(),
+                    ziel_wechsel: opt.ziel_wechsel,
                 }
             }
             Kind::Verweis { text, dir, ziel, .. } => {
@@ -250,7 +253,7 @@ impl App {
     pub fn open_kleiste_dialog(&mut self, anlage: usize, idx: usize) {
         let Some(a) = self.project.anlagen.get(anlage) else { return };
         let name = a.klemmleisten.get(idx).cloned().unwrap_or_default();
-        let info = a.klemmen.iter().find(|k| k.name == name).cloned().unwrap_or_else(|| KlemmInfo { id: 0, name: name.clone(), nrs: vec![] });
+        let info = a.klemmen.iter().find(|k| k.name == name).cloned().unwrap_or_else(|| KlemmInfo { id: 0, name: name.clone(), nrs: vec![], intern: name.clone(), etagen: 1, titel_off: (0, -50) });
         let mut nrs: Vec<String> = info.nrs.iter().map(|n| n.to_string()).collect();
         // Klemmen, die nur auf den Blättern stehen, ergänzen
         for s in &a.sheets {
@@ -263,7 +266,10 @@ impl App {
             }
         }
         nrs.sort_by_key(|n| n.parse::<u32>().unwrap_or(0));
-        self.dlg3 = Some(Dlg3::KLeiste { anlage, idx, name: name.clone(), titel: name, x: "0".into(), y: "-4".into(), anzahl: nrs.len().to_string(), ebenen: 0, nrs });
+        // Name (KLM Byte 0–43), Titel (TIT), Titelposition (Feld 10/11, 0,1 mm) und Ebenen (Feld 15) aus der Klemmleiste
+        let intern = if info.intern.is_empty() { name.clone() } else { info.intern.clone() };
+        let (tx, ty) = if info.id == 0 { (0, -50) } else { info.titel_off };
+        self.dlg3 = Some(Dlg3::KLeiste { anlage, idx, name: intern, titel: name, x: f1(tx as f32 / 10.0), y: f1(ty as f32 / 10.0), anzahl: nrs.len().to_string(), ebenen: (info.etagen.max(1) as usize - 1).min(3), nrs });
     }
 
     pub fn open_pfad_dialog(&mut self) {
@@ -1066,17 +1072,20 @@ impl App {
                     }
                 });
             }
-            Dlg3::Klemme { id, leisten, leiste, titel, tx, ty, nummer, auto, ebene, .. } => {
+            Dlg3::Klemme { id, leisten, leiste, titel, gr_auto, align, tx, ty, nummer, auto, korr, position, posk, ebene, funktion, ziel_wechsel } => {
                 let name = leisten.get(leiste).cloned().unwrap_or_default();
-                let nr = if auto { self.next_terminal(&name) } else { nummer.trim().parse().unwrap_or(1) };
+                let mehr = self.cur().and_then(|r| self.project.anlagen.get(r.anlage)).and_then(|a| a.klemmen.iter().find(|k| k.name == name)).map(|k| k.etagen > 1).unwrap_or(false);
+                let ein = crate::klemmen::Eingabe { leiste: name, nummer, auto, korr, position, posk, ebene: if mehr || ebene > 0 { ebene as u8 + 1 } else { 0 } };
+                crate::klemmen::apply_index(&mut self.project, id, &ein);
                 self.with_sheet(|s, _| {
                     if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
-                        if let Kind::Terminal { leiste: l, nr: n, level, text_off, tpl, .. } = &mut o.kind {
-                            *l = name.clone();
-                            *n = nr;
-                            *level = if ebene > 0 || *level > 0 { ebene as u8 + 1 } else { 0 };
-                            *text_off = Some(P::new(num(&tx).unwrap_or(-1.0), num(&ty).unwrap_or(-4.0)));
+                        if let Kind::Terminal { text_off, tpl, opt, .. } = &mut o.kind {
+                            *text_off = Some(P::new(num(&tx).unwrap_or(-1.0), num(&ty).unwrap_or(-2.0)));
                             *tpl = titel.clone();
+                            opt.gr_auto = gr_auto;
+                            opt.align = align.min(2) as u8;
+                            opt.funktion = funktion.trim().to_string();
+                            opt.ziel_wechsel = ziel_wechsel;
                         }
                     }
                 });
@@ -1123,19 +1132,23 @@ impl App {
                     }
                 });
             }
-            Dlg3::KLeiste { anlage, idx, name, nrs, ebenen, .. } => {
+            Dlg3::KLeiste { anlage, idx, name: intern, titel, x, y, nrs, ebenen, .. } => {
+                // Titel = Name der Leiste in den Klemmstellen (%O); ohne Titel gilt der Name
+                let name = if titel.trim().is_empty() { intern.trim().to_string() } else { titel.trim().to_string() };
+                crate::klemmen::ensure_ids(&mut self.project);
                 if let Some(a) = self.project.anlagen.get_mut(anlage) {
                     let old = a.klemmleisten.get(idx).cloned().unwrap_or_default();
                     if let Some(k) = a.klemmleisten.get_mut(idx) {
                         *k = name.clone();
                     }
                     let n: Vec<u32> = nrs.iter().filter_map(|n| n.trim().parse().ok()).collect();
-                    match a.klemmen.iter_mut().find(|k| k.name == old) {
-                        Some(k) => {
-                            k.name = name.clone();
-                            k.nrs = n;
-                        }
-                        None => a.klemmen.push(KlemmInfo { id: 0, name: name.clone(), nrs: n }),
+                    let off = ((num(&x).unwrap_or(0.0) * 10.0).round() as i32, (num(&y).unwrap_or(-5.0) * 10.0).round() as i32);
+                    if let Some(k) = a.klemmen.iter_mut().find(|k| k.name == old) {
+                        k.name = name.clone();
+                        k.intern = intern.trim().to_string();
+                        k.nrs = n;
+                        k.etagen = ebenen as i32 + 1;
+                        k.titel_off = off;
                     }
                     for sh in &mut a.sheets {
                         for o in &mut sh.objects {

@@ -11,14 +11,24 @@
 //! - Treffen sich Verbindungsenden (Toleranz 0,05 mm), geht es in allen anschließenden Verbindungen weiter.
 //!   Endet eine Verbindung auf dem Verlauf einer anderen (Knick oder Strecke), geht es in dieser nur zu ihrem
 //!   Anfang weiter – so wie das Original die Ziele zuordnet. Kreuzende Verbindungen sind nicht verbunden.
-//! - "Von Ziel" ist das erste gefundene Ziel, "Nach Ziel" das letzte (weitere dazwischen zeigt das Original nicht).
+//! - Von/Nach wie im Original (Klemmplan-Routine 0x4830a8): jede Verbindung an der Klemme belegt eine von vier
+//!   Richtungen – vom Klemmenende zum Nachbarpunkt der Verbindung: 0 oben, 1 links, 2 rechts, 3 unten; die erste
+//!   Verbindung je Richtung (Objektreihenfolge) zählt, Brücken belegen ihre Richtung ebenfalls. "Ziel Wechsel"
+//!   tauscht oben/unten und links/rechts. "Von Ziel" = erste Richtung mit Ziel; "Nach Ziel" = unten, wenn Von
+//!   oben ist und unten ein Ziel hat, sonst die nächste Richtung mit Ziel.
+//! - Symbole mit Eigentümer (VSY › OWR, z. B. Kontakt eines Relais) erscheinen mit der Kennung des Eigentümers
+//!   (Ausdruck Seite 13: "-K1" statt "-Q1+W2").
+//! - Funktion = Funktion der Klemme (Klemmen-Dialog), sonst die Pfadbeschreibung ihres Strompfades (Anleitung 4.2.4).
+//! - Reihenfolge der Zeilen: Position in der Klemmleiste, dann Etage (wie das Original: Position · 10 + Etage).
+//! - Folgeseiten: direkt aufeinander folgende Klemmplan-Blätter derselben Leiste setzen die Liste fort
+//!   (Anleitung 4.2: „Zusammenhängende Blätter ergeben eine zusammenhängende … Liste“).
 //! - Pfad = Blattnummer / Strompfad der Symbollage (bei Sammelschienen: ihres Anfangs).
 
 use crate::canvas::{self, DrawCtx};
 use crate::model::*;
 use crate::symbols::{self, Prim, SymDef};
 use eframe::egui::{self, Align2, Color32, Rect, Stroke};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 /// Toleranz für zusammenfallende Punkte in mm
 pub const TOL: f32 = 0.05;
@@ -43,6 +53,10 @@ pub struct Zeile {
     pub label: String,
     pub von: Option<Ziel>,
     pub nach: Option<Ziel>,
+    /// Funktion (Klemme bzw. Pfadbeschreibung)
+    pub funktion: String,
+    /// Position in der Klemmleiste (Reihenfolge)
+    pub pos: u32,
 }
 
 /// Brücke zwischen Klemmen derselben Leiste: Zeilen (aufsteigend) und Spur in der Brückenspalte.
@@ -73,11 +87,20 @@ struct Klemmstelle {
     nr: u32,
     level: u8,
     tpl: String,
+    opt: crate::klemmen::KlemmOpt,
+}
+
+/// Belegung einer Richtung an der Klemme.
+enum Slot {
+    Ziel(Ziel),
+    Bruecke,
 }
 
 /// Verbindungsdaten eines Blattes.
 struct Netz<'a> {
     wires: Vec<&'a [P]>,
+    /// "Verbindung ist Brücke" (VBG Feld 14 Bit 0x100 bzw. Verbindungsdialog) je Verbindung
+    bruecke: Vec<bool>,
     /// Symbolanschlüsse: Lage, Ziel
     pins: Vec<(P, Ziel)>,
     terms: Vec<Klemmstelle>,
@@ -112,16 +135,53 @@ pub fn pin_name(def: &SymDef, pin: usize, ext: &SymExt, option: u16) -> String {
     symbols::expand_text(&s, def, &ext.params, option).replace("\r\n", " ").replace('\n', " ").trim().to_string()
 }
 
+/// Kennung eines Symbols im Original (VSY Byte 96–103).
+fn vsy_uid(o: &Obj) -> Option<u64> {
+    o.raw.as_deref().filter(|r| r.block.is("VSY")).and_then(|r| r.block.data.get(96..104)).map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+}
+
+/// Eigentümer eines Symbols (VSY › OWR Byte 0–7 = Kennung des Eigentümer-Symbols).
+fn owner_uid(o: &Obj) -> Option<u64> {
+    o.raw.as_deref().and_then(|r| r.block.kid("OWR")).and_then(|w| w.data.get(0..8)).map(|b| u64::from_le_bytes(b.try_into().unwrap()))
+}
+
+/// Angezeigte Kennung aller Symbole der Anlage, die Eigentümer sein können (Kennung → BMK).
+fn owners(anlage: &Anlage) -> HashMap<u64, String> {
+    let mut m = HashMap::new();
+    for s in &anlage.sheets {
+        let ctx = canvas::bmk_ctx(anlage, s);
+        for o in &s.objects {
+            if let (Kind::Symbol { bmk, ext, .. }, Some(id)) = (&o.kind, vsy_uid(o)) {
+                m.insert(id, symbols::display_bmk(bmk, ext.counter, &ctx));
+            }
+        }
+    }
+    m
+}
+
+/// Pfadbeschreibung des Strompfades bei `x` (leer, wenn keine eigene vergeben ist).
+pub fn pfad_text(sheet: &Sheet, x: f32) -> String {
+    let (fx0, _, fx1, _) = sheet.frame();
+    let cols = sheet.columns.max(1);
+    let cw = (fx1 - fx0) / cols as f32;
+    let i = if cw > 0.0 { ((x - fx0) / cw).floor().clamp(0.0, (cols - 1) as f32) as usize } else { 0 };
+    sheet.col_labels.get(i).map(|s| s.trim().to_string()).unwrap_or_default()
+}
+
 impl<'a> Netz<'a> {
-    fn new(anlage: &Anlage, sheet: &'a Sheet, lib: &[SymDef]) -> Self {
+    fn new(anlage: &Anlage, sheet: &'a Sheet, lib: &[SymDef], owners: &HashMap<u64, String>) -> Self {
         let ctx = canvas::bmk_ctx(anlage, sheet);
-        let mut n = Netz { wires: vec![], pins: vec![], terms: vec![], bars: vec![] };
+        let mut n = Netz { wires: vec![], bruecke: vec![], pins: vec![], terms: vec![], bars: vec![] };
         for o in &sheet.objects {
             match &o.kind {
-                Kind::Wire { pts, .. } if pts.len() >= 2 => n.wires.push(pts),
+                Kind::Wire { pts, opts, .. } if pts.len() >= 2 => {
+                    n.wires.push(pts);
+                    let raw = o.raw.as_deref().filter(|r| r.block.is("VBG") && r.kind == o.kind).map(|r| r.block.i32(14) & 0x100 != 0);
+                    n.bruecke.push(raw.unwrap_or(false) || opts & WIRE_BRUECKE != 0);
+                }
                 Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, flags, bmk, ext, .. } => {
                     let Some(def) = symbols::find(lib, key) else { continue };
-                    let kennung = symbols::display_bmk(bmk, ext.counter, &ctx);
+                    let kennung = owner_uid(o).and_then(|w| owners.get(&w).cloned()).unwrap_or_else(|| symbols::display_bmk(bmk, ext.counter, &ctx));
                     let pf = pfad(sheet, pos.x);
                     for (i, q) in def.pins.iter().enumerate() {
                         if !symbols::visible(*option, def.pin_vis.get(i)) || !symbols::flag_visible(*flags, def.pin_info.get(i).map(|x| &x.1)) {
@@ -131,7 +191,7 @@ impl<'a> Netz<'a> {
                         n.pins.push((at, Ziel { kennung: kennung.clone(), kl: pin_name(def, i, ext, *option), pfad: pf.clone() }));
                     }
                 }
-                Kind::Terminal { pos, leiste, nr, level, tpl, .. } => n.terms.push(Klemmstelle { pos: *pos, leiste: leiste.clone(), nr: *nr, level: *level, tpl: tpl.clone() }),
+                Kind::Terminal { pos, leiste, nr, level, tpl, opt, .. } => n.terms.push(Klemmstelle { pos: *pos, leiste: leiste.clone(), nr: *nr, level: *level, tpl: tpl.clone(), opt: opt.clone() }),
                 Kind::Busbar { a, x2, name, .. } => {
                     let kurz = anlage.schienen.get(name).map(|s| s.kurz.trim().to_string()).filter(|k| !k.is_empty()).unwrap_or_else(|| name.clone());
                     let x0 = a.x.min(*x2);
@@ -143,11 +203,10 @@ impl<'a> Netz<'a> {
         n
     }
 
-    /// Ziel auf eine Klemme einer anderen Leiste: Kennung = Leiste, Anschluss = Nummer (mit Etage)
+    /// Ziel auf eine Klemme: Kennung = Leiste, Anschluss = Nummer ohne Etage (Ausdruck Seite 22: "-X1 8")
     fn term_ziel(&self, sheet: &Sheet, i: usize) -> Ziel {
         let t = &self.terms[i];
-        let kl = if t.level > 0 { format!("{}{}", t.nr, (b'A' + t.level - 1) as char) } else { t.nr.to_string() };
-        Ziel { kennung: t.leiste.clone(), kl, pfad: pfad(sheet, t.pos.x) }
+        Ziel { kennung: t.leiste.clone(), kl: t.nr.to_string(), pfad: pfad(sheet, t.pos.x) }
     }
 
     /// Was liegt am Punkt `p`? (Anschluss, Klemmstelle außer `origin`, Sammelschiene); `Err(())` = die
@@ -156,9 +215,11 @@ impl<'a> Netz<'a> {
         if let Some((_, z)) = self.pins.iter().find(|(q, _)| q.dist(p) <= TOL) {
             return Ok(Some(Treffer::Ziel(z.clone())));
         }
+        let bar = |p: P| self.bars.iter().find(|(a, x2, _)| (p.y - a.y).abs() <= TOL && p.x >= a.x.min(*x2) - TOL && p.x <= a.x.max(*x2) + TOL).map(|(_, _, z)| z.clone());
         if let Some(i) = self.terms.iter().position(|t| t.pos.dist(p) <= KLEMME_R + TOL) {
             if i == origin {
-                return Err(());
+                // kurze Verbindung innerhalb des Klemmenkreises auf eine Sammelschiene (Ausdruck Seite 20, Klemme 1B)
+                return bar(p).map(|z| Some(Treffer::Ziel(z))).ok_or(());
             }
             return Ok(Some(if self.terms[i].leiste == self.terms[origin].leiste { Treffer::Bruecke(i) } else { Treffer::Ziel(self.term_ziel(sheet, i)) }));
         }
@@ -206,69 +267,107 @@ impl<'a> Netz<'a> {
         out
     }
 
-    /// Ziele (in Anschlussreihenfolge) und Brücken einer Klemmstelle.
-    fn klemme(&self, sheet: &Sheet, i: usize) -> (Vec<Ziel>, Vec<usize>) {
+    /// Belegung der vier Richtungen (0 oben, 1 links, 2 rechts, 3 unten; mit "Ziel Wechsel" getauscht) und
+    /// Brücken einer Klemmstelle.
+    fn klemme(&self, sheet: &Sheet, i: usize) -> ([Option<Slot>; 4], Vec<usize>) {
         let c = self.terms[i].pos;
-        let mut att: Vec<(P, usize, bool)> = vec![];
-        for (k, pts) in self.wires.iter().enumerate() {
-            let (a, b) = (pts[0], *pts.last().unwrap());
-            if a.dist(c) <= KLEMME_R + TOL {
-                att.push((a, k, true));
-            } else if b.dist(c) <= KLEMME_R + TOL {
-                att.push((b, k, false));
-            }
-        }
-        let key = |p: P| ((p.y * 10.0).round() as i64, (p.x * 10.0).round() as i64);
-        att.sort_by_key(|(p, k, _)| (key(*p), *k));
-        let mut ziele = vec![];
+        let mut slots: [Option<Slot>; 4] = Default::default();
         let mut br = vec![];
-        for (_, k, from_start) in att {
-            let mut found = false;
-            for t in self.trace(sheet, i, k, from_start) {
-                match t {
-                    Treffer::Ziel(z) if !found => {
-                        ziele.push(z);
-                        found = true;
-                    }
-                    Treffer::Bruecke(j) => br.push(j),
-                    _ => {}
+        for (k, pts) in self.wires.iter().enumerate() {
+            let n = pts.len();
+            let from_start = if pts[0].dist(c) <= KLEMME_R + TOL {
+                true
+            } else if pts[n - 1].dist(c) <= KLEMME_R + TOL {
+                false
+            } else {
+                continue;
+            };
+            // Richtung wie im Original: vom Klemmenende zum benachbarten Punkt der Verbindung (0,1 mm genau)
+            let (p0, p1) = if from_start { (pts[0], pts[1]) } else { (pts[n - 1], pts[n - 2]) };
+            let r = |v: f32| (v * 10.0).round() as i32;
+            let mut dir = if r(p0.x) == r(p1.x) {
+                if r(p0.y) < r(p1.y) {
+                    3
+                } else {
+                    0
                 }
+            } else if r(p0.x) < r(p1.x) {
+                2
+            } else {
+                1
+            };
+            if self.terms[i].opt.ziel_wechsel {
+                dir = 3 - dir;
+            }
+            // Klemme derselben Leiste: Brücke nur über "Verbindung ist Brücke", sonst ein Ziel wie "-X2 2"
+            // (Ausdruck Seite 39; Original: Verbindung +0x38 Bit 0x100)
+            let hits: Vec<Treffer> = self
+                .trace(sheet, i, k, from_start)
+                .into_iter()
+                .map(|t| match t {
+                    Treffer::Bruecke(j) if !self.bruecke[k] => Treffer::Ziel(self.term_ziel(sheet, j)),
+                    t => t,
+                })
+                .collect();
+            br.extend(hits.iter().filter_map(|t| if let Treffer::Bruecke(j) = t { Some(*j) } else { None }));
+            if slots[dir].is_none() {
+                slots[dir] = match hits.into_iter().next() {
+                    Some(Treffer::Ziel(z)) => Some(Slot::Ziel(z)),
+                    Some(Treffer::Bruecke(_)) => Some(Slot::Bruecke),
+                    None => None,
+                };
             }
         }
-        (ziele, br)
+        (slots, br)
     }
+}
+
+/// Von/Nach aus den vier Richtungen wie im Original.
+fn von_nach(slots: &[Option<Slot>; 4]) -> (Option<Ziel>, Option<Ziel>) {
+    let ziel = |d: usize| match &slots[d] {
+        Some(Slot::Ziel(z)) => Some(z.clone()),
+        _ => None,
+    };
+    let Some(v) = (0..4).find(|d| ziel(*d).is_some()) else { return (None, None) };
+    let n = if v == 0 && ziel(3).is_some() { Some(3) } else { (v + 1..4).find(|d| ziel(*d).is_some()) };
+    (ziel(v), n.and_then(ziel))
 }
 
 /// Klemmplan der Klemmleiste `leiste` einer Anlage berechnen (Klemmen aller Blätter der Anlage).
 pub fn plan(anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
     let mut plan = Plan::default();
     let mut links: Vec<((u32, u8), (u32, u8))> = vec![];
-    let row_of =|plan: &mut Plan, nr: u32, level: u8, label: String| -> usize {
+    let row_of = |plan: &mut Plan, nr: u32, level: u8, label: String, pos: u32| -> usize {
         if let Some(r) = plan.zeilen.iter().position(|z| z.nr == nr && z.level == level) {
             return r;
         }
-        plan.zeilen.push(Zeile { nr, level, label, von: None, nach: None });
+        plan.zeilen.push(Zeile { nr, level, label, von: None, nach: None, funktion: String::new(), pos });
         plan.zeilen.len() - 1
     };
+    let owners = owners(anlage);
     for sheet in &anlage.sheets {
         if sheet.art == 4 || sheet.art == 5 {
             continue;
         }
-        let netz = Netz::new(anlage, sheet, lib);
+        let netz = Netz::new(anlage, sheet, lib, &owners);
         for i in 0..netz.terms.len() {
             let t = &netz.terms[i];
             if t.leiste != leiste {
                 continue;
             }
             let label = crate::epr::terminal_label(&t.tpl, &t.leiste, t.nr, t.level);
-            let r = row_of(&mut plan, t.nr, t.level, label);
-            let (ziele, br) = netz.klemme(sheet, i);
+            let r = row_of(&mut plan, t.nr, t.level, label, t.opt.pos(t.nr));
+            let (slots, br) = netz.klemme(sheet, i);
+            let (von, nach) = von_nach(&slots);
             let z = &mut plan.zeilen[r];
             if z.von.is_none() {
-                z.von = ziele.first().cloned();
+                z.von = von;
+                z.nach = nach;
+            } else if z.nach.is_none() {
+                z.nach = von;
             }
-            if ziele.len() >= 2 {
-                z.nach = ziele.last().cloned();
+            if z.funktion.is_empty() {
+                z.funktion = if t.opt.funktion.trim().is_empty() { pfad_text(sheet, t.pos.x) } else { t.opt.funktion.trim().to_string() };
             }
             for j in br {
                 links.push(((t.nr, t.level), (netz.terms[j].nr, netz.terms[j].level)));
@@ -279,11 +378,11 @@ pub fn plan(anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
     if let Some(k) = anlage.klemmen.iter().find(|k| k.name == leiste) {
         for nr in &k.nrs {
             if !plan.zeilen.iter().any(|z| z.nr == *nr) {
-                plan.zeilen.push(Zeile { nr: *nr, level: 0, label: crate::epr::terminal_label("", leiste, *nr, 0), von: None, nach: None });
+                plan.zeilen.push(Zeile { nr: *nr, level: 0, label: crate::epr::terminal_label("", leiste, *nr, 0), von: None, nach: None, funktion: String::new(), pos: *nr });
             }
         }
     }
-    plan.zeilen.sort_by_key(|z| (z.nr, z.level));
+    plan.zeilen.sort_by_key(|z| (z.pos, z.level, z.nr));
     plan.etagen = plan.zeilen.iter().map(|z| z.level).max().unwrap_or(0);
     // Brücken: zusammenhängende Gruppen von Zeilen
     let idx = |plan: &Plan, k: (u32, u8)| plan.zeilen.iter().position(|z| (z.nr, z.level) == k);
@@ -326,6 +425,22 @@ pub fn plan(anlage: &Anlage, leiste: &str, lib: &[SymDef]) -> Plan {
         plan.bruecken.push(Bruecke { lane, rows });
     }
     plan
+}
+
+/// Folgeseite eines berechneten Blattes: Anzahl der unmittelbar vorangehenden Blätter derselben Art (beim
+/// Klemmplan derselben Klemmleiste) in der Anlage – sie zeigen die Liste davor (Anleitung 4.2: zusammenhängende
+/// Blätter ergeben eine zusammenhängende Liste).
+pub fn folge_index(anlage: &Anlage, sheet: &Sheet) -> usize {
+    let i = anlage.sheets.iter().position(|s| std::ptr::eq(s, sheet)).or_else(|| anlage.sheets.iter().position(|s| s.number == sheet.number && s.subindex == sheet.subindex && s.art == sheet.art));
+    let Some(i) = i else { return 0 };
+    anlage.sheets[..i].iter().rev().take_while(|s| s.art == sheet.art && (sheet.art != 4 || s.klm == sheet.klm)).count()
+}
+
+/// Zeilen je Klemmplan-Blatt (gleiche Rechnung wie beim Zeichnen).
+pub fn rows_per_sheet(project: &Project, sheet: &Sheet) -> usize {
+    let (_, fy0, _, fy1) = sheet.frame();
+    let (y0, y1) = (fy0 + 10.0, fy1 - project.title_h() - 4.0);
+    ((((y1 - y0 - 9.0) / 4.4).floor().max(3.0)) as usize).saturating_sub(2)
 }
 
 /// Klemmplan zeichnen (Original-Ausdruck Seite 12 bzw. "Alter Klemmenplan" in den Projekteigenschaften).
@@ -405,9 +520,11 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
             None => vec![],
         }
     };
+    // Folgeseite: vorangehende Klemmplan-Blätter derselben Leiste zeigen die ersten Zeilen
+    let off = folge_index(anlage, sheet) * rows;
     for r in 0..rows {
         let y = row_y(r);
-        let Some(zl) = plan.zeilen.get(r) else {
+        let Some(zl) = plan.zeilen.get(off + r) else {
             if !alt {
                 p.circle_stroke(xf.s(P::new(xs[5] + 2.0, y)), 0.8 * z, stroke);
             }
@@ -419,9 +536,10 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
             cells.push((4, zl.label.clone()));
             cells.extend(ziel_cells(5, &zl.nach));
         } else {
+            cells.push((0, zl.funktion.clone()));
             cells.extend(ziel_cells(1, &zl.von));
             cells.extend(ziel_cells(6, &zl.nach));
-            let first_of_nr = r == 0 || plan.zeilen[r - 1].nr != zl.nr;
+            let first_of_nr = r == 0 || plan.zeilen[off + r - 1].nr != zl.nr;
             if first_of_nr {
                 text(P::new(xs[5] - 0.8, y), &zl.nr.to_string(), 2.2, Align2::RIGHT_CENTER);
             }
@@ -440,7 +558,7 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
     if !alt && !mehr {
         for b in &plan.bruecken {
             let x = xs[5] + 4.2 + b.lane as f32 * 3.3;
-            let vis: Vec<usize> = b.rows.iter().copied().filter(|r| *r < rows).collect();
+            let vis: Vec<usize> = b.rows.iter().copied().filter(|r| *r >= off && *r < off + rows).map(|r| r - off).collect();
             let (Some(lo), Some(hi)) = (vis.first(), vis.last()) else { continue };
             p.line_segment([xf.s(P::new(x, row_y(*lo))), xf.s(P::new(x, row_y(*hi)))], stroke);
             for r in &vis {
@@ -458,7 +576,7 @@ mod tests {
         Obj { id, kind, pen: 0, fixed: false, group: None, raw: None }
     }
     fn term(id: u64, x: f32, y: f32, leiste: &str, nr: u32) -> Obj {
-        obj(id, Kind::Terminal { pos: P::new(x, y), leiste: leiste.into(), nr, level: 0, text_off: None, tpl: String::new() })
+        obj(id, Kind::Terminal { pos: P::new(x, y), leiste: leiste.into(), nr, level: 0, text_off: None, tpl: String::new(), opt: Default::default() })
     }
     fn wire(id: u64, pts: &[(f32, f32)]) -> Obj {
         obj(id, Kind::Wire { pts: pts.iter().map(|(x, y)| P::new(*x, *y)).collect(), leitung: 0, bez: vec![], opts: 0 })
@@ -476,8 +594,8 @@ mod tests {
             term(4, 150.0, 90.0, "-X9", 8),
             // -X1:1 rechts → Knick → -X9:7 (Von)
             wire(10, &[(50.8, 50.0), (100.0, 50.0), (100.0, 50.0), (149.2, 50.0)]),
-            // -X1:1 unten → -X1:2 oben (Brücke)
-            wire(11, &[(50.0, 50.8), (50.0, 69.2)]),
+            // -X1:1 unten → -X1:2 oben (Brücke: "Verbindung ist Brücke")
+            obj(11, Kind::Wire { pts: vec![P::new(50.0, 50.8), P::new(50.0, 69.2)], leitung: 0, bez: vec![], opts: WIRE_BRUECKE }),
             // -X1:2 rechts: kreuzt die senkrechte Verbindung 12 ohne Verbindung, endet an -X9:8 unten links
             wire(12, &[(120.0, 40.0), (120.0, 100.0)]),
             wire(13, &[(50.8, 70.0), (130.0, 70.0), (130.0, 90.0), (149.2, 90.0)]),

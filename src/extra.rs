@@ -238,7 +238,7 @@ impl App {
             id += 1;
         }
         for (i, p) in def.pins.iter().enumerate() {
-            sheet.objects.push(Obj { id, kind: Kind::Terminal { pos: e(*p), leiste: "Anschluss".into(), nr: i as u32 + 1, level: 0, text_off: None, tpl: String::new() }, pen: 0, fixed: false, group: None, raw: None });
+            sheet.objects.push(Obj { id, kind: Kind::Terminal { pos: e(*p), leiste: "Anschluss".into(), nr: i as u32 + 1, level: 0, text_off: None, tpl: String::new(), opt: Default::default() }, pen: 0, fixed: false, group: None, raw: None });
             if let Some(v) = def.pin_vis.get(i) {
                 vis.insert(id, *v);
             }

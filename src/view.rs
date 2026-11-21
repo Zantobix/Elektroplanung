@@ -1283,7 +1283,7 @@ impl App {
                     let leiste = ks.get(self.klemme).cloned().unwrap_or_else(|| "Klemme 1".into());
                     let nr = self.next_terminal(&leiste);
                     let pos = self.snap(m);
-                    self.add_obj(Kind::Terminal { pos, leiste, nr, level: 0, text_off: None, tpl: String::new() });
+                    self.add_obj(Kind::Terminal { pos, leiste, nr, level: 0, text_off: None, tpl: String::new(), opt: Default::default() });
                 }
                 Tool::Text => {
                     let pos = self.snap(m);
