@@ -23,6 +23,7 @@ pub const BEFEHLE: &[Befehl] = &[
     Befehl { id: "loeschen", name: "Löschen", vorgabe: "Delete" },
     Befehl { id: "alles", name: "Alles markieren", vorgabe: "Strg+A" },
     Befehl { id: "eigenschaften", name: "Eigenschaften", vorgabe: "Alt+Enter" },
+    Befehl { id: "suchen", name: "Suchen (alle Blätter)", vorgabe: "Strg+F" },
     Befehl { id: "drehen", name: "Drehen", vorgabe: "R" },
     Befehl { id: "spiegel_v", name: "Vertikal spiegeln", vorgabe: "Umschalt+V" },
     Befehl { id: "spiegel_h", name: "Horizontal spiegeln", vorgabe: "Umschalt+H" },

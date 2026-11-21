@@ -172,6 +172,8 @@ pub struct App {
     pub tree_open: HashSet<String>,
     pub tree_sel: Option<String>,
     pub search: String,
+    /// Suchen über alle Blätter, Projekt prüfen, Bildexport (suche.rs)
+    pub suche: crate::suche::SucheState,
     pub dialog: Option<Dialog>,
     /// Eigenschaftendialoge wie im Original (Symbol, Text, Blatt)
     pub props: Option<crate::props::Props>,
@@ -294,6 +296,7 @@ impl App {
             tree_open,
             tree_sel: None,
             search: String::new(),
+            suche: Default::default(),
             dialog: None,
             props: None,
             align_win: false,
