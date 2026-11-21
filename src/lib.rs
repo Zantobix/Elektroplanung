@@ -27,6 +27,7 @@ pub mod suche;
 pub mod symbols;
 pub mod titleblock;
 pub mod variantenrad;
+pub mod verweise;
 pub mod view;
 pub mod vorschau;
 

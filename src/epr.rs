@@ -282,6 +282,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
         return Err("Keine Anlagen im Projekt gefunden".into());
     }
     update_busbar_xrefs(&mut p);
+    link_verweise(&mut p);
     for a in &mut p.anlagen {
         if a.sheets.is_empty() {
             a.sheets.push(Sheet::new(1));
@@ -547,16 +548,65 @@ fn verweis(k: &Block, text: String) -> Kind {
     let mut vertical = k.i32(15) & 1 == 1;
     let mut dir = ang / 10;
     if text.is_empty() {
-        // Verweis ohne Text (Pfeil im Schriftfeld): Feld 14 = 900 zeigt ▼, 1800 ► (Original-Ausdruck Seite 5 und 35)
-        return Kind::Verweis { pos, text_pos, text, dir: ((dir + 180) % 360) as u16, vertical: false };
+        // Verweis ohne Text (Pfeil im Schriftfeld): Feld 14 = 900 zeigt ▼, 1800 ► (Original-Ausdruck Seite 5 und 35);
+        // Bit 0 hat ohne Text keine sichtbare Wirkung, bleibt aber für Drehen/Zurückschreiben erhalten
+        return Kind::Verweis { pos, text_pos, text, dir: ((dir + 180) % 360) as u16, vertical, ziel: None };
     }
     if cross {
         dir = (dir + 270) % 360;
-        vertical = vertical || ang == 1800;
+        // bei 180° hochkant ohne Bit 0 ("=UV3+W2"); als Umkehrung von Bit 0 gelesen, damit jede Lage darstellbar ist
+        vertical ^= ang == 1800;
     } else if vertical {
         dir = (dir + 90) % 360;
     }
-    Kind::Verweis { pos, text_pos, text, dir: dir as u16, vertical }
+    Kind::Verweis { pos, text_pos, text, dir: dir as u16, vertical, ziel: None }
+}
+
+/// Kennung (8 Byte) eines Blocks ab Byte `at`, 0 wenn zu kurz.
+fn id_at(b: &Block, at: usize) -> u64 {
+    b.data.get(at..at + 8).map(|d| u64::from_le_bytes(d.try_into().unwrap())).unwrap_or(0)
+}
+
+/// Kennungen im Originalformat: Anlage (ANL Byte 0x88), Blatt (BLT Byte 0x48), Objekt (OBJ Byte 0).
+pub const ANL_ID_AT: usize = 0x88;
+pub const BLT_ID_AT: usize = 0x48;
+
+/// Ziele der Verweise aus OBJ Feld 8–13 (Kennungen von Anlage, Blatt und Gegenverweis) in Namen/Nummer/Objekt-Id
+/// übersetzen. Im Original vergleicht die Routine bei 0x48056c genau diese Felder (Objekt +0x20/+0x28/+0x30) mit
+/// Anlage +0x88, Blatt +0x48 und Objekt +0; Byte 0x3d (Feld 15 Byte 1) = Ziel gesetzt.
+fn link_verweise(p: &mut Project) {
+    let mut anl: std::collections::HashMap<u64, String> = Default::default();
+    let mut blt: std::collections::HashMap<(u64, u64), u32> = Default::default();
+    let mut objs: std::collections::HashMap<u64, u64> = Default::default();
+    for a in &p.anlagen {
+        let Some((ab, _)) = a.raw.as_deref() else { continue };
+        let aid = id_at(ab, ANL_ID_AT);
+        anl.insert(aid, a.name.clone());
+        for s in &a.sheets {
+            if let Some(r) = s.raw.as_deref() {
+                blt.insert((aid, id_at(&r.block, BLT_ID_AT)), s.number);
+            }
+            for o in &s.objects {
+                if let Some(r) = o.raw.as_deref().filter(|r| r.block.is("OBJ")) {
+                    objs.insert(id_at(&r.block, 0), o.id);
+                }
+            }
+        }
+    }
+    for o in p.anlagen.iter_mut().flat_map(|a| a.sheets.iter_mut()).flat_map(|s| s.objects.iter_mut()) {
+        let Some(r) = o.raw.as_deref_mut() else { continue };
+        if !matches!(r.kind, Kind::Verweis { .. }) || (r.block.i32(15) >> 8) & 0xff == 0 {
+            continue;
+        }
+        let (aid, bid, oid) = (id_at(&r.block, 0x20), id_at(&r.block, 0x28), id_at(&r.block, 0x30));
+        let Some(name) = anl.get(&aid) else { continue };
+        let z = VerweisZiel { anlage: name.clone(), blatt: blt.get(&(aid, bid)).copied().unwrap_or(0), obj: objs.get(&oid).copied().unwrap_or(0) };
+        for k in [&mut r.kind, &mut o.kind] {
+            if let Kind::Verweis { ziel, .. } = k {
+                *ziel = Some(z.clone());
+            }
+        }
+    }
 }
 
 /// Ankerpunkt eines Textes in seiner Textbox je nach Ausrichtung (wie das Zeichnen ihn erwartet).

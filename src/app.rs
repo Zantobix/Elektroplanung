@@ -934,14 +934,7 @@ impl App {
                         }
                     }
                     Kind::Terminal { .. } | Kind::Busbar { .. } => {}
-                    Kind::Verweis { pos, text_pos, dir, vertical, .. } => {
-                        f(pos);
-                        f(text_pos);
-                        if op == 1 {
-                            *dir = (*dir + 270) % 360;
-                            *vertical = !*vertical;
-                        }
-                    }
+                    Kind::Verweis { .. } => crate::verweise::drehen(&mut o.kind, op),
                     Kind::Line { a, b }
                     | Kind::Rect { a, b }
                     | Kind::Triangle { a, b }

@@ -193,3 +193,15 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Hochkant-BMK (VSY Feld 12 Bit 24): Text liest von unten nach oben und beginnt bei "Links" am Titelanker
   (Seite 1: "-M2.1" von y = 147,6 bis 156,5 mm bei Anker 157,5 mm); Mittig/Rechts verschieben nach unten.
 - PRJ › BLD: Name 0–20, Feld 5 Nummer, JPG = JPEG-Daten (über 64 KB in Teilen).
+
+## Nachtrag 21.11.2026 – Verweisziele, Doppelklick, Drehen, PDF-Verknüpfungen
+- OBJ (Verweis) Feld 0/1 = eigene Kennung, 8/9 Kennung der Zielanlage (ANL Byte 0x88), 10/11 Zielblatt (BLT Byte 0x48),
+  12/13 Gegenverweis (dessen Feld 0/1), Feld 15 Byte 1 = Ziel gesetzt. Belegt durch W2.epr ("Raum 10" Neubau EG ↔
+  "Raum 7" Neubeu DG zeigen gegenseitig aufeinander) und die Routine 0x48056c ("Der Zielverweis ist schon anderwertig
+  belegt …"), die genau diese Felder vergleicht, den alten Partner löst und den Gegenverweis zurückverknüpft.
+- Anklicken: Das Original springt per **Doppelklick** zum Ziel – Option (TForm4) "Doppelklick auf Verweise =" Ziel
+  anzeigen / Eigenschaften. Der Nachbau springt ebenso bei Doppelklick auf die Querverweistexte der Sammelschienen
+  ("Blatt/Pfad", vorige/nächste Stelle der Schiene) – dafür gibt es im Original keinen Beleg.
+- Querverweis (Feld 4 = 0x0101FFFF): hochkant = Bit 0 XOR (Feld 14 = 1800); ohne Text gilt Bit 0 unverändert.
+  Drehen (R) um die Pfeilspitze: Richtung −90°, Text wechselt waagerecht/hochkant.
+- PDF: Verweise und Sammelschienen-Querverweise sind Verknüpfungen (/Link, /Dest auf die Zielseite).

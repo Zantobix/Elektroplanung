@@ -161,11 +161,14 @@ fn obj_json(o: &Obj) -> Value {
         Kind::Poly { pts } | Kind::Wire { pts, .. } => {
             m.insert("points".into(), Value::Array(pts.iter().map(p).collect()));
         }
-        Kind::Verweis { pos, text_pos, text, dir, vertical } => {
+        Kind::Verweis { pos, text_pos, text, dir, vertical, ziel } => {
             m.insert("points".into(), json!([p(pos), p(text_pos)]));
             m.insert("text".into(), json!(text));
             m.insert("dir".into(), json!(dir));
             m.insert("vertical".into(), json!(vertical));
+            if let Some(z) = ziel {
+                m.insert("ziel".into(), json!({ "anlage": z.anlage, "blatt": z.blatt, "obj": z.obj }));
+            }
         }
         Kind::Terminal { pos, leiste, nr, .. } => {
             m.insert("points".into(), json!([p(pos)]));
