@@ -181,10 +181,10 @@ pub fn ui(ui: &mut egui::Ui, elems: &mut Vec<TbOwned>, w_mm: f32, h_mm: f32) {
                 elems.remove(s);
             }
         }
-        ui.separator();
+        ui.add_space(12.0); // kein Trennstrich: er dehnt sich in der Zeile auf die volle Höhe und lässt das Fenster wachsen
         ui.label("Höhe ×");
         ui.add(egui::Slider::new(&mut z.dehnung, 1.0..=8.0).step_by(0.5));
-        ui.separator();
+        ui.add_space(12.0); // kein Trennstrich: er dehnt sich in der Zeile auf die volle Höhe und lässt das Fenster wachsen
         if ui.button("Standard-Schriftfeld").on_hover_text("Standard-Schriftfeld wiederherstellen").clicked() {
             *elems = titleblock::default_owned();
             z.sel = None;
@@ -297,7 +297,8 @@ pub fn ui(ui: &mut egui::Ui, elems: &mut Vec<TbOwned>, w_mm: f32, h_mm: f32) {
     ui.horizontal_top(|ui| {
         egui::ScrollArea::vertical().id_salt("sf_liste").max_height(170.0).min_scrolled_height(170.0).show(ui, |ui| {
             ui.set_width(260.0);
-            for (i, e) in elems.iter().enumerate() {
+            // eigene senkrechte Anordnung: die Zeile außen (horizontal_top) würde die Einträge nebeneinander legen
+            ui.vertical(|ui| for (i, e) in elems.iter().enumerate() {
                 let name = match e {
                     TbOwned::Line(..) => format!("{:>2}  Linie", i + 1),
                     TbOwned::Logo(..) => format!("{:>2}  Logo", i + 1),
@@ -306,9 +307,9 @@ pub fn ui(ui: &mut egui::Ui, elems: &mut Vec<TbOwned>, w_mm: f32, h_mm: f32) {
                 if ui.selectable_label(z.sel == Some(i), name).clicked() {
                     z.sel = Some(i);
                 }
-            }
+            });
         });
-        ui.separator();
+        ui.add_space(12.0); // kein Trennstrich: er dehnt sich in der Zeile auf die volle Höhe und lässt das Fenster wachsen
         ui.vertical(|ui| {
             let Some(si) = z.sel else {
                 ui.weak("Kein Element gewählt");
@@ -354,7 +355,7 @@ pub fn ui(ui: &mut egui::Ui, elems: &mut Vec<TbOwned>, w_mm: f32, h_mm: f32) {
                     for (a, n) in [(Align::Left, "Links"), (Align::Center, "Mittig"), (Align::Right, "Rechts")] {
                         ui.radio_value(al, a, n);
                     }
-                    ui.separator();
+                    ui.add_space(12.0); // kein Trennstrich: er dehnt sich in der Zeile auf die volle Höhe und lässt das Fenster wachsen
                     ui.label("Zeilen");
                     // wie das Original höchstens 8 Zeilen (FUS › GRS Feld 9)
                     ui.add(egui::DragValue::new(lines).range(1..=8));
