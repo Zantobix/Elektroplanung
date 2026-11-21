@@ -60,8 +60,9 @@ pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32
         text.split('\n').map(String::from).collect()
     };
     let gal: Vec<_> = lines.iter().map(|l| p.layout_no_wrap(l.to_string(), font.clone(), color)).collect();
-    let lh = gal.first().map(|g| g.size().y).unwrap_or(size_mm * z);
-    let total = lh * gal.len() as f32;
+    // Zeilenabstand und Einzug wie im Original-Ausdruck (schriftlage.rs)
+    let lh = crate::schriftlage::textbox_zeile(size_mm) * z;
+    let rand = crate::schriftlage::TEXTBOX_RAND * z;
     let (bmn, bmx) = (xf.s(mn), xf.s(mx));
     // wie im Original (DrawText im Boxrechteck): was über die Box hinausragt, wird abgeschnitten
     let p = &p.with_clip_rect(Rect::from_min_max(bmn, bmx).expand(1.0).intersect(p.clip_rect()));
@@ -69,22 +70,23 @@ pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32
         let w = g.size().x;
         let underline = st.underline;
         if vertical {
-            // hochkant (von unten nach oben): Zeilen nebeneinander, Ausrichtung entlang der Boxhöhe
-            let cx = (bmn.x + bmx.x) / 2.0 - total / 2.0 + i as f32 * lh;
+            // hochkant (von unten nach oben): Zeilen nebeneinander ab dem linken Boxrand, Ausrichtung entlang der
+            // Boxhöhe (Original-Ausdruck Seite 1: „Flur unten“/„Raum 7“)
+            let cx = bmn.x + rand + i as f32 * lh;
             let y = match align {
-                Align::Left => bmx.y,
+                Align::Left => bmx.y - rand,
                 Align::Center => (bmn.y + bmx.y) / 2.0 + w / 2.0,
-                Align::Right => bmn.y + w,
+                Align::Right => bmn.y + rand + w,
             };
             p.add(egui::epaint::TextShape::new(Pos2::new(cx, y), g, color).with_angle(-std::f32::consts::FRAC_PI_2));
         } else {
             let x = match align {
-                Align::Left => bmn.x,
+                Align::Left => bmn.x + rand,
                 Align::Center => (bmn.x + bmx.x) / 2.0 - w / 2.0,
-                Align::Right => bmx.x - w,
+                Align::Right => bmx.x - rand - w,
             };
             // oben in der Box wie im Original (am 21.11.2026 an einer neuen Textbox beobachtet)
-            let y = bmn.y + i as f32 * lh;
+            let y = bmn.y + rand + i as f32 * lh;
             if underline && w > 0.0 {
                 let uy = y + lh * 0.92;
                 p.line_segment([Pos2::new(x, uy), Pos2::new(x + w, uy)], Stroke::new((0.06 * size_mm * z).max(1.0), color));
@@ -412,11 +414,13 @@ pub fn draw_sheet_base(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, colors: &Sh
         if i > 0 {
             p.line_segment([xf.s(P::new(x, fy0)), xf.s(P::new(x, fy0 + COLUMN_BAR_H))], black);
         }
+        // Spaltennummern in 12 pt (Original-Ausdruck, hoch- und querformatige Blätter), Grundlinie 3,8 mm unter
+        // der Rahmenoberkante
         p.text(
-            xf.s(P::new(x + cw / 2.0, fy0 + COLUMN_BAR_H / 2.0 + 0.2)),
+            xf.s(P::new(x + cw / 2.0, fy0 + COLUMN_BAR_H / 2.0)),
             Align2::CENTER_CENTER,
             sheet.col_label(i as usize),
-            times(3.6 * z),
+            times(crate::schriftlage::SPALTEN_SCHRIFT * z),
             Color32::BLACK,
         );
     }
@@ -542,7 +546,9 @@ pub fn macro_values(project: &Project, anlage: &Anlage, sheet: &Sheet) -> MacroV
         erstellt: if sheet.erstellt.is_empty() { project.erstellt.clone() } else { sheet.erstellt.clone() },
         geaendert: if sheet.geaendert.is_empty() { project.geaendert.clone() } else { sheet.geaendert.clone() },
         name: sheet.name.clone(),
-        von: project.von.clone(),
+        // „Erstellt von“ der Anlage (ANL @66), nicht des Projekts: Im Original-Ausdruck zeigt jede Anlage ihren
+        // eigenen Namen, eine Anlage mit leerem Feld keinen
+        von: anlage.set.von.clone(),
         seite: sheet.number.to_string(),
         // wie im Original-Ausdruck: Kurzform der Anlage ("UV1"), sonst der Name; Ort des Blattes ("W2"), sonst des Projekts
         anlage: if anlage.set.kurz.trim().is_empty() { anlage.name.clone() } else { anlage.set.kurz.clone() },
@@ -596,7 +602,7 @@ fn draw_title_block(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, x0: f32, x1: f
                 let rb = tp(c, d);
                 let h_mm = (rb.y - ra.y).abs();
                 let w_mm = (rb.x - ra.x).abs();
-                let mut em = 0.72 * h_mm / lines as f32;
+                let mut em = crate::schriftlage::feld_schrift(h_mm, lines as usize);
                 let font = |em: f32| times(em * z);
                 let mut galley = p.layout_no_wrap(text.clone(), font(em), Color32::BLACK);
                 let avail = (w_mm - 0.4) * z;

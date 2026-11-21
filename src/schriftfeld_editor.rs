@@ -222,7 +222,7 @@ pub fn ui(ui: &mut egui::Ui, elems: &mut Vec<TbOwned>, w_mm: f32, h_mm: f32) {
                 let rr = Rect::from_two_pos(s(a, b), s(c, d));
                 p.rect_stroke(rr, 0.0, Stroke::new(1.0, if gew { sel_col } else { Color32::from_rgb(170, 190, 230) }), egui::StrokeKind::Inside);
                 let text = t.trim_end_matches('\n');
-                let mut px = (0.72 * rr.height() / (*lines).max(1) as f32).clamp(6.0, 22.0);
+                let mut px = crate::schriftlage::feld_schrift(rr.height(), (*lines).max(1) as usize).clamp(6.0, 22.0);
                 let font = |px: f32| crate::canvas::times(px);
                 let mut g = p.layout_no_wrap(text.to_string(), font(px), Color32::BLACK);
                 if g.size().x > rr.width() - 2.0 && rr.width() > 4.0 {
