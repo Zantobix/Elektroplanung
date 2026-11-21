@@ -14,6 +14,8 @@ const BG: Color32 = Color32::from_rgb(240, 240, 240);
 const VIEW_BG: Color32 = Color32::from_rgb(128, 128, 128);
 const SEL: Color32 = Color32::from_rgb(220, 0, 0);
 const PREVIEW: Color32 = Color32::from_rgb(0, 0, 200);
+/// Fangpunkte werden in diesem Umkreis der Maus angezeigt (mm)
+const SNAP_SHOW: f32 = 10.0;
 
 pub fn tool_button(ui: &mut egui::Ui, icon: Icon, hint: &str, enabled: bool, down: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(27.0, 26.0), if enabled { Sense::click() } else { Sense::hover() });
@@ -391,6 +393,9 @@ impl App {
         if let Some(r) = ev.drag_start {
             self.tree_drag = Some(r);
         }
+        if ev.sym_drag && self.placing.is_some() {
+            self.lib_drag = true;
+        }
         if let (Some(src), Some(dst)) = (self.tree_drag, ev.drop_on) {
             self.move_sheet(src.anlage, src.sheet, dst.sheet);
             self.tree_drag = None;
@@ -458,6 +463,10 @@ impl App {
         }
         if resp.double_clicked() {
             ev.dbl = Some(node.clone());
+        }
+        // Symbol auf das Blatt ziehen (Ablegen setzt es, siehe handle_canvas_input)
+        if resp.drag_started() && matches!(node.action, TAction::Symbol(_)) {
+            ev.sym_drag = true;
         }
         // Blätter per Ziehen umsortieren (innerhalb der Anlage)
         if let TAction::Sheet(r) = &node.action {
@@ -946,6 +955,11 @@ impl App {
                 }
             }
         }
+        if let Some(hp) = hover {
+            if area.contains(hp) && !self.zoom_tool {
+                self.draw_snap_points(&clip, xf, xf.m(hp));
+            }
+        }
         if self.size_frame && self.selection.len() == 1 {
             if let Some(o) = sheet.objects.iter().find(|o| o.id == self.selection[0]) {
                 if let Some((a, b)) = o.kind.frame_points() {
@@ -977,7 +991,7 @@ impl App {
             }
             Drag::Create { tool, start } => {
                 if let Some(h) = hover {
-                    if let Some(k) = self.make_kind(*tool, *start, self.snap(xf.m(h))) {
+                    if let Some(k) = self.make_kind(*tool, *start, self.create_end(*tool, xf.m(h), xf.z)) {
                         canvas::draw_object(&dc, &Obj { id: 0, kind: k, pen: self.pen, fixed: false, group: None, raw: None }, Some(PREVIEW));
                     }
                 }
@@ -1004,6 +1018,54 @@ impl App {
 
     fn wire_end(&self, m: P, z: f32) -> P {
         self.pin_near(m, 6.0 / z, &[]).unwrap_or_else(|| self.snap(m))
+    }
+
+    /// Punkt beim Aufziehen eines Zeichenobjekts: Linien fangen wie Leitungen auf Anschlüsse (außer im
+    /// Symboleditor), alles andere auf das Raster.
+    fn create_end(&self, tool: Tool, m: P, z: f32) -> P {
+        if tool == Tool::Line && self.sym_edit.is_none() {
+            self.wire_end(m, z)
+        } else {
+            self.snap(m)
+        }
+    }
+
+    /// Fangpunkte anzeigen: beim Zeichnen von Linien und Leitungen sowie beim Platzieren eines Symbols kleine Marken
+    /// auf den Anschlüssen von Symbolen und Klemmstellen in der Nähe der Maus; hervorgehoben wird der Anschluss, auf
+    /// den gefangen würde (beim Platzieren: die Anschlüsse, auf die das Symbol trifft).
+    fn draw_snap_points(&self, p: &egui::Painter, xf: Xf, m: P) {
+        let wire = matches!(self.drag, Drag::Wire { .. });
+        let line = self.tool == Tool::Line && matches!(self.drag, Drag::None | Drag::Create { .. });
+        let def = self.placing.as_ref().and_then(|k| symbols::find(&self.lib, k));
+        if !(wire || line || def.is_some()) {
+            return;
+        }
+        let Some(sheet) = self.sheet() else { return };
+        let mark = Color32::from_rgb(0, 90, 200);
+        let hit = Color32::from_rgb(0, 160, 0);
+        for o in sheet.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })) {
+            for q in canvas::obj_pins(o, &self.lib).into_iter().filter(|q| q.dist(m) <= SNAP_SHOW) {
+                p.rect_stroke(Rect::from_center_size(xf.s(q), Vec2::splat(5.0)), 0.0, Stroke::new(1.0, mark), StrokeKind::Middle);
+            }
+        }
+        let mut ziel: Vec<P> = vec![];
+        if let Some(def) = def {
+            // Lage wie die Vorschau: erster Anschluss auf dem Raster, Strompfadausrichtung
+            let pin0 = def.pins.first().copied().unwrap_or_default();
+            let pos = self.align_to_path(self.snap(m.add(pin0)).sub(pin0));
+            for q in def.pins.iter().map(|q| sym_xform(*q, pos, 0, false, false)) {
+                if let Some(t) = self.pin_near(q, crate::mitziehen::PIN_TOL, &[]) {
+                    ziel.push(t);
+                }
+            }
+        } else if let Some(t) = self.pin_near(m, 6.0 / xf.z, &[]) {
+            ziel.push(t);
+        }
+        for t in ziel {
+            let c = xf.s(t);
+            p.circle_stroke(c, 5.0, Stroke::new(2.0, hit));
+            p.circle_filled(c, 2.0, hit);
+        }
     }
 
     fn zoom_at(&mut self, at: Pos2, area: Rect, f: f32) {
@@ -1079,8 +1141,9 @@ impl App {
 
         // Symbol aus der Bibliothek platzieren (Klick oder Ziehen aus dem Baum)
         if let Some(key) = self.placing.clone() {
-            if inside && (pressed_l || (released_l && dragging)) {
+            if inside && (pressed_l || (released_l && (dragging || self.lib_drag))) {
                 self.place_symbol(key, m);
+                self.lib_drag = false;
                 self.placing = None;
                 self.tool = Tool::Select;
                 self.drag = Drag::None;
@@ -1094,7 +1157,8 @@ impl App {
 
         if inside && dbl && self.tool == Tool::Select {
             if let Some(id) = self.hit_top(m, tol) {
-                self.edit_props(id);
+                // mehrere markiert: gemeinsame Eigenschaften (Stift, Fixierung, Text)
+                self.props_command(id);
                 self.drag = Drag::None;
                 return;
             }
@@ -1190,7 +1254,7 @@ impl App {
                     let pos = self.snap(m);
                     self.dialog = Some(Dialog::Text { title: "Neuer Text".into(), value: String::new(), target: TextTarget::NewText(pos) });
                 }
-                t => self.drag = Drag::Create { tool: t, start: self.snap(m) },
+                t => self.drag = Drag::Create { tool: t, start: self.create_end(t, m, xf.z) },
             }
         }
 
@@ -1216,8 +1280,14 @@ impl App {
             if (d.x.abs() > 1e-4 || d.y.abs() > 1e-4) && !movable.is_empty() {
                 if !moved {
                     self.checkpoint();
+                    // angeschlossene Leitungen im Zustand vor dem Verschieben merken
+                    self.move_follow = self.wire_followers(&movable);
                 }
                 self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| movable.contains(&o.id)).for_each(|o| o.kind.translate(d)));
+                // Leitungsenden folgen den Anschlüssen (gleicher Rückgängig-Schritt, aus der Gesamtverschiebung)
+                let follow = std::mem::take(&mut self.move_follow);
+                self.apply_followers(&follow, total);
+                self.move_follow = follow;
                 self.drag = Drag::Move { start, applied: total, moved: true };
             }
         }
@@ -1277,7 +1347,7 @@ impl App {
                     }
                 }
                 Drag::Create { tool, start } => {
-                    if let Some(k) = self.make_kind(tool, start, self.snap(m)) {
+                    if let Some(k) = self.make_kind(tool, start, self.create_end(tool, m, xf.z)) {
                         let id = self.add_obj(k);
                         if tool == Tool::Image {
                             self.edit_props(id);
@@ -1658,7 +1728,7 @@ impl App {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
-        if ctx.egui_wants_keyboard_input() || self.dialog.is_some() || self.xdlg.is_some() || self.opt_dlg.is_some() || self.ask_save.is_some() {
+        if ctx.egui_wants_keyboard_input() || self.dialog.is_some() || self.xdlg.is_some() || self.opt_dlg.is_some() || self.ask_save.is_some() || self.multi_props.is_some() {
             self.hold_s = false;
             self.hold_a = false;
             self.no_snap = false;
@@ -1748,7 +1818,10 @@ impl App {
             };
             self.checkpoint();
             let sel: Vec<u64> = self.selected_objs().iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
+            let follow = self.wire_followers(&sel);
             self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| sel.contains(&o.id)).for_each(|o| o.kind.translate(d)));
+            // angeschlossene Leitungen mitziehen
+            self.apply_followers(&follow, d);
             // mit gehaltener Taste A wie im Original: freie Anschlüsse nach dem Schritt automatisch verbinden
             if self.hold_a {
                 if let Some(p) = self.hold_press[1].as_mut() {
@@ -1929,6 +2002,8 @@ impl App {
 #[derive(Default)]
 struct TreeEvents {
     drag_start: Option<SheetRef>,
+    /// Symbol wird aus der Bibliothek gezogen
+    sym_drag: bool,
     drop_on: Option<SheetRef>,
     clicked: Option<TNode>,
     dbl: Option<TNode>,
@@ -1999,8 +2074,10 @@ impl eframe::App for App {
             let mut ca = ui.new_child(egui::UiBuilder::new().max_rect(area));
             self.canvas(&mut ca);
         });
+        self.lib_drag_end(&ctx);
         self.dialogs(&ctx);
         self.props_ui(&ctx);
+        self.multi_props_ui(&ctx);
         self.align_window(&ctx);
         self.optionen_ui(&ctx);
         self.dialoge2_ui(&ctx);
@@ -2014,6 +2091,23 @@ impl eframe::App for App {
 }
 
 impl App {
+    /// Ziehen aus der Symbolbibliothek: während des Ziehens Greif-Mauszeiger; außerhalb der Zeichenfläche
+    /// losgelassen bricht das Platzieren ab (auf dem Blatt setzt handle_canvas_input das Symbol).
+    fn lib_drag_end(&mut self, ctx: &egui::Context) {
+        if !self.lib_drag {
+            return;
+        }
+        if self.placing.is_none() {
+            self.lib_drag = false;
+            return;
+        }
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+        if ctx.input(|i| i.pointer.any_released()) {
+            self.lib_drag = false;
+            self.placing = None;
+        }
+    }
+
     /// Projektbild als Bildobjekt (Pfad "bld:<Nummer>") mittig auf das aktuelle Blatt setzen, Breite 80 mm.
     pub fn place_project_image(&mut self, i: usize) {
         let Some(b) = self.project.bilder.get(i) else { return };
