@@ -28,6 +28,9 @@ pub struct SymProps {
     pub bild: u16,
     pub bild_items: Vec<String>,
     pub rack: String,
+    /// Zähler für %C (VSY Feld 38); nur mit „Korrektur“ änderbar (Symbol1LO_IndexkorrekturClick:
+    /// LO_Counter.Enabled = LO_Indexkorrektur.Checked)
+    pub index: String,
     pub korrektur: bool,
     pub funktion: String,
     pub bauteil: String,
@@ -101,6 +104,9 @@ pub struct SymEigenProps {
     /// Textnummern der Textelemente (Spalten der Alternativtext-Tabelle) und je Satz die Texte
     pub text_cols: Vec<u32>,
     pub alt: Vec<Vec<String>>,
+    /// Parameter (GRD › PRA): Nummer, Name, Vorgabe – Reiter „Stifte / Parameter“
+    pub params: Vec<(u32, String, String)>,
+    pub sel_param: usize,
 }
 
 pub enum Props {
@@ -242,7 +248,8 @@ impl App {
                     alt_items,
                     bild: *option,
                     bild_items,
-                    rack: ext.rack.to_string(),
+                    rack: if ext.rack >= 0 { ext.rack.to_string() } else { String::new() },
+                    index: if ext.counter > 0 { ext.counter.to_string() } else { String::new() },
                     korrektur: false,
                     funktion: ext.funktion.clone(),
                     bauteil,
@@ -311,6 +318,8 @@ impl App {
             stifte: self.project.stifte.iter().map(|s| s.name.clone()).collect(),
             text_cols,
             alt,
+            params: e.params.clone(),
+            sel_param: 0,
         }));
     }
 
@@ -450,6 +459,9 @@ impl App {
                             ext.alt = s.alt;
                             *option = s.bild;
                             ext.rack = s.rack.trim().parse().unwrap_or(-1);
+                            if s.korrektur {
+                                ext.counter = s.index.trim().parse::<i32>().unwrap_or(0).max(0);
+                            }
                             ext.funktion = s.funktion.clone();
                             ext.querverweise = s.querverweise;
                             ext.sicherung = s.sicherung;
@@ -503,6 +515,7 @@ impl App {
                         .map(|row| sp.text_cols.iter().zip(row).map(|(i, t)| (*i, t.clone())).collect())
                         .collect();
                     e.frg = (sp.quer, sp.fuse);
+                    e.params = crate::parameter::clean_params(&sp.params);
                 }
                 self.sym_frg_default = (sp.quer, sp.fuse);
             }
@@ -636,10 +649,9 @@ fn symbol_ui(ui: &mut egui::Ui, s: &mut SymProps) {
         label(ui, 98.0, "Rackposition", true);
         edit(ui, &mut s.rack, 60.0);
         ui.end_row();
-        label(ui, 98.0, "Index", false);
+        label(ui, 98.0, "Index", s.korrektur);
         ui.horizontal(|ui| {
-            let mut idx = s.rack.clone();
-            ui.add_enabled(false, egui::TextEdit::singleline(&mut idx).desired_width(40.0));
+            ui.add_enabled(s.korrektur, egui::TextEdit::singleline(&mut s.index).desired_width(40.0));
             ui.checkbox(&mut s.korrektur, bt("Korrektur"));
         });
         ui.end_row();
@@ -790,8 +802,7 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
                 let mut pens = s.stifte.clone();
                 ui.add_enabled_ui(false, |ui| list(ui, "stifte", &mut pens, &mut sel, 345.0, "Stift Löschen", usize::MAX));
                 ui.add_space(12.0);
-                let mut none: Vec<String> = vec![];
-                ui.add_enabled_ui(false, |ui| list(ui, "param", &mut none, &mut sel, 323.0, "Parameter Löschen", usize::MAX));
+                crate::parameter::param_table_ui(ui, &mut s.params, &mut s.sel_param);
             });
         }
         _ => {

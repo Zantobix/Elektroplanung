@@ -143,14 +143,15 @@ fn edited_sym(project: &Project, k: &Block) -> Option<Block> {
         a.name == b.name && a.bmk == b.bmk && a.prims == b.prims && a.pins == b.pins && a.title == b.title && a.vis == b.vis
             && a.pin_vis == b.pin_vis && a.options == b.options && a.flag == b.flag && a.flag_names == b.flag_names
             && a.alt_sets == b.alt_sets && a.text_mode == b.text_mode && a.fill == b.fill && a.value_pos == b.value_pos
+            && a.params == b.params
     };
     if same(def, &orig) {
         return None;
     }
     let mut nb = sym_block(def, k, id);
-    // Unterblöcke, die der Nachbau nicht neu erzeugt (Parameter PRA, Stifte SIT), aus dem Original übernehmen
+    // Stifte (SIT) erzeugt der Nachbau nicht neu: aus dem Original übernehmen (Parameter PRA schreibt sym_block)
     if let (Some(og), Some(ng)) = (k.kid("GRD"), nb.kids.iter_mut().find(|b| b.is("GRD"))) {
-        for c in og.kids.iter().filter(|c| c.is("PRA") || c.is("SIT")) {
+        for c in og.kids.iter().filter(|c| c.is("SIT")) {
             ng.kids.push(c.clone());
         }
     }
@@ -416,15 +417,12 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
                         set_child_text(b, "FKT", &ext.funktion);
                     }
                 }
-                if old_ext.as_ref().map(|e| e.rack) != Some(ext.rack) {
-                    if ext.rack < 0 {
-                        b.kids.retain(|k| !k.is("SPA"));
-                    } else {
-                        match b.kids.iter_mut().find(|k| k.is("SPA")) {
-                            Some(k) => k.set_i32(0, ext.rack),
-                            None => b.kids.push(Block::new("SPA", ext.rack.to_le_bytes().to_vec())),
-                        }
-                    }
+                // Parameterwerte (SPA) und benutzerdefinierte Texte (ALT) der Instanz
+                if old_ext.as_ref().map(|e| (&e.params, &e.texts)) != Some((&ext.params, &ext.texts)) {
+                    crate::parameter::sync_vsy_kids(b, &ext.params, &ext.texts);
+                }
+                if old_ext.as_ref().map(|e| e.counter) != Some(ext.counter) {
+                    b.set_i32(38, if ext.counter > 0 { ext.counter } else { -1 });
                 }
             }
             b.set_i32(16, to01(pos.x));
@@ -910,6 +908,8 @@ fn sym_block(def: &crate::symbols::SymDef, tpl: &Block, id: u64) -> Block {
         opt.kids.push(Block::new("STR", crate::eprfile::encode_cp1252(name)));
         grd.kids.push(opt);
     }
+    // Parameter (PRA: Nummer; STR Name, STR Vorgabe)
+    grd.kids.extend(crate::parameter::pra_blocks(&def.params));
     b.kids.push(grd);
     b
 }

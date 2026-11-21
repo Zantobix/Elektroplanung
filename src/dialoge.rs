@@ -215,8 +215,9 @@ impl App {
                 }
                 self.dirty = true;
             }
-            Dlg2::Drucken { anlage, drucker, drucker_liste, art, von, bis, .. } => {
-                // Blattauswahl wie im Original; "Änderung seit …" kennt der Nachbau nicht je Blatt → alle Blätter der Anlage
+            Dlg2::Drucken { anlage, drucker, drucker_liste, art, von, bis, datum, .. } => {
+                // Blattauswahl wie im Original; "Änderung seit …" nach den Blattdaten (druck.rs)
+                let gedruckt = self.project.gedruckt.clone();
                 let mut sel: Vec<SheetRef> = vec![];
                 if let Some(a) = self.project.anlagen.get(anlage) {
                     let (v, b): (u32, u32) = (von.trim().parse().unwrap_or(1), bis.trim().parse().unwrap_or(u32::MAX));
@@ -226,12 +227,18 @@ impl App {
                             1 => self.cur() == Some(r),
                             2 => s.number >= v && s.number <= b,
                             3 => self.tabs.contains(&r),
+                            4 => crate::druck::geaendert_seit(s, &datum),
+                            5 => crate::druck::geaendert_seit(s, &gedruckt),
                             _ => true,
                         };
                         if take {
                             sel.push(r);
                         }
                     }
+                }
+                if sel.is_empty() {
+                    self.dialog = Some(crate::app::Dialog::Message("Keine Blätter zum Drucken ausgewählt.".into()));
+                    return;
                 }
                 self.print_sel = Some(sel);
                 self.print_printer = (drucker > 0).then(|| drucker_liste[drucker].clone());

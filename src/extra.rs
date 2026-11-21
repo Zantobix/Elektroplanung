@@ -1424,7 +1424,9 @@ impl App {
                 }
             }
             ("Neues Symbol", _) => self.open_symbol_editor(None),
-            ("Neue Grafik", _) => self.tool = Tool::Image,
+            ("Neue Grafik", _) => self.new_project_graphic(),
+            ("Eigenschaften", TAction::Bild(i)) => self.open_grafik_dialog(*i),
+            ("Löschen", TAction::Bild(i)) => self.delete_project_graphic(*i),
             ("Neue Leitung", _) => {
                 self.new_leitung();
                 self.open_leitung_dialog(self.leitung);

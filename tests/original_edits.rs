@@ -139,7 +139,10 @@ fn text_style_and_alt_text_roundtrip() {
     if let Kind::Symbol { ext, flags, .. } = &mut find_sym(&mut p, "-X2.4").kind {
         ext.alt = 2;
         ext.funktion = "Steckdose Küche".into();
-        ext.rack = 7;
+        // Parameterwert (VSY › SPA), benutzerdefinierter Text (VSY › ALT) und Zähler %C (Feld 38)
+        ext.params = vec![(1, "B16".into())];
+        ext.texts = vec![(2, "PE".into())];
+        ext.counter = 5;
         *flags = 3;
     }
     let out = std::env::temp_dir().join("ep_style.epr");
@@ -153,7 +156,8 @@ fn text_style_and_alt_text_roundtrip() {
     }
     match &find_sym(&mut back, "-X2.4").kind {
         Kind::Symbol { ext, flags, .. } => {
-            assert_eq!((ext.alt, ext.funktion.as_str(), ext.rack, *flags), (2, "Steckdose Küche", 7, 3));
+            assert_eq!((ext.alt, ext.funktion.as_str(), *flags), (2, "Steckdose Küche", 3));
+            assert_eq!((ext.params.clone(), ext.texts.clone(), ext.counter), (vec![(1, "B16".to_string())], vec![(2, "PE".to_string())], 5));
         }
         _ => unreachable!(),
     }

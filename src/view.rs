@@ -1606,10 +1606,10 @@ impl App {
                 }
                 ui.separator();
                 if ui.button("Vorlage öffnen").clicked() {
-                    self.guarded(crate::app::Pending::Open);
+                    self.open_template();
                 }
                 if ui.button("Vorlage speichern").clicked() {
-                    self.save_as();
+                    self.save_template();
                 }
                 ui.separator();
                 if ui.button("Schriftfeld speichern").clicked() {
@@ -1618,10 +1618,9 @@ impl App {
                 ui.separator();
                 // Reihenfolge wie im Original-Menü: Export › PDF (Beta), Bitmapexport, DXF Import
                 ui.menu_button("Export", |ui| {
+                    // wie das Original (Export.dll): Exporteinstellung mit Projektliste
                     if ui.button("PDF (Beta)").clicked() {
-                        if let Some(p) = rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name("Projekt.pdf").save_file() {
-                            self.pdf_req = Some((p, false));
-                        }
+                        self.open_pexport();
                     }
                 });
                 // Bitmapexport des Originals: PNG mit wählbarer Auflösung (bildexport.rs)
@@ -1708,7 +1707,7 @@ impl App {
                     self.open_neues_schriftfeld();
                 }
                 if ui.button("Grafik").clicked() {
-                    self.tool = Tool::Image;
+                    self.new_project_graphic();
                 }
                 if ui.button("Platzhaltergruppe").clicked() {
                     self.new_platzhalter();
@@ -2129,6 +2128,7 @@ impl eframe::App for App {
         self.retry_library(now);
         self.extra_dialogs(&ctx);
         self.dialoge3_ui(&ctx);
+        self.zusatz_ui(&ctx);
         self.ask_save_ui(&ctx);
         self.suche_ui(&ctx);
         self.make_pdf(&ctx);

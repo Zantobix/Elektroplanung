@@ -944,8 +944,14 @@ impl App {
         let mut ok = 0;
         let mut errs = vec![];
         for p in liste {
+            let is_cur = self.path.as_ref().map(|c| c.display().to_string() == *p).unwrap_or(false);
             let (prj, out) = if p.starts_with('(') {
-                (self.project.clone(), std::env::temp_dir().join("Elektroplanung_Export.pdf"))
+                // ungespeichertes aktuelles Projekt: Zieldatei erfragen
+                let Some(out) = rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name("Projekt.pdf").save_file() else { continue };
+                (self.project.clone(), out)
+            } else if is_cur {
+                // aktuelles Projekt mit seinem Bearbeitungsstand, PDF neben der Projektdatei
+                (self.project.clone(), PathBuf::from(p).with_extension("pdf"))
             } else {
                 let path = PathBuf::from(p);
                 match crate::mcp::open_project(&path) {

@@ -522,7 +522,8 @@ fn symbol(k: &Block) -> Option<(Kind, usize)> {
                 querverweise: k.i32(20) & 1 == 0,
                 sicherung: (k.i32(20) >> 24) & 1 == 1,
                 funktion: k.kid("FKT").map(|t| txt(&t.data)).unwrap_or_default(),
-                rack: k.kid("SPA").map(|s| i32_at(&s.data, 0)).unwrap_or(-1),
+                // Rackposition: Ablage im VSY unbekannt (SPA sind Parameterwerte, nicht die Rackposition)
+                rack: -1,
                 counter: k.i32(38).max(0),
                 texts: k.kids_of("ALT").map(|a| (a.i32(0).max(0) as u32, a.kid("STR").map(|t| txt(&t.data)).unwrap_or_default())).collect(),
                 params: k.kids_of("SPA").map(|s| (i32_at(&s.data, 0).max(0) as u32, s.kid("STR").map(|t| txt(&t.data)).unwrap_or_default())).collect(),
