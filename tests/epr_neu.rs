@@ -44,7 +44,7 @@ fn kinds() -> Vec<(&'static str, Kind, usize, bool)> {
         ("Textbox", Kind::TextBox { a: P::new(130.0, 30.0), b: P::new(180.0, 50.0), text: "Zeile 1\nZeile 2".into(), size: 12.0 * 0.3528 }, 0, false),
         (
             "Tabelle",
-            Kind::Table { a: P::new(20.0, 100.0), b: P::new(120.0, 130.0), rows: 3, cols: 2, cells: ["Nr", "Name", "1", "Ä-Ö", "", "x"].map(String::from).to_vec(), header: true, fixed_w: true },
+            Kind::Table { a: P::new(20.0, 100.0), b: P::new(120.0, 130.0), rows: 3, cols: 2, cells: ["Nr", "Name", "1", "Ä-Ö", "", "x"].map(String::from).to_vec(), header: true, fixed_w: true, art: 0, ab: 0 },
             0,
             true,
         ),
@@ -290,7 +290,7 @@ fn changed_new_objects_are_patched() {
 fn table_cells_are_separated_like_original() {
     let mut p = Project::new_default();
     let cells = ["Nr", "", "1", "a", "", ""].map(String::from).to_vec();
-    let k = Kind::Table { a: P::new(20.0, 20.0), b: P::new(80.0, 50.0), rows: 3, cols: 2, cells, header: true, fixed_w: false };
+    let k = Kind::Table { a: P::new(20.0, 20.0), b: P::new(80.0, 50.0), rows: 3, cols: 2, cells, header: true, fixed_w: false, art: 0, ab: 0 };
     let o = obj(&mut p, k, 0, false);
     p.anlagen[0].sheets[0].objects.push(o);
     let (back, f) = reload(&p);

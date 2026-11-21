@@ -103,7 +103,7 @@ pub fn vorbereiten(project: &Project, base: &EprFile) {
     }
     plan.ltg = base.root("PRJ").map(|p| p.kids_of("LTG").map(|l| l.i32(9)).collect()).unwrap_or_default();
     for o in project.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects) {
-        if o.raw.is_none() && matches!(o.kind, Kind::Verweis { .. } | Kind::Busbar { .. } | Kind::Wire { .. }) {
+        if o.raw.is_none() && matches!(o.kind, Kind::Verweis { .. } | Kind::Busbar { .. } | Kind::Wire { .. } | Kind::Symbol { .. } | Kind::Spiegel { .. }) {
             plan.kennung.insert(o.id, next());
         }
     }
@@ -152,7 +152,15 @@ pub fn vorbereiten(project: &Project, base: &EprFile) {
 /// beim Speichern vergebene. 0 = keine.
 pub fn kennung(o: &Obj) -> u64 {
     if let Some(r) = o.raw.as_deref() {
-        return if r.block.is("OBJ") { id_at(&r.block, 0) } else if r.block.is("VBG") { id_at(&r.block, 40) } else { 0 };
+        return if r.block.is("OBJ") {
+            id_at(&r.block, 0)
+        } else if r.block.is("VBG") {
+            id_at(&r.block, 40)
+        } else if r.block.is("VSY") {
+            id_at(&r.block, 96)
+        } else {
+            0
+        };
     }
     PLAN.with(|p| p.borrow().kennung.get(&o.id).copied().unwrap_or(0))
 }
@@ -267,12 +275,14 @@ fn schreibe_zcn(b: &mut Block, k: &Kind) {
             set_byte(b, 0x14, *frame as u8);
             set_byte(b, 0x15, bild_art(*mode));
         }
-        Kind::Table { a, b: e, rows, cols, cells, header, fixed_w } => {
+        Kind::Table { a, b: e, rows, cols, cells, header, fixed_w, art, ab } => {
             set_rect(b, *a, *e);
             b.set_i32(4, (*cols).max(1) as i32);
             b.set_i32(5, (*rows).max(1) as i32);
+            b.set_i32(6, *ab as i32);
             set_byte(b, 0x24, *header as u8);
             set_byte(b, 0x25, !*fixed_w as u8);
+            set_byte(b, 0x26, *art);
             set_kid(b, "STR", tabellen_str(*rows, *cols, cells), None);
         }
         _ => {}
@@ -336,6 +346,7 @@ pub fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             b.set_i32(15, (*style == 2) as i32);
             Some(b)
         }
+        Kind::Spiegel { .. } => spiegel_block(project, o),
         _ => None,
     }
 }
@@ -365,6 +376,11 @@ pub fn nachfuehren(project: &Project, o: &Obj, b: &mut Block) {
     }
     if b.is("VSY") {
         if let Kind::Symbol { ext, .. } = &o.kind {
+            // eigene Kennung (VSY Byte 96; Spule eines Kontaktspiegels, Eigentümer), statt der der Vorlage
+            let k = kennung(o);
+            if k != 0 && b.data.len() >= 104 {
+                b.data[96..104].copy_from_slice(&k.to_le_bytes());
+            }
             b.set_i32(38, ext.counter);
             // ALT/SPA neu aufbauen (ersetzt vorhandene, z. B. schon vom Patch geschriebene – nie doppelt)
             crate::parameter::sync_vsy_kids(b, &ext.params, &ext.texts);
@@ -395,6 +411,31 @@ fn bezeichnungen(b: &mut Block, bez: &[(P, String)]) {
         z.set_i32(10, 2);
         z.kids.push(Block::new("STR", cstr_bytes(t)));
         b.kids.push(z);
+    }
+}
+
+/// Kontaktspiegel (OBJ Art 5 mit STB-Zeilen, siehe `kontaktspiegel`): Kennungen von Spiegel, Spule und Kontakten,
+/// Blatt (BLT Byte 72) und Anlage (ANL Byte 0x88) der Kontakte.
+pub fn spiegel_block(project: &Project, o: &Obj) -> Option<Block> {
+    let orte = |r: SheetRef| -> (u64, u64) {
+        let Some(a) = project.anlagen.get(r.anlage) else { return (0, 0) };
+        let anlage = a.raw.as_deref().map(|(b, _)| id_at(b, crate::epr::ANL_ID_AT)).unwrap_or_else(|| anlage_kennung(project, a));
+        let blatt = a.sheets.get(r.sheet).map(|s| s.raw.as_deref().map(|x| id_at(&x.block, crate::epr::BLT_ID_AT)).unwrap_or_else(|| crate::epr_write::new_sheet_id(s).to_bits())).unwrap_or(0);
+        (blatt, anlage)
+    };
+    crate::kontaktspiegel::block(project, o, kennung(o), &kennung, &orte)
+}
+
+/// Zusatz der Blattarten Deckblatt, Querverweise und Stückliste (BLT Feld 32 Byte 1; beim Klemmplan steht dort
+/// die Klemmleiste, die `klemmen::patch_blt` schreibt). Nur bei Änderung, damit unveränderte Blätter gleich bleiben.
+pub fn patch_zusatz(b: &mut Block, s: &Sheet) {
+    // neues Blatt mit ausdrücklich gewählter Art 0 (Deckblatt): `klemmen::patch_blt` lässt hier die Art der
+    // Vorlage stehen (Feld 22 Byte 0)
+    if s.raw.is_none() && s.art_fest && b.data.len() > 88 && b.data[88] != s.art {
+        b.data[88] = s.art;
+    }
+    if matches!(s.blattart(), 0 | 2 | 6) && b.data.len() > 0x81 && b.data[0x81] != s.zusatz {
+        b.data[0x81] = s.zusatz;
     }
 }
 

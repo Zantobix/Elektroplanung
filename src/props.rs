@@ -362,8 +362,14 @@ impl App {
                 strompfade: if s.col_auto || s.columns == 0 { "-1".into() } else { s.columns.to_string() },
                 portrait: s.portrait,
                 // 0 heißt bei neuen Blättern „noch nicht festgelegt“ (Schaltplan), bei gelesenen Blättern Deckblatt
-                art: if (s.art == 0 && s.raw.is_none()) || s.art as usize >= ARTEN.len() { 3 } else { s.art as usize },
-                zusatz: if s.art == 4 { leisten.iter().position(|l| l.0 == s.klm).map(|i| i + 1).unwrap_or(0) } else { 0 },
+                art: if s.blattart() as usize >= ARTEN.len() { 3 } else { s.blattart() as usize },
+                zusatz: match s.blattart() {
+                    4 => leisten.iter().position(|l| l.0 == s.klm).map(|i| i + 1).unwrap_or(0),
+                    // Zusatz der übrigen Blattarten (berechnet.rs): Querverweise speichern 1–3, die Liste zeigt 0–2
+                    2 => s.zusatz.saturating_sub(1) as usize,
+                    0 | 6 => s.zusatz as usize,
+                    _ => 0,
+                },
                 leisten,
             }));
         }
@@ -557,7 +563,7 @@ impl App {
             Props::Sheet(s) => {
                 // Regeln des Originals für Nummer 0, Subindex 0 und Deckblatt (blattnummer.rs); im Nachbau
                 // angelegte Blätter ohne Art gelten als Schaltplan
-                let art = self.project.sheet(s.r).map(|x| if x.art == 0 && x.raw.is_none() { 3 } else { x.art }).unwrap_or(3);
+                let art = s.art as u8;
                 let (n, sub) = match crate::blattnummer::pruefen(&self.project, s.r, &s.nummer, &s.subindex, art) {
                     Ok(v) => v,
                     Err(m) => {
@@ -581,7 +587,19 @@ impl App {
                     sh.portrait = s.portrait;
                     // Blattart; beim Klemmplan die gewählte Klemmleiste (BLT Feld 32 ab Bit 8)
                     sh.art = s.art as u8;
+                    sh.art_fest = true;
                     sh.klm = if s.art == 4 { s.zusatz.checked_sub(1).and_then(|i| s.leisten.get(i)).map(|l| l.0).unwrap_or(0) } else { 0 };
+                    sh.zusatz = match s.art {
+                        2 => (s.zusatz.min(2) + 1) as u8,
+                        0 | 6 => s.zusatz.min(2) as u8,
+                        _ => 0,
+                    };
+                }
+                // Inhaltsverzeichnis, Querverweise, Artikelliste: fehlende Folgeblätter anlegen (im Original nach Rückfrage)
+                match crate::berechnet::folgeblaetter_anlegen(&mut self.project, s.r) {
+                    Ok(0) => {}
+                    Ok(n) => self.info = format!("{n} Folgeblätter für die Liste angelegt"),
+                    Err(m) => self.dialog = Some(crate::app::Dialog::Message(m)),
                 }
             }
         }
@@ -963,13 +981,19 @@ fn sheet_ui(ui: &mut egui::Ui, s: &mut SheetProps, anlagen: &[String]) {
             }
         });
         ui.end_row();
-        // Zusatz: beim Klemmenplan die Klemmleiste („Keine Zuordnung“ wie im Original)
-        let klemmplan = s.art == 4;
-        label(ui, 90.0, "Zusatz", klemmplan);
-        ui.add_enabled_ui(klemmplan, |ui| {
-            let mut items: Vec<String> = vec!["Keine Zuordnung".into()];
-            items.extend(s.leisten.iter().map(|l| l.1.clone()));
-            let text = if klemmplan { items.get(s.zusatz).cloned().unwrap_or_default() } else { String::new() };
+        // Zusatz wie im Original (Texte der Exe): Klemmenplan = Klemmleiste („Keine Zuordnung“), Deckblatt mit/ohne
+        // Rahmen, Querverweise 1–3 Tabellen, Artikelliste Summenliste/Summe+BMK/Einzelliste
+        let items: Vec<String> = match s.art {
+            4 => std::iter::once("Keine Zuordnung".to_string()).chain(s.leisten.iter().map(|l| l.1.clone())).collect(),
+            0 => vec!["mit Rahmen".into(), "ohne Rahmen".into()],
+            2 => vec!["1 Tabelle".into(), "2 Tabellen".into(), "3 Tabellen".into()],
+            6 => vec!["Summenliste".into(), "Summe+BMK".into(), "Einzelliste".into()],
+            _ => vec![],
+        };
+        let mit_zusatz = !items.is_empty();
+        label(ui, 90.0, "Zusatz", mit_zusatz);
+        ui.add_enabled_ui(mit_zusatz, |ui| {
+            let text = items.get(s.zusatz).cloned().unwrap_or_default();
             egui::ComboBox::from_id_salt("zus").width(145.0).selected_text(text).show_ui(ui, |ui| {
                 for (i, t) in items.iter().enumerate() {
                     ui.selectable_value(&mut s.zusatz, i, t);

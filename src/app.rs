@@ -942,7 +942,7 @@ impl App {
                             *vertical = !*vertical
                         }
                     }
-                    Kind::Terminal { .. } | Kind::Busbar { .. } => {}
+                    Kind::Terminal { .. } | Kind::Busbar { .. } | Kind::Spiegel { .. } => {}
                     Kind::Verweis { .. } => crate::verweise::drehen(&mut o.kind, op),
                     Kind::Line { a, b }
                     | Kind::Rect { a, b }
@@ -1367,7 +1367,7 @@ impl App {
     }
 
     pub fn edit_props(&mut self, id: u64) {
-        if self.open_props(id) || self.open_props3(id) {
+        if self.open_props(id) || self.open_props3(id) || self.spiegel_props(id) {
             return;
         }
         let Some(o) = self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == id)).cloned() else { return };
@@ -1674,7 +1674,7 @@ impl App {
             Tool::Triangle => Kind::Triangle { a, b },
             Tool::Circle => Kind::Circle { a, b },
             Tool::TextBox => Kind::TextBox { a, b, text: "Text".into(), size: 3.5 },
-            Tool::Table => Kind::Table { a, b, rows: 3, cols: 3, cells: vec![String::new(); 9], header: true, fixed_w: false },
+            Tool::Table => Kind::Table { a, b, rows: 3, cols: 3, cells: vec![String::new(); 9], header: true, fixed_w: false, art: 0, ab: 0 },
             Tool::Image => Kind::Image { a, b, path: String::new(), mode: 0, frame: true },
             _ => return None,
         })

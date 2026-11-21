@@ -259,6 +259,7 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
         }
     }
     crate::klemmen::patch_blt(&mut blk, s);
+    crate::epr_neu::patch_zusatz(&mut blk, s);
     let by_id: std::collections::HashMap<u64, &Obj> = s.objects.iter().map(|o| (o.id, o)).collect();
     let mut written = std::collections::HashSet::new();
     for (i, k) in src.kids.iter().enumerate() {
@@ -296,6 +297,13 @@ fn object_block_raw(project: &Project, o: &Obj) -> Option<Block> {
     if matches!(o.kind, Kind::Terminal { .. }) {
         return crate::klemmen::terminal_block(project, o);
     }
+    // Kontaktspiegel (OBJ Art 5) schreibt kontaktspiegel.rs, unverändert bleibt der Originalblock
+    if matches!(o.kind, Kind::Spiegel { .. }) {
+        if let Some(r) = o.raw.as_deref().filter(|r| r.kind == o.kind) {
+            return Some(r.block.clone());
+        }
+        return crate::epr_neu::spiegel_block(project, o);
+    }
     if let Some(r) = o.raw.as_deref() {
         if r.kind == o.kind && r.pen == o.pen && r.fixed == o.fixed {
             return Some(r.block.clone());
@@ -331,7 +339,7 @@ fn first_point(k: &Kind) -> Option<P> {
     Some(match k {
         Kind::Line { a, .. } | Kind::Curve { a, .. } | Kind::Rect { a, .. } | Kind::Triangle { a, .. } | Kind::Circle { a, .. } => *a,
         Kind::TextBox { a, .. } | Kind::Table { a, .. } | Kind::Image { a, .. } => *a,
-        Kind::Text { pos, .. } | Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } => *pos,
+        Kind::Text { pos, .. } | Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } | Kind::Spiegel { pos, .. } => *pos,
         Kind::Wire { pts, .. } | Kind::Poly { pts } => *pts.first()?,
         Kind::Verweis { pos, .. } => *pos,
         Kind::Busbar { a, .. } => *a,
@@ -951,5 +959,6 @@ pub fn kind_name(k: &Kind) -> &'static str {
         Kind::Terminal { .. } => "Klemmstelle",
         Kind::Verweis { .. } => "Verweis",
         Kind::Busbar { .. } => "Sammelschiene",
+        Kind::Spiegel { .. } => "Kontaktspiegel",
     }
 }

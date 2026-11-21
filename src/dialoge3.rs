@@ -32,14 +32,13 @@ pub enum Dlg3 {
     Wahl { path: PathBuf, anlagen: Vec<(String, bool)> },
     UserDat { anlage: usize, breite: String, hoehe: String },
     TextChange { ids: Vec<u64>, text: String },
-    Spiegel { id: u64, rows: Vec<(String, bool)>, sel: Option<usize> },
     Errliste { lines: Vec<String> },
     /// Listen Export (TListExport): Liste, Dateiformat, Meldung
     ListExport { art: usize, format: usize, msg: String },
 }
 
 const DIRS: &[&str] = &["Links nach Rechts", "Rechts nach Links", "Oben nach Unten", "Unten nach Oben"];
-const TAB_ARTEN: &[&str] = &["Benutzerdaten", "Inhaltsverzeichnis"];
+const TAB_ARTEN: &[&str] = &["Benutzerdaten", "Inhaltsverzeichnis", "Querverweise"];
 const BILD_ARTEN: &[&str] = &["Zentriert", "Eingepasst", "Gestreckt"];
 const KL_ALIGN: &[&str] = &["Links", "Mittig", "Rechts"];
 const EBENEN: &[&str] = &["1", "2", "3", "4"];
@@ -163,9 +162,10 @@ impl App {
                 opts: *opts,
                 text: bez.first().map(|b| b.1.clone()).unwrap_or_default(),
             },
-            Kind::Table { rows, cols, cells, header, fixed_w, .. } => {
+            Kind::Table { rows, cols, cells, header, fixed_w, art, ab, .. } => {
                 let grid: Vec<Vec<String>> = (0..*rows).map(|r| (0..*cols).map(|c| cells.get(r * cols + c).cloned().unwrap_or_default()).collect()).collect();
-                Dlg3::Tab { id, art: 0, spalten: cols.to_string(), zeilen: rows.to_string(), header: *header, auto: !*fixed_w, fixiert: o.fixed, ab: "1".into(), cells: grid, sel_row: 0 }
+                let ab = if *art == 0 && *ab == 0 { 1 } else { *ab };
+                Dlg3::Tab { id, art: (*art as usize).min(TAB_ARTEN.len() - 1), spalten: cols.to_string(), zeilen: rows.to_string(), header: *header, auto: !*fixed_w, fixiert: o.fixed, ab: ab.to_string(), cells: grid, sel_row: 0 }
             }
             Kind::Terminal { leiste, nr, level, text_off, tpl, opt, .. } => {
                 let mut leisten = anl.klemmleisten.clone();
@@ -334,24 +334,9 @@ impl App {
         self.dlg3 = Some(Dlg3::TextChange { ids: objs.iter().map(|o| o.id).collect(), text: first.unwrap_or_default() });
     }
 
-    /// Kontaktspiegel (TSSpiegel): Kontakte mit gleicher BMK; Zeilen löschen, Referenz setzen, dann als Text einfügen.
+    /// Kontaktspiegel (TSSpiegel): verknüpftes Objekt unter der Spule, siehe kontaktspiegel.rs.
     pub fn open_spiegel(&mut self) {
-        let Some(o) = self.selected_objs().into_iter().find(|o| matches!(o.kind, Kind::Symbol { .. })) else { return };
-        let Kind::Symbol { bmk, .. } = &o.kind else { return };
-        let mut rows = vec![];
-        for a in &self.project.anlagen {
-            for s in &a.sheets {
-                for x in s.objects.iter().filter(|x| x.id != o.id) {
-                    if let Kind::Symbol { bmk: b2, key, pos, .. } = &x.kind {
-                        if b2 == bmk && !bmk.is_empty() {
-                            let name = symbols::find(&self.lib, key).map(|d| d.name.clone()).unwrap_or_default();
-                            rows.push((format!("{name}  /{}.{}", s.number, crate::epr::column_at(s, pos.x)), false));
-                        }
-                    }
-                }
-            }
-        }
-        self.dlg3 = Some(Dlg3::Spiegel { id: o.id, rows, sel: None });
+        self.spiegel_oeffnen();
     }
 
     /// Dialoge zeichnen und anwenden.
@@ -373,7 +358,6 @@ impl App {
             Dlg3::Wahl { .. } => ("Auswahl", [275.0, 307.0]),
             Dlg3::UserDat { .. } => ("Benutzermaße", [180.0, 100.0]),
             Dlg3::TextChange { .. } => ("Texteigenschaft", [285.0, 63.0]),
-            Dlg3::Spiegel { .. } => ("Kontaktspiegel", [260.0, 277.0]),
             Dlg3::Errliste { .. } => ("Fehler in den Daten", [620.0, 264.0]),
             Dlg3::ListExport { .. } => ("Listen Export", [420.0, 566.0]),
         };
@@ -381,6 +365,8 @@ impl App {
         let mut rail_edit: Option<String> = None;
         // Tabelle › Daten „Inhaltsverzeichnis“: Blätter der aktuellen Anlage (inhalt.rs)
         let toc = if matches!(d, Dlg3::Tab { art: 1, .. }) { crate::inhalt::blaetter(&self.project, self.cur().map(|r| r.anlage).unwrap_or(0)) } else { vec![] };
+        // … bzw. „Querverweise“ (berechnet.rs); auf dem Blatt wird beides bei jedem Zeichnen neu berechnet
+        let qv = if matches!(d, Dlg3::Tab { art: 2, .. }) { self.cur().and_then(|r| self.project.anlagen.get(r.anlage)).map(crate::berechnet::querverweise).unwrap_or_default() } else { vec![] };
         let closed = tool_window(ctx, "dlg3", title, size, egui::Order::Middle, |ui| {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 5.0);
             match &mut d {
@@ -527,6 +513,10 @@ impl App {
                     if *art == 1 {
                         *cells = crate::inhalt::tabelle(&toc, ab.trim().parse().unwrap_or(0), *header);
                         *spalten = crate::inhalt::KOPF.len().to_string();
+                        *zeilen = cells.len().to_string();
+                    } else if *art == 2 {
+                        *cells = crate::berechnet::quer_zellen(&qv, ab.trim().parse().unwrap_or(1), *header);
+                        *spalten = crate::berechnet::KOPF_QUER.len().to_string();
                         *zeilen = cells.len().to_string();
                     }
                     // Spalten/Zeilen sofort übernehmen
@@ -880,43 +870,6 @@ impl App {
                     }
                 }
                 Dlg3::TextChange { text, .. } => field(ui, 40.0, "Text", text, 220.0),
-                Dlg3::Spiegel { rows, sel, .. } => {
-                    egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
-                        for (i, (t, referenz)) in rows.iter().enumerate() {
-                            let label = if *referenz { format!("► {t}") } else { t.clone() };
-                            let r = ui.selectable_label(*sel == Some(i), label);
-                            if r.clicked() {
-                                *sel = Some(i);
-                            }
-                            let mut set_ref = false;
-                            r.context_menu(|ui| {
-                                if ui.button("Setze Referenz").clicked() {
-                                    set_ref = true;
-                                    ui.close();
-                                }
-                            });
-                            if set_ref {
-                                *sel = Some(i);
-                            }
-                        }
-                    });
-                    ui.horizontal(|ui| {
-                        if ui.button("Zeile löschen").clicked() {
-                            if let Some(i) = sel.take() {
-                                if i < rows.len() {
-                                    rows.remove(i);
-                                }
-                            }
-                        }
-                        if ui.button("Set Referenz").clicked() {
-                            if let Some(i) = *sel {
-                                for (k, r) in rows.iter_mut().enumerate() {
-                                    r.1 = k == i;
-                                }
-                            }
-                        }
-                    });
-                }
                 Dlg3::Errliste { lines } => {
                     egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                         for l in lines.iter() {
@@ -1096,11 +1049,14 @@ impl App {
                     }
                 });
             }
-            Dlg3::Tab { id, cells, header, auto, fixiert, .. } => {
+            Dlg3::Tab { id, cells, header, auto, fixiert, art, ab, .. } => {
                 self.with_sheet(|s, _| {
                     if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
                         o.fixed = fixiert;
-                        if let Kind::Table { rows, cols, cells: c, header: h, fixed_w, .. } = &mut o.kind {
+                        if let Kind::Table { rows, cols, cells: c, header: h, fixed_w, art: ta, ab: tb, .. } = &mut o.kind {
+                            // Daten und „Ab“ (ZCN Feld 9 Byte 2, Feld 6)
+                            *ta = art as u8;
+                            *tb = ab.trim().parse().unwrap_or(0);
                             *rows = cells.len().max(1);
                             *cols = cells.first().map(|r| r.len()).unwrap_or(1).max(1);
                             *c = cells.iter().flatten().cloned().collect();
@@ -1275,16 +1231,6 @@ impl App {
                         }
                     }
                 });
-            }
-            Dlg3::Spiegel { id, rows, .. } => {
-                let Some(o) = self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == id)).cloned() else { return None };
-                let (mn, mx) = crate::canvas::obj_bounds(&o, &self.lib);
-                let mut lines: Vec<String> = rows.iter().filter(|r| r.1).map(|r| r.0.clone()).collect();
-                lines.extend(rows.iter().filter(|r| !r.1).map(|r| r.0.clone()));
-                if lines.is_empty() {
-                    lines.push("(keine Kontakte)".into());
-                }
-                self.add_obj(Kind::Text { pos: P::new(mn.x, mx.y + 4.0), text: lines.join("\n"), size: 2.2, align: Align::Left, vertical: false, style: Default::default() });
             }
         }
         None

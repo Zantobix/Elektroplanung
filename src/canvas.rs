@@ -248,6 +248,7 @@ pub fn obj_bounds(o: &Obj, lib: &[SymDef]) -> (P, P) {
             None => (P::new(pos.x - 3.0, pos.y - 3.0), P::new(pos.x + 3.0, pos.y + 3.0)),
         },
         Kind::Terminal { pos, .. } => (P::new(pos.x - 1.2, pos.y - 1.2), P::new(pos.x + 1.2, pos.y + 1.2)),
+        Kind::Spiegel { pos, rows, .. } => crate::kontaktspiegel::bounds(*pos, rows),
         Kind::Verweis { pos, text_pos, text, dir, vertical, .. } => {
             // Pfeil (in jeder Drehung ganz) und – falls vorhanden – Text
             let (ta, tb) = pts_bounds(&verweis_triangle(*pos, *dir));
@@ -374,12 +375,19 @@ pub fn draw_sheet_base(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, colors: &Sh
     // Rahmen
     let (fx0, fy0, fx1, fy1) = sheet.frame();
     let fr = Rect::from_min_max(xf.s(P::new(fx0, fy0)), xf.s(P::new(fx1, fy1)));
+    // Deckblatt: ohne Strompfade und Schriftfeld, Rahmen nach Zusatz „mit/ohne Rahmen“ (Anleitung 4.2.1)
+    if sheet.blattart() == 0 {
+        if sheet.zusatz == 0 {
+            p.rect_stroke(fr, 0.0, black, egui::StrokeKind::Middle);
+        }
+        return;
+    }
     p.rect_stroke(fr, 0.0, black, egui::StrokeKind::Middle);
 
     let th = dc.project.title_h();
     // Strompfad-Spaltenleiste (Klemmplan und Sicherungsübersicht haben keine, wie im Original-Ausdruck; ebenso
-    // die übrigen Listenblätter Inhaltsverzeichnis und Artikelliste)
-    if matches!(sheet.art, 1 | 4 | 5 | 6) {
+    // die übrigen Listenblätter Inhaltsverzeichnis, Querverweise und Artikelliste)
+    if matches!(sheet.blattart(), 1 | 2 | 4 | 5 | 6) {
         draw_title_block(dc, sheet, anlage, fx0, fx1, fy1 - th, fy1);
         draw_generated(dc, sheet, anlage);
         return;
@@ -505,7 +513,7 @@ pub fn draw_generated(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
         // Klemmplan (Original-Ausdruck Seite 12): siehe klemmplan.rs
         crate::klemmplan::draw(dc, sheet, anlage);
     } else {
-        // Artikelliste, Inhaltsverzeichnis: siehe berechnet.rs
+        // Artikelliste, Inhaltsverzeichnis, Querverweise: siehe berechnet.rs
         crate::berechnet::draw(dc, sheet, anlage);
     }
 }
@@ -644,10 +652,17 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             let g = p.layout_job(job);
             p.with_clip_rect(r).galley(r.min + Vec2::splat(0.5 * z), g, tc);
         }
-        Kind::Table { a, b, rows, cols, cells, header, fixed_w } => {
+        Kind::Spiegel { pos, rows, .. } => crate::kontaktspiegel::draw(dc, *pos, rows, stroke),
+        Kind::Table { a, b, rows, cols, cells, header, fixed_w, art, ab } => {
             let (mn, mx) = norm_rect(*a, *b);
             let rows = (*rows).max(1);
-            let cols = (*cols).max(1);
+            // Daten „Inhaltsverzeichnis“/„Querverweise“: Inhalt bei jedem Zeichnen aus dem Projekt (berechnet.rs)
+            let berechnet = dc.anlage.and_then(|an| crate::berechnet::tabelle(an, *art, *ab, *header, rows));
+            let (cols, cells) = match &berechnet {
+                Some((c, z)) => (*c, z),
+                None => (*cols, cells),
+            };
+            let cols = cols.max(1);
             let rh = (mx.y - mn.y) / rows as f32;
             // Schrift wie im Original-Ausdruck (Seite 35: Zeilen 8,1 mm, Schrift ≈ 5 mm), Spalten nach dem längsten Text,
             // die letzte Spalte füllt den Rest
