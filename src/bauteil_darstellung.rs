@@ -40,7 +40,7 @@ pub fn firma_ui(ui: &mut egui::Ui, v: &mut String, firmen: &[String]) {
     ui.horizontal(|ui| {
         ui.add(egui::TextEdit::singleline(v).desired_width(150.0));
         ui.add_enabled_ui(!firmen.is_empty(), |ui| {
-            ui.menu_button("▾", |ui| {
+            ui.menu_button("▼", |ui| {
                 for f in firmen {
                     if ui.button(f.as_str()).clicked() {
                         *v = f.clone();

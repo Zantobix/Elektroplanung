@@ -105,7 +105,7 @@ pub struct TNode {
     pub id: String,
     pub label: String,
     pub bold: bool,
-    /// 0 nichts, 1 Buch, 2 Buch+Stern, 3 Blatt, 4 Ordner
+    /// Knotensymbol, Werte siehe `baum::ico` (0 nichts, 1 Buch, 2 Buch+Stern, 3 Blatt, 4 Anlage, 5… Projektgruppen)
     pub icon: u8,
     pub action: TAction,
     pub children: Vec<TNode>,
@@ -176,6 +176,8 @@ pub struct App {
     pub tree_open: HashSet<String>,
     pub tree_sel: Option<String>,
     pub search: String,
+    /// Zustand des Suchfelds im Projektexplorer (Verlauf, „Aa“)
+    pub suchfeld: crate::baum::SuchFeld,
     /// Suchen über alle Blätter, Projekt prüfen, Bildexport (suche.rs)
     pub suche: crate::suche::SucheState,
     pub dialog: Option<Dialog>,
@@ -303,6 +305,7 @@ impl App {
             tree_open,
             tree_sel: None,
             search: String::new(),
+            suchfeld: Default::default(),
             suche: Default::default(),
             dialog: None,
             props: None,
