@@ -30,6 +30,8 @@ pub mod klemmen;
 pub mod klemmplan;
 pub mod kontaktspiegel;
 pub mod kuerzel;
+pub mod kurve;
+pub mod leitung_fuehrung;
 pub mod leitung_stift;
 pub mod listen;
 pub mod mcp;

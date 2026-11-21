@@ -1005,6 +1005,7 @@ impl App {
                     canvas::draw_object(&dc, &Obj { id: 0, kind: k, pen: self.pen, fixed: false, group: None, raw: None }, Some(PREVIEW));
                 }
             }
+            self.kurven_extras(&dc, xf, &e.sheet.objects, hover);
             return;
         }
         let Some(r) = self.cur() else { return };
@@ -1093,15 +1094,16 @@ impl App {
                     }
                 }
             }
-            Drag::Wire { start } => {
+            Drag::Wire { f } => {
                 if let Some(h) = hover {
                     let end = self.wire_end(xf.m(h), xf.z);
-                    let w = Obj { id: 0, kind: Kind::Wire { pts: route(*start, end), leitung: self.leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None };
+                    let w = Obj { id: 0, kind: Kind::Wire { pts: f.weg(end), leitung: self.leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None };
                     canvas::draw_object(&dc, &w, Some(PREVIEW));
                 }
             }
             _ => {}
         }
+        self.kurven_extras(&dc, xf, &sheet.objects, hover);
         // Vormarkierung (gestricheltes Rechteck) und Zusatz am Mauszeiger, siehe hover.rs
         if let (Some(z), Some(h)) = (crate::hover::gemerkt(ui.ctx()), hover) {
             crate::hover::rechteck(&clip, xf, &z);
@@ -1120,6 +1122,21 @@ impl App {
                     canvas::draw_symbol(&clip, xf, def, pos, 0, false, false, 1.0, 0, Stroke::new((0.25 * xf.z).max(1.0), PREVIEW));
                 }
             }
+        }
+    }
+
+    /// Griffe markierter Kurven und Vorschau einer entstehenden Kurve (kurve.rs).
+    fn kurven_extras(&self, dc: &DrawCtx, xf: Xf, objs: &[Obj], hover: Option<Pos2>) {
+        for o in objs.iter().filter(|o| self.selection.contains(&o.id)) {
+            crate::kurve::griffe_zeichnen(dc.painter, xf, &o.kind);
+        }
+        if let (Drag::Kurve(k), Some(h)) = (&self.drag, hover) {
+            let kind = match k.vorschau(self.snap(xf.m(h))) {
+                crate::kurve::Vorschau::Linie(a, b) => Kind::Line { a, b },
+                crate::kurve::Vorschau::Kurve(c) => c,
+            };
+            canvas::draw_object(dc, &Obj { id: 0, kind: kind.clone(), pen: self.pen, fixed: false, group: None, raw: None }, Some(PREVIEW));
+            crate::kurve::griffe_zeichnen(dc.painter, xf, &kind);
         }
     }
 
@@ -1252,6 +1269,40 @@ impl App {
         }
         let Some(h) = hover else { return };
         let m = xf.m(h);
+        // angefangene Kurve verwerfen, wenn ein anderes Werkzeug gewählt wurde
+        if matches!(self.drag, Drag::Kurve(_)) && self.tool != Tool::Curve {
+            self.drag = Drag::None;
+        }
+        // Leitung im Klickbetrieb wie im Original: Klick auf freie Fläche setzt einen Eckpunkt, Klick auf einen
+        // Anschluss beendet, Rechtsklick bricht ab (leitung_fuehrung.rs)
+        if let Drag::Wire { f } = &self.drag {
+            if f.klickbetrieb {
+                let mut f = f.clone();
+                if inside && pressed_r {
+                    self.drag = Drag::None;
+                    self.info = "Leitung abgebrochen".into();
+                    return;
+                }
+                if inside && pressed_l {
+                    let min = 6.0 / xf.z;
+                    match self.pin_near(m, min, &[]) {
+                        Some(pin) if !(f.pts.len() == 1 && pin.dist(f.start()) < 0.01) => {
+                            let pts = f.weg(pin);
+                            self.drag = Drag::None;
+                            if pts.len() >= 2 {
+                                let l = self.leitung;
+                                self.add_obj(Kind::Wire { pts, leitung: l, bez: vec![], opts: 0 });
+                            }
+                        }
+                        _ => {
+                            f.klick(self.snap(m), min);
+                            self.drag = Drag::Wire { f };
+                        }
+                    }
+                }
+                return;
+            }
+        }
 
         // Symbol aus der Bibliothek platzieren (Klick oder Ziehen aus dem Baum)
         if let Some(key) = self.placing.clone() {
@@ -1347,6 +1398,14 @@ impl App {
         if inside && pressed_l {
             match self.tool {
                 Tool::Select => {
+                    // Griffe markierter Kurven (Endpunkte, Kontrollpunkte) vor dem Rahmen zur Größenänderung
+                    if !shift && !ctrl {
+                        if let Some((id, griff)) = self.kurven_griff_bei(m, tol) {
+                            self.checkpoint();
+                            self.drag = Drag::KurvenGriff { id, griff };
+                            return;
+                        }
+                    }
                     if let Some((mn, mx)) = self.sel_frame() {
                         let r = (FRAME_HANDLE / 2.0).max(2.5 / xf.z) + 0.5 / xf.z;
                         let nur_ecken = crate::groesse::proportional(&self.selected_objs());
@@ -1378,7 +1437,7 @@ impl App {
                     if let Some(pin) = self.pin_near(m, tol, &[]) {
                         let on_selected = self.selected_objs().iter().any(|o| canvas::hit(o, m, tol, &self.lib));
                         if !on_selected {
-                            self.drag = Drag::Wire { start: pin };
+                            self.drag = Drag::Wire { f: crate::leitung_fuehrung::Fuehrung::neu(pin) };
                             return;
                         }
                     }
@@ -1412,8 +1471,33 @@ impl App {
                     let pos = self.snap(m);
                     self.dialog = Some(Dialog::Text { title: "Neuer Text".into(), value: String::new(), target: TextTarget::NewText(pos) });
                 }
+                // Neue Kurve: vier Klicks wie im Original (Anfang, Ende, Kontrollpunkt 1, Kontrollpunkt 2)
+                Tool::Curve => {
+                    let p = self.snap(m);
+                    if let Drag::Kurve(mut k) = self.drag.clone() {
+                        if let Some(kind) = k.klick(p) {
+                            self.drag = Drag::None;
+                            self.add_obj(kind);
+                            self.info = "Kurve angelegt".into();
+                        } else {
+                            self.info = k.hinweis().into();
+                            self.drag = Drag::Kurve(k);
+                        }
+                    } else {
+                        let k = crate::kurve::NeueKurve::neu(p);
+                        self.info = k.hinweis().into();
+                        self.drag = Drag::Kurve(k);
+                    }
+                }
                 t => self.drag = Drag::Create { tool: t, start: self.create_end(t, m, xf.z) },
             }
+        }
+        if let Drag::KurvenGriff { id, griff } = self.drag.clone() {
+            let p = self.snap(m);
+            self.kurven_griff_ziehen(id, griff, p);
+        }
+        if let Drag::Wire { f } = &mut self.drag {
+            f.bewegen(m, 6.0 / xf.z);
         }
 
         if let Drag::Move { start, applied, moved } = self.drag.clone() {
@@ -1473,6 +1557,8 @@ impl App {
         }
 
         if released_l {
+            // Zustände, die über das Loslassen hinaus bestehen (Kurve zwischen den Klicks, Leitung im Klickbetrieb)
+            let mut bleibt = false;
             match self.drag.clone() {
                 Drag::Rubber { start } => {
                     let (mn, mx) = canvas::norm_rect(start, m);
@@ -1505,12 +1591,28 @@ impl App {
                         }
                     }
                 }
-                Drag::Wire { start } => {
+                Drag::Wire { mut f } => {
                     let end = self.wire_end(m, xf.z);
-                    if end.dist(start) > 0.01 {
+                    if end.dist(f.start()) > 0.01 {
+                        // gezogen: Knick nach der ersten Zugrichtung
                         let l = self.leitung;
-                        self.add_obj(Kind::Wire { pts: route(start, end), leitung: l, bez: vec![], opts: 0 });
+                        self.add_obj(Kind::Wire { pts: f.weg(end), leitung: l, bez: vec![], opts: 0 });
+                    } else {
+                        // Klick auf den Anschluss ohne Ziehen: Klickbetrieb wie im Original
+                        f.klickbetrieb = true;
+                        self.drag = Drag::Wire { f };
+                        self.info = "Leitung: Eckpunkte anklicken, auf einem Anschluss beenden (Rechtsklick bricht ab)".into();
+                        bleibt = true;
                     }
+                }
+                Drag::Kurve(mut k) => {
+                    // Komfort: wurde vom Anfang weg gezogen, setzt das Loslassen den Endpunkt (im Original nur Klicks)
+                    if k.b.is_none() && m.dist(k.a) * xf.z > 6.0 {
+                        k.klick(self.snap(m));
+                        self.info = k.hinweis().into();
+                    }
+                    self.drag = Drag::Kurve(k);
+                    bleibt = true;
                 }
                 // nach dem Verschieben: freie Anschlüsse automatisch verbinden (gleicher Rückgängig-Schritt)
                 Drag::Move { moved: true, .. } if self.auto_conn_eff() => {
@@ -1519,7 +1621,9 @@ impl App {
                 }
                 _ => {}
             }
-            self.drag = Drag::None;
+            if !bleibt {
+                self.drag = Drag::None;
+            }
         }
 
         if inside && pressed_r {
@@ -1894,7 +1998,8 @@ impl App {
         // Gehaltene Tasten wie im Original: S kehrt die Strompfadausrichtung, A die automatischen Verbindungen um,
         // solange sie gedrückt sind; Umschalt schaltet den Rasterfang ab. Ein kurzer Druck ohne Setzen/Ziehen
         // schaltet beim Loslassen wie bisher um. Gilt nur für Belegungen ohne Strg/Umschalt/Alt.
-        let busy = self.placing.is_some() || matches!(self.drag, Drag::Move { .. } | Drag::Create { .. } | Drag::Wire { .. } | Drag::Resize { .. } | Drag::Scale { .. } | Drag::Beschriftung { .. });
+        let busy = self.placing.is_some()
+            || matches!(self.drag, Drag::Move { .. } | Drag::Create { .. } | Drag::Wire { .. } | Drag::Kurve(_) | Drag::KurvenGriff { .. } | Drag::Resize { .. } | Drag::Scale { .. } | Drag::Beschriftung { .. });
         let hold_keys: [Option<Key>; 2] = ["pfadfang", "autoverb"].map(|id| {
             crate::kuerzel::parse(&crate::kuerzel::belegung(&eigene, id)).filter(|(m, _)| !m.ctrl && !m.shift && !m.alt && !m.command).map(|(_, k)| k)
         });
@@ -1954,6 +2059,11 @@ impl App {
         }
         if self.spiegel_pick_aktiv() && ctx.input(|i| i.key_pressed(Key::Escape)) {
             self.spiegel_pick_ende(None);
+        }
+        // Esc bricht eine angefangene Kurve bzw. eine Leitung im Klickbetrieb ab
+        if matches!(&self.drag, Drag::Kurve(_) | Drag::Wire { .. }) && ctx.input(|i| i.key_pressed(Key::Escape)) {
+            self.drag = Drag::None;
+            self.info = "Zeichnen abgebrochen".into();
         }
         if copy {
             self.copy();

@@ -49,7 +49,12 @@ pub enum Drag {
     Move { start: P, applied: P, moved: bool },
     Rubber { start: P },
     Create { tool: Tool, start: P },
-    Wire { start: P },
+    /// Leitung von einem Anschluss aus (Ziehen oder Klickbetrieb wie im Original), siehe leitung_fuehrung.rs
+    Wire { f: crate::leitung_fuehrung::Fuehrung },
+    /// Neue Kurve zwischen den vier Klicks, siehe kurve.rs
+    Kurve(crate::kurve::NeueKurve),
+    /// Griff (0 Anfang, 1/2 Kontrollpunkte, 3 Ende) einer markierten Kurve ziehen
+    KurvenGriff { id: u64, griff: usize },
     Resize { id: u64, corner: usize },
     /// Rahmen zur Größenänderung um die ganze Markierung: Griff 0–7 (links oben im Uhrzeigersinn),
     /// Umriss und Objekte beim Beginn des Ziehens
@@ -1675,15 +1680,8 @@ impl App {
         }
         Some(match tool {
             Tool::Line => Kind::Line { a, b },
-            Tool::Curve => {
-                let d = b.sub(a);
-                Kind::Curve {
-                    a,
-                    c1: P::new(a.x + d.x * 0.33 - d.y * 0.35, a.y + d.y * 0.33 + d.x * 0.35),
-                    c2: P::new(a.x + d.x * 0.66 + d.y * 0.35, a.y + d.y * 0.66 - d.x * 0.35),
-                    b,
-                }
-            }
+            // Zeichenfläche: vier Klicks wie im Original (kurve.rs); hier nur die gerade Ausgangslage
+            Tool::Curve => Kind::Curve { a, c1: a, c2: b, b },
             Tool::Rect => Kind::Rect { a, b },
             Tool::Triangle => Kind::Triangle { a, b },
             Tool::Circle => Kind::Circle { a, b },
