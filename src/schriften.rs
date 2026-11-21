@@ -114,25 +114,48 @@ fn ordner() -> Vec<(PathBuf, usize)> {
     if let Ok(d) = std::env::var("EP_SCHRIFTEN") {
         return std::env::split_paths(&d).map(|p| (p, 4)).collect();
     }
-    let mut v = vec![];
     #[cfg(windows)]
     {
         let windir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
-        v.push((PathBuf::from(windir).join("Fonts"), 0));
+        let mut v = vec![(PathBuf::from(windir).join("Fonts"), 0)];
         if let Ok(l) = std::env::var("LOCALAPPDATA") {
             v.push((PathBuf::from(l).join("Microsoft\\Windows\\Fonts"), 0));
         }
+        v
     }
     #[cfg(not(windows))]
     {
-        for d in ["/usr/share/fonts", "/usr/local/share/fonts", "/Library/Fonts", "/System/Library/Fonts", "/System/Library/Fonts/Supplemental"] {
-            v.push((PathBuf::from(d), 4));
+        let var = |k: &str| std::env::var(k).ok().filter(|s| !s.is_empty());
+        unix_ordner(var("HOME").as_deref(), var("XDG_DATA_HOME").as_deref(), var("XDG_DATA_DIRS").as_deref())
+    }
+}
+
+/// Schriftordner unter Linux (XDG: $XDG_DATA_HOME bzw. ~/.local/share, $XDG_DATA_DIRS bzw. /usr/local/share und
+/// /usr/share, je mit „fonts“, dazu ~/.fonts) und macOS (/System/Library/Fonts samt Supplemental, /Library/Fonts,
+/// ~/Library/Fonts), jeweils mit Suchtiefe. Doppelte Ordner fallen weg.
+#[cfg_attr(windows, allow(dead_code))]
+fn unix_ordner(home: Option<&str>, xdg_home: Option<&str>, xdg_dirs: Option<&str>) -> Vec<(PathBuf, usize)> {
+    let mut v: Vec<(PathBuf, usize)> = vec![];
+    let mut add = |p: PathBuf, t: usize| {
+        if !v.iter().any(|(q, _)| *q == p) {
+            v.push((p, t));
         }
-        if let Ok(h) = std::env::var("HOME") {
-            v.push((PathBuf::from(&h).join(".local/share/fonts"), 4));
-            v.push((PathBuf::from(&h).join(".fonts"), 4));
-            v.push((PathBuf::from(&h).join("Library/Fonts"), 2));
-        }
+    };
+    let home = home.map(PathBuf::from);
+    if let Some(x) = xdg_home.map(PathBuf::from).or_else(|| home.as_ref().map(|h| h.join(".local/share"))) {
+        add(x.join("fonts"), 4);
+    }
+    if let Some(h) = &home {
+        add(h.join(".fonts"), 4);
+    }
+    for d in xdg_dirs.unwrap_or("/usr/local/share:/usr/share").split(':').filter(|d| !d.is_empty()) {
+        add(PathBuf::from(d).join("fonts"), 4);
+    }
+    // macOS (Supplemental liegt unter /System/Library/Fonts und wird mit der Suchtiefe erfasst)
+    add(PathBuf::from("/System/Library/Fonts"), 2);
+    add(PathBuf::from("/Library/Fonts"), 2);
+    if let Some(h) = &home {
+        add(h.join("Library/Fonts"), 2);
     }
     v
 }
@@ -415,6 +438,46 @@ mod tests {
         t.extend(&fam);
         t.extend(&sub);
         assert_eq!(namen(&t), vec![("Arial".to_string(), "Bold".to_string())]);
+    }
+
+    /// Schriftordner unter Linux/macOS (auf jedem System prüfbar, da reine Pfadrechnung).
+    #[test]
+    fn ordner_linux_macos() {
+        let v: Vec<String> = unix_ordner(Some("/home/u"), None, None).into_iter().map(|(p, _)| p.to_string_lossy().replace('\\', "/")).collect();
+        assert_eq!(
+            v,
+            ["/home/u/.local/share/fonts", "/home/u/.fonts", "/usr/local/share/fonts", "/usr/share/fonts", "/System/Library/Fonts", "/Library/Fonts", "/home/u/Library/Fonts"]
+        );
+        // XDG-Variablen ersetzen die Vorgaben, doppelte Ordner fallen weg
+        let v: Vec<String> = unix_ordner(None, Some("/x/data"), Some("/opt/share:/usr/share:/usr/share:")).into_iter().map(|(p, _)| p.to_string_lossy().replace('\\', "/")).collect();
+        assert_eq!(v, ["/x/data/fonts", "/opt/share/fonts", "/usr/share/fonts", "/System/Library/Fonts", "/Library/Fonts"]);
+    }
+
+    /// Fehlt eine Schrift, liefert der Lader die Times-Kette im passenden Schnitt (fett: times_b zuerst), für
+    /// fremde Familien nichts.
+    #[test]
+    fn rueckfall_auf_times() {
+        let data = egui::FontDefinitions::default().font_data.values().next().unwrap().as_ref().clone();
+        let ersatz = ["times", "times_b", "times_i", "segoe"].iter().map(|n| egui::epaint::text::FontInsert::new(n, data.clone(), vec![])).collect();
+        let l = Lader { ersatz };
+        use egui::epaint::text::FontProvider;
+        let namen = |f: FontFamily| l.fonts_for_family(&f).into_iter().map(|i| i.name).collect::<Vec<_>>();
+        assert!(finden("Gibt Es Nicht 4711", false, false).is_none());
+        assert_eq!(namen(familie("Gibt Es Nicht 4711", true, false)), ["times_b", "times", "segoe"]);
+        assert_eq!(namen(familie("Gibt Es Nicht 4711", false, false)), ["times", "segoe"]);
+        assert!(namen(FontFamily::Name("times".into())).is_empty());
+        assert!(namen(FontFamily::Proportional).is_empty());
+        // gezeichnet: gleiche Laufweite wie Times
+        let ctx = egui::Context::default();
+        crate::setup_style(&ctx);
+        let input = || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::splat(400.0))), ..Default::default() };
+        let _ = ctx.run_ui(input(), |_| {});
+        let mut breiten = (0.0, 0.0);
+        let _ = ctx.run_ui(input(), |ui| {
+            let w = |f: FontId| ui.painter().layout_no_wrap("Wiiiiiiiiide".into(), f, egui::Color32::BLACK).size().x;
+            breiten = (w(font_id("Gibt Es Nicht 4711", 20.0, false, false)), w(font_id("", 20.0, false, false)));
+        });
+        assert!((breiten.0 - breiten.1).abs() < 0.01, "{breiten:?}");
     }
 
     /// Mit installierter Arial (Windows) wird sie gefunden und ist eine gültige Schrift für egui.
