@@ -194,7 +194,7 @@ impl App {
         };
         let ziehen = match &self.drag {
             Drag::None => Ziehen::Nichts,
-            Drag::Move { .. } => Ziehen::Verschieben,
+            Drag::Move { .. } | Drag::Teilstueck { .. } => Ziehen::Verschieben,
             Drag::Beschriftung { .. } => Ziehen::Beschriftung,
             Drag::Scale { handle, .. } => Ziehen::Griff(*handle),
             Drag::Resize { .. } => Ziehen::Ecke,

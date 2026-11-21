@@ -1113,8 +1113,8 @@ impl App {
             }
             Drag::Wire { f } => {
                 if let Some(h) = hover {
-                    let end = self.wire_end(xf.m(h), xf.z);
-                    let w = Obj { id: 0, kind: Kind::Wire { pts: f.weg(end), leitung: self.leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None };
+                    let end = self.leitungsende(f, xf.m(h), xf.z);
+                    let w = Obj { id: 0, kind: Kind::Wire { pts: self.leitungsweg(f, end), leitung: self.leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None };
                     canvas::draw_object(&dc, &w, Some(PREVIEW));
                 }
             }
@@ -1310,9 +1310,11 @@ impl App {
                 }
                 if inside && pressed_l {
                     let min = 6.0 / xf.z;
-                    match self.pin_near(m, min, &[]) {
+                    // Klick auf eine Sammelschiene beendet wie ein Anschluss (senkrecht auf die Schiene)
+                    let ziel = self.pin_near(m, min, &[]).or_else(|| self.sheet().and_then(|s| crate::leitung_route::schiene_bei(s, m, min)).map(|s| crate::leitung_route::ende_auf_schiene(f.letzter(), s)));
+                    match ziel {
                         Some(pin) if !(f.pts.len() == 1 && pin.dist(f.start()) < 0.01) => {
-                            let pts = f.weg(pin);
+                            let pts = self.leitungsweg(&f, pin);
                             self.drag = Drag::None;
                             if pts.len() >= 2 {
                                 let l = self.leitung;
@@ -1491,6 +1493,10 @@ impl App {
                             self.selection = vec![id];
                         }
                         self.expand_groups();
+                        // einzeln markierte Leitung: nur das gegriffene Teilstück verschieben (segment_ziehen.rs)
+                        if !ctrl && self.teilstueck_greifen(id, m, tol) {
+                            return;
+                        }
                         self.drag = Drag::Move { start: self.snap(m), applied: P::default(), moved: false };
                     } else {
                         if !ctrl {
@@ -1534,6 +1540,9 @@ impl App {
         }
         if let Drag::Wire { f } = &mut self.drag {
             f.bewegen(m, 6.0 / xf.z);
+        }
+        if matches!(self.drag, Drag::Teilstueck { .. }) {
+            self.teilstueck_ziehen(m);
         }
 
         if let Drag::Move { start, applied, moved } = self.drag.clone() {
@@ -1632,11 +1641,12 @@ impl App {
                     }
                 }
                 Drag::Wire { mut f } => {
-                    let end = self.wire_end(m, xf.z);
+                    let end = self.leitungsende(&f, m, xf.z);
                     if end.dist(f.start()) > 0.01 {
                         // gezogen: Knick nach der ersten Zugrichtung
                         let l = self.leitung;
-                        self.add_obj(Kind::Wire { pts: f.weg(end), leitung: l, bez: vec![], opts: 0 });
+                        let pts = self.leitungsweg(&f, end);
+                        self.add_obj(Kind::Wire { pts, leitung: l, bez: vec![], opts: 0 });
                     } else {
                         // Klick auf den Anschluss ohne Ziehen: Klickbetrieb wie im Original
                         f.klickbetrieb = true;

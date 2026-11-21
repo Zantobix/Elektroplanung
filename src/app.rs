@@ -65,6 +65,8 @@ pub enum Drag {
     /// Rechte Maustaste gedrückt (rechts_ziehen.rs): Rasterpunkt und Bildschirmlage beim Drücken; `kopie` = auf
     /// einem Objekt (Ziehen legt eine Kopie ab), sonst öffnet das Loslassen das Kontextmenü
     Rechts { start: P, druck: Pos2, kopie: bool },
+    /// Teilstück `idx` einer Leitung quer verschieben, Enden bleiben angeschlossen (segment_ziehen.rs)
+    Teilstueck { id: u64, idx: usize, orig: Vec<P>, start: P, moved: bool },
 }
 
 pub enum TextTarget {
@@ -1204,7 +1206,10 @@ impl App {
         }
     }
 
-    /// Neue Sammelschiene: waagerechte Leitung über die Blattbreite mit Namen.
+    /// Neue Sammelschiene (Werkzeugleiste, Kontextmenü): echtes Sammelschienen-Objekt wie in W2 (Anfang 8 mm rechts
+    /// vom Rahmen, Ende 21 mm vor dem rechten Rahmen, Name 4 mm darüber), oben unter die vorhandenen Schienen
+    /// gestapelt (5 mm Abstand). Bisher entstand hier eine Leitung mit Text, an der Leiter nicht senkrecht
+    /// anschlossen (Maus-Befund M3).
     pub fn new_busbar(&mut self) {
         if self.cur().is_none() {
             return;
@@ -1216,24 +1221,16 @@ impl App {
         let name = format!("Sammelschiene {n}");
         anl.sammelschienen.push(name.clone());
         let (fx0, fy0, fx1, _) = self.sheet().map(|s| s.frame()).unwrap_or((FRAME_LEFT, FRAME_TOP, SHEET_W - FRAME_RIGHT, 0.0));
-        let y = self.snap(P::new(0.0, fy0 + COLUMN_BAR_H + 10.0 * n as f32)).y;
-        let leitung = self.leitung;
+        let vorhanden: Vec<f32> = self.sheet().map(|s| s.objects.iter().filter_map(|o| if let Kind::Busbar { a, .. } = &o.kind { Some(a.y) } else { None }).collect()).unwrap_or_default();
+        let mut y = fy0 + 12.0;
+        while vorhanden.iter().any(|v| (v - y).abs() < 2.5) {
+            y += 5.0;
+        }
         let id = self.project.alloc_id();
-        let tid = self.project.alloc_id();
-        let x0 = fx0 + 20.0;
-        let x1 = fx1 - 10.0;
-        self.with_sheet(|s, _| {
-            s.objects.push(Obj { id, kind: Kind::Wire { pts: vec![P::new(x0, y), P::new(x1, y)], leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
-            s.objects.push(Obj {
-                id: tid,
-                kind: Kind::Text { pos: P::new(x0 - 1.0, y), text: name, size: 2.5, align: Align::Right, vertical: false, style: Default::default() },
-                pen: 0,
-                fixed: false,
-                group: None, raw: None
-            });
-        });
+        let kind = Kind::Busbar { a: P::new(fx0 + 8.0, y), x2: fx1 - 21.0, name, label: P::new(0.0, -4.0), style: 0, sms: 0, xin: String::new(), xout: String::new(), lage: 0, versatz: 0.0 };
+        self.with_sheet(|s, _| s.objects.push(Obj { id, kind, pen: 0, fixed: false, group: None, raw: None }));
         self.tree_open.insert(format!("prj/a{a}/ss"));
-        self.selection = vec![id, tid];
+        self.selection = vec![id];
     }
 
     pub fn save_as(&mut self) {

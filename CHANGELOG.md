@@ -9,6 +9,16 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Behoben (Maustest 22.11.2026):
+- Leitung ziehen: führt aus dem Anschluss in dessen Richtung heraus und tritt am Ziel von außen ein (Z-Führung
+  über die Mitte wie im Original), statt durch das eigene Symbol zu laufen und dabei andere Anschlüsse zu treffen
+- Teilstück einer markierten Leitung ziehen verschiebt nur dieses Teilstück quer; die Enden bleiben an ihren
+  Anschlüssen (bisher wurde die ganze Leitung verschoben und getrennt)
+- Leitungsende auf einer Sammelschiene oder einer anderen Leitung trifft diese senkrecht in der Flucht, statt auf
+  den nächsten Rasterpunkt zu springen
+- „Neue Sammelschiene“ legt ein echtes Sammelschienen-Objekt an (wie in W2: Name darüber, gestapelt) statt einer
+  Leitung mit Text
+
 ## [0.2.0]
 
 Neu:
