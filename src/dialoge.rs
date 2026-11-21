@@ -42,7 +42,7 @@ impl App {
 
     pub fn open_druck_dialog(&mut self) {
         let a = self.cur().map(|r| r.anlage).filter(|a| *a < self.project.anlagen.len()).unwrap_or(0);
-        self.dlg2 = Some(Dlg2::Drucken { anlage: a, drucker: 0, drucker_liste: drucker(), art: 0, von: "1".into(), bis: "1".into(), datum: today(), skal: true });
+        self.dlg2 = Some(Dlg2::Drucken { anlage: a, drucker: 0, drucker_liste: drucker(), art: 0, von: String::new(), bis: String::new(), datum: today(), skal: true });
     }
 
     pub fn open_potential_dialog(&mut self, idx: usize) {
@@ -108,46 +108,60 @@ impl App {
                     });
                 }
                 Dlg2::Drucken { anlage, drucker, drucker_liste, art, von, bis, datum, skal } => {
+                    // Aufbau wie TForm3: oben Drucker mit Bildknopf „Druckereinstellung“, darunter Anlage
                     ui.horizontal(|ui| {
-                        lbl(ui, 60.0, "Anlage");
-                        egui::ComboBox::from_id_salt("danl").width(300.0).selected_text(anlagen.get(*anlage).cloned().unwrap_or_default()).show_ui(ui, |ui| {
-                            for (i, a) in anlagen.iter().enumerate() {
-                                ui.selectable_value(anlage, i, a);
-                            }
-                        });
-                    });
-                    egui::Frame::group(ui.style()).show(ui, |ui| {
-                        ui.set_width(390.0);
-                        ui.label("Blatt");
-                        ui.radio_value(art, 0, RichText::new("Alle Blätter").font(bold(13.0)));
-                        ui.radio_value(art, 1, RichText::new("Aktuelles Blatt").font(bold(13.0)));
-                        ui.horizontal(|ui| {
-                            ui.radio_value(art, 2, RichText::new("Blätter").font(bold(13.0)));
-                            ui.label("Von");
-                            ui.add_sized([50.0, 20.0], egui::TextEdit::singleline(von));
-                            ui.label("Bis");
-                            ui.add_sized([50.0, 20.0], egui::TextEdit::singleline(bis));
-                        });
-                        ui.radio_value(art, 3, RichText::new("Alle offenen Blätter").font(bold(13.0)));
-                        ui.horizontal(|ui| {
-                            ui.radio_value(art, 4, RichText::new("Änderung seit dem:").font(bold(13.0)));
-                            ui.add_sized([90.0, 20.0], egui::TextEdit::singleline(datum));
-                        });
-                        ui.radio_value(art, 5, RichText::new("Änderung seit dem letzten Ausdruck (Anleitung!)").font(bold(13.0)));
-                    });
-                    ui.horizontal(|ui| {
-                        lbl(ui, 60.0, "Drucker");
-                        egui::ComboBox::from_id_salt("ddr").width(260.0).selected_text(drucker_liste.get(*drucker).cloned().unwrap_or_default()).show_ui(ui, |ui| {
+                        lbl(ui, 92.0, "Drucker");
+                        egui::ComboBox::from_id_salt("ddr").width(250.0).selected_text(drucker_liste.get(*drucker).cloned().unwrap_or_default()).show_ui(ui, |ui| {
                             for (i, p) in drucker_liste.iter().enumerate() {
                                 ui.selectable_value(drucker, i, p);
                             }
                         });
+                        // SpeedButton1Click 0x4adf1c: Druckereinrichtung (TPrinterSetupDialog), danach Druckerwahl
+                        if crate::tabelle::icon_knopf(ui, crate::icons::Icon::EditDrucker, "Druckereinstellung") {
+                            let name = if *drucker > 0 { drucker_liste.get(*drucker).cloned() } else { None };
+                            crate::pdf::printer_settings(name.as_deref());
+                        }
                     });
-                    // Druckereinstellung: Einstellungsdialog des gewählten Druckers (Windows) bzw. CUPS-Optionen
-                    if ui.button("Druckereinstellung").clicked() {
-                        let name = if *drucker > 0 { drucker_liste.get(*drucker).cloned() } else { None };
-                        crate::pdf::printer_settings(name.as_deref());
-                    }
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        lbl(ui, 92.0, "Anlage");
+                        // AlleClick 0x4adc78: Anlage gesperrt bei „Aktuelles Blatt“ oder nur einer Anlage
+                        let frei = crate::dialog_regeln::druck_anlage_frei(*art, anlagen.len());
+                        ui.add_enabled_ui(frei, |ui| {
+                            egui::ComboBox::from_id_salt("danl").width(250.0).selected_text(anlagen.get(*anlage).cloned().unwrap_or_default()).show_ui(ui, |ui| {
+                                for (i, a) in anlagen.iter().enumerate() {
+                                    ui.selectable_value(anlage, i, a);
+                                }
+                            });
+                        });
+                    });
+                    egui::Frame::group(ui.style()).show(ui, |ui| {
+                        ui.set_width(390.0);
+                        ui.label(RichText::new("Blatt").font(bold(13.0)));
+                        ui.radio_value(art, 0, RichText::new("Alle Blätter").font(bold(13.0)));
+                        ui.radio_value(art, 1, RichText::new("Aktuelles Blatt").font(bold(13.0)));
+                        ui.radio_value(art, 3, RichText::new("Alle offenen Blätter").font(bold(13.0)));
+                        ui.horizontal(|ui| {
+                            ui.radio_value(art, 2, RichText::new("Blätter").font(bold(13.0)));
+                            // VonChange 0x4adef8: Eingabe in Von/Bis wählt „Blätter“
+                            ui.label("Von");
+                            if ui.add_sized([60.0, 20.0], egui::TextEdit::singleline(von)).changed() {
+                                *art = 2;
+                            }
+                            ui.label("Bis");
+                            if ui.add_sized([60.0, 20.0], egui::TextEdit::singleline(bis)).changed() {
+                                *art = 2;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            ui.radio_value(art, 4, RichText::new("Änderung seit dem:").font(bold(13.0)));
+                            // DatumChange 0x4adf68: Datum ändern wählt „Änderung seit dem“
+                            if ui.add_sized([90.0, 20.0], egui::TextEdit::singleline(datum)).changed() {
+                                *art = 4;
+                            }
+                        });
+                        ui.radio_value(art, 5, RichText::new("Änderung seit dem letzten Ausdruck (Anleitung!)").font(bold(13.0)));
+                    });
                     ui.checkbox(skal, RichText::new("An Papiergröße anpassen").font(bold(13.0)));
                 }
                 Dlg2::Potential { name, spannung, strom, .. } => {
@@ -219,6 +233,8 @@ impl App {
                 // Blattauswahl wie im Original; "Änderung seit …" nach den Blattdaten (druck.rs)
                 let gedruckt = self.project.gedruckt.clone();
                 let mut sel: Vec<SheetRef> = vec![];
+                // „Aktuelles Blatt“: Anlagenwahl gesperrt, es gilt die Anlage des aktuellen Blattes
+                let anlage = if art == 1 { self.cur().map(|c| c.anlage).unwrap_or(anlage) } else { anlage };
                 if let Some(a) = self.project.anlagen.get(anlage) {
                     let (v, b): (u32, u32) = (von.trim().parse().unwrap_or(1), bis.trim().parse().unwrap_or(u32::MAX));
                     for (si, s) in a.sheets.iter().enumerate() {

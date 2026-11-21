@@ -1504,8 +1504,9 @@ impl App {
                 XDialog::Stift { name, style, width, color, .. } => {
                     ui.strong("Stift");
                     egui::Grid::new("st").num_columns(2).show(ui, |ui| {
+                        // TStift: Name höchstens 19 Zeichen
                         ui.label("Name");
-                        ui.text_edit_singleline(name);
+                        ui.add(egui::TextEdit::singleline(name).char_limit(19));
                         ui.end_row();
                         ui.label("Breite in mm");
                         ui.text_edit_singleline(width);
@@ -1524,34 +1525,48 @@ impl App {
                     });
                 }
                 XDialog::Leitung { name, color, quer, adern, kennz, width, style, .. } => {
-                    ui.strong("Leitung");
-                    egui::Grid::new("lt").num_columns(2).show(ui, |ui| {
-                        ui.label("Name");
-                        ui.text_edit_singleline(name);
-                        ui.end_row();
-                        ui.label("Adern: Querschnitt (mm²)");
-                        ui.text_edit_singleline(quer);
-                        ui.end_row();
-                        ui.label("Adern: Anzahl");
-                        ui.text_edit_singleline(adern);
-                        ui.end_row();
-                        ui.label("Kennzeichnung");
-                        let k = ["Keine", "Zahlen", "Farbig"];
-                        egui::ComboBox::from_id_salt("kennz").selected_text(k[(*kennz).min(2)]).show_ui(ui, |ui| {
-                            for (i, a) in k.iter().enumerate() {
-                                ui.selectable_value(kennz, i, *a);
+                    // Aufbau wie TLeitung: Name (19 Zeichen), Gruppe „Adern“ (Querschnitt mm², Anzahl, Farbe,
+                    // Kennzeichnung), Gruppe „Darstellung“ (Stift mit Bildknopf „Neuer Stift“)
+                    ui.horizontal(|ui| {
+                        ui.add_sized([47.0, 20.0], egui::Label::new(egui::RichText::new("Name").strong()));
+                        ui.add(egui::TextEdit::singleline(name).char_limit(19).desired_width(120.0));
+                    });
+                    ui.group(|ui| {
+                        ui.label(egui::RichText::new("Adern").strong());
+                        egui::Grid::new("lt").num_columns(3).show(ui, |ui| {
+                            ui.label(egui::RichText::new("Querschnitt").strong());
+                            if ui.add(egui::TextEdit::singleline(quer).desired_width(60.0)).lost_focus() {
+                                *quer = crate::dialog_regeln::zahl_text(quer, 2);
+                            }
+                            ui.label(egui::RichText::new("mm²").strong());
+                            ui.end_row();
+                            ui.label(egui::RichText::new("Anzahl").strong());
+                            if ui.add(egui::TextEdit::singleline(adern).desired_width(60.0)).lost_focus() {
+                                *adern = crate::dialog_regeln::zahl_text(adern, 0);
+                            }
+                            ui.end_row();
+                            ui.label(egui::RichText::new("Farbe").strong());
+                            ui.color_edit_button_srgba(color);
+                            ui.end_row();
+                            ui.label(egui::RichText::new("Kennzeichnung").strong());
+                            let k = ["Keine", "Zahlen", "Farbig"];
+                            egui::ComboBox::from_id_salt("kennz").width(121.0).selected_text(k[(*kennz).min(2)]).show_ui(ui, |ui| {
+                                for (i, a) in k.iter().enumerate() {
+                                    ui.selectable_value(kennz, i, *a);
+                                }
+                            });
+                            ui.end_row();
+                        });
+                    });
+                    ui.group(|ui| {
+                        ui.label(egui::RichText::new("Darstellung").strong());
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Stift").strong());
+                            // Stift wie im Original (leitung_stift.rs)
+                            if crate::leitung_stift::stift_ui(ui, &pens, width, style) {
+                                new_pen_ltg = true;
                             }
                         });
-                        ui.end_row();
-                        ui.label("Farbe");
-                        ui.color_edit_button_srgba(color);
-                        ui.end_row();
-                        // Darstellung: Stift wie im Original (leitung_stift.rs)
-                        ui.label("Darstellung: Stift");
-                        if crate::leitung_stift::stift_ui(ui, &pens, width, style) {
-                            new_pen_ltg = true;
-                        }
-                        ui.end_row();
                     });
                 }
                 XDialog::Potential { name, .. } => {
@@ -1663,28 +1678,28 @@ impl App {
                 }
                 XDialog::Platz { name, text, .. } => {
                     ui.strong("Platzhaltergruppe");
+                    // wie TSTextliste: Name (höchstens 8 Zeichen) und rechts daneben die vier Bildknöpfe Liste
+                    // laden/speichern, Alles löschen, Zeile löschen (letzte Zeile)
                     ui.horizontal(|ui| {
                         ui.label("Name");
-                        ui.text_edit_singleline(name);
-                    });
-                    // Knöpfe wie TSTextliste: Liste laden/speichern, Alles löschen, Zeile löschen (letzte Zeile)
-                    ui.horizontal(|ui| {
-                        if ui.small_button("Liste laden").clicked() {
+                        ui.add(egui::TextEdit::singleline(name).char_limit(8).desired_width(110.0));
+                        ui.add_space(12.0);
+                        if crate::tabelle::icon_knopf(ui, crate::icons::Icon::Open, "Liste laden") {
                             if let Some(p) = rfd::FileDialog::new().add_filter("Liste", &["txt"]).pick_file() {
                                 if let Ok(t) = std::fs::read_to_string(p) {
                                     *text = t.replace(';', "=");
                                 }
                             }
                         }
-                        if ui.small_button("Liste speichern").clicked() {
+                        if crate::tabelle::icon_knopf(ui, crate::icons::Icon::Save, "Liste speichern") {
                             if let Some(p) = rfd::FileDialog::new().add_filter("Liste", &["txt"]).set_file_name("Platzhalter.txt").save_file() {
                                 let _ = std::fs::write(p, text.as_str());
                             }
                         }
-                        if ui.small_button("Alles löschen").clicked() {
+                        if crate::tabelle::icon_knopf(ui, crate::icons::Icon::Delete, "Alles löschen") {
                             text.clear();
                         }
-                        if ui.small_button("Zeile löschen").clicked() {
+                        if crate::tabelle::icon_knopf(ui, crate::icons::Icon::DelZeile, "Zeile löschen") {
                             let mut l: Vec<&str> = text.lines().collect();
                             l.pop();
                             *text = l.join("\n");

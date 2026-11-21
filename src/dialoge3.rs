@@ -557,10 +557,11 @@ impl App {
                     });
                     ui.horizontal(|ui| {
                         ui.add_space(92.0);
-                        if ui.radio(*zu, "Zu").clicked() {
+                        // im Dialog TObjekt_Eigenschaften heißen VW_Zu/VW_Von „Start“/„Ziel“ (DFM-Überschreibung)
+                        if ui.radio(*zu, "Start").clicked() {
                             *zu = true;
                         }
-                        if ui.radio(!*zu, "Von").clicked() {
+                        if ui.radio(!*zu, "Ziel").clicked() {
                             *zu = false;
                         }
                     });

@@ -125,6 +125,10 @@ pub enum Props {
     Text(TextProps),
     Sheet(SheetProps),
     Anlage(AnlProps),
+    /// Zeichenobjekte (TZeichen): Koordinaten- und Eigenschaftstabelle, siehe zeichen_dialog.rs
+    Zeichen(crate::zeichen_dialog::ZeichenProps),
+    /// Eigentümer wählen (TSOwner), siehe eigentuemer_dialog.rs
+    Owner(crate::eigentuemer_dialog::OwnerProps),
 }
 
 fn mm1(v: i32) -> String {
@@ -298,8 +302,24 @@ impl App {
                 }));
                 true
             }
-            _ => false,
+            _ => match crate::zeichen_dialog::aus_objekt(&o) {
+                Some(z) => {
+                    self.props = Some(Props::Zeichen(z));
+                    true
+                }
+                None => false,
+            },
         }
+    }
+
+    /// Eigentümer › Eigenschaften: Dialog TSOwner für die markierten Symbole (bzw. das Symbol `id`).
+    pub fn open_eigentuemer_dialog(&mut self, id: u64) {
+        let Some(r) = self.cur() else { return };
+        let mut ids: Vec<u64> = self.selected_objs().iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).map(|o| o.id).collect();
+        if !ids.contains(&id) {
+            ids = vec![id];
+        }
+        self.props = Some(Props::Owner(crate::eigentuemer_dialog::OwnerProps::neu(&self.project, ids, r)));
     }
 
     /// Dialog "Symboleigenschaften" des Symboleditors öffnen (Knopf mit Werkzeug-Icon).
@@ -388,6 +408,7 @@ impl App {
         let Some(mut p) = self.props.take() else { return };
         let mut result: Option<bool> = None;
         let anlagen: Vec<String> = self.project.anlagen.iter().map(|a| a.name.clone()).collect();
+        let stifte: Vec<String> = self.project.stifte.iter().map(|s| s.name.clone()).collect();
         let (title, size) = match &p {
             Props::SymEigen(_) => ("Symboleigenschaften", [692.0, 478.0]),
             _ => ("Eigenschaften", [289.0, 405.0]),
@@ -400,6 +421,8 @@ impl App {
                     Props::Sheet(s) => sheet_ui(ui, s, &anlagen),
                     Props::Anlage(a) => anlage_ui(ui, a),
                     Props::SymEigen(s) => symeigen_ui(ui, s),
+                    Props::Zeichen(z) => crate::zeichen_dialog::ui(ui, z, &stifte),
+                    Props::Owner(d) => crate::eigentuemer_dialog::ui(ui, d),
                 }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -453,6 +476,18 @@ impl App {
     fn apply_props(&mut self, p: Props) {
         self.checkpoint();
         match p {
+            Props::Owner(d) => {
+                if crate::eigentuemer_dialog::anwenden(&mut self.project, &d) {
+                    self.dirty = true;
+                }
+            }
+            Props::Zeichen(z) => {
+                self.with_sheet(|sh, _| {
+                    if let Some(o) = sh.objects.iter_mut().find(|o| o.id == z.id) {
+                        crate::zeichen_dialog::anwenden(&z, o);
+                    }
+                });
+            }
             Props::Symbol(s) => {
                 let title_changed = (s.tx.clone(), s.ty.clone()) != s.initial_title;
                 self.with_sheet(|sh, _| {
@@ -900,24 +935,25 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
 
 fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
     ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
-    let row = |ui: &mut egui::Ui, l: &str, v: &mut String, w: f32| {
+    // Höchstlängen wie die TIn-Felder von TSAnlage (MaxLength)
+    let row = |ui: &mut egui::Ui, l: &str, v: &mut String, w: f32, max: usize| {
         ui.horizontal(|ui| {
             label(ui, 84.0, l, true);
-            ui.add_sized([w, 20.0], egui::TextEdit::singleline(v));
+            ui.add_sized([w, 20.0], egui::TextEdit::singleline(v).char_limit(max));
         });
     };
-    row(ui, "Anlagenname", &mut a.name, 190.0);
-    row(ui, "Kurzform", &mut a.t[0], 110.0);
-    row(ui, "Erstellt von", &mut a.t[1], 190.0);
-    row(ui, "Zeichnugs Nr", &mut a.t[2], 190.0);
+    row(ui, "Anlagenname", &mut a.name, 190.0, 54);
+    row(ui, "Kurzform", &mut a.t[0], 110.0, 10);
+    row(ui, "Erstellt von", &mut a.t[1], 190.0, 49);
+    row(ui, "Zeichnugs Nr", &mut a.t[2], 190.0, 19);
     egui::Frame::group(ui.style()).inner_margin(egui::Margin::symmetric(4, 2)).show(ui, |ui| {
         ui.set_width(270.0);
         ui.label(RichText::new("Strompfade").size(11.0));
         ui.horizontal(|ui| {
             ui.label(bt("Anzahl"));
-            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[3]));
+            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[3]).char_limit(2));
             ui.label(bt("Höhe"));
-            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[4]));
+            ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[4]).char_limit(6));
             ui.label(bt("mm"));
             ui.checkbox(&mut a.s.ab_null, bt("Ab '0'"));
         });
@@ -928,7 +964,7 @@ fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
         egui::Grid::new("anl_sz").num_columns(4).show(ui, |ui| {
             for (i, (l, j)) in [("Titel", 5), ("Verbindungen", 7), ("Wert", 6), ("Pfadbezeichnung", 8)].iter().enumerate() {
                 label(ui, if i % 2 == 0 { 40.0 } else { 104.0 }, l, true);
-                ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[*j]));
+                ui.add_sized([40.0, 20.0], egui::TextEdit::singleline(&mut a.t[*j]).char_limit(3));
                 if i % 2 == 1 {
                     ui.end_row();
                 }
@@ -943,8 +979,9 @@ fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
                 ui.selectable_value(&mut a.s.format, *f, *n);
             }
         });
-        // Benutzermaße (TUserdat): eigene Breite/Höhe in mm
-        ui.menu_button("Benutzermaße", |ui| {
+        // Bildknopf „Bearbeiten“ (Anlage1EditClick): Benutzermaße (TUserdat), eigene Breite/Höhe in mm
+        ui.menu_image_button(crate::icons::image(crate::icons::Icon::EditBlatt, 16.0), |ui| {
+            ui.label(RichText::new("Benutzermaße").strong());
             let mut b = format!("{}", a.s.format.0 as f32 / 10.0);
             let mut h = format!("{}", a.s.format.1 as f32 / 10.0);
             ui.horizontal(|ui| {
@@ -965,7 +1002,9 @@ fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
                 }
                 ui.label("mm");
             });
-        });
+        })
+        .response
+        .on_hover_text("Bearbeiten");
     });
     egui::Frame::group(ui.style()).inner_margin(egui::Margin::symmetric(4, 2)).show(ui, |ui| {
         ui.set_width(270.0);
