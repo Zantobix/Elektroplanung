@@ -191,8 +191,9 @@ impl App {
             Drag::Beschriftung { .. } => Ziehen::Beschriftung,
             Drag::Scale { handle, .. } => Ziehen::Griff(*handle),
             Drag::Resize { .. } => Ziehen::Ecke,
-            Drag::Wire { start } => Ziehen::Leitung { dx: (m.x - start.x) * z, dy: (m.y - start.y) * z },
-            Drag::Rubber { .. } | Drag::Create { .. } => Ziehen::Aufziehen,
+            Drag::Wire { f } => { let start = f.start(); Ziehen::Leitung { dx: (m.x - start.x) * z, dy: (m.y - start.y) * z } },
+            Drag::Rubber { .. } | Drag::Create { .. } | Drag::Kurve(_) => Ziehen::Aufziehen,
+            Drag::KurvenGriff { .. } => Ziehen::Ecke,
             Drag::Pan { .. } => Ziehen::Schieben,
         };
         let auswahl_frei = werkzeug == Werkzeug::Auswahl && ziehen == Ziehen::Nichts && ziel.is_none();
