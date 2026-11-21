@@ -156,6 +156,8 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   20 Freigaben (Bit 0 = keine Querverweise, Bit 24 = Sicherungsübersicht), 21 Alternativtext-Satz, 22 Bild, 23 Optionen.
   Unterblöcke: TIT (Titel), WRT (Wert), FKT (Funktion), SPA (Rackposition), ALT (benutzerdefinierter Alternativtext), OWR (Eigentümer).
 - Projektsymbol (SYM): Name 0–40, BMK-Vorlage 40–60, Kennung 80–88 = Erstellungszeitpunkt als Delphi-Datum (f64);
+  Byte 112 (u32) Freigaben: Bit 0 Querverweise, Bit 1 Sicherungsübersicht (W2: RCD/LS-Schalter 3, Klemme 0, sonst 1;
+  ältere Symbole tragen dort teils Zufallsbytes, Werte > 3 gelten als unbekannt);
   GRD › GRS (Elemente), STR (Texte, Nr. 1 = BMK), SEI (Bilder), OPT (Optionen: Feld 1 = Bit, STR = Name),
   ALT (Alternativtexte: Feld 0 = Textnummer, Feld 1 = Satz, STR = Ersatztext, fehlt = leer).
 - Element (0x50 Byte): Typ 0x3c, Stiftart 0x40, Bild/Modus 0x44/0x46, Option 0x48 (0 = immer, n = Bit n−1), 0x4c = !Option.

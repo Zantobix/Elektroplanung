@@ -37,8 +37,12 @@ pub mod parameter;
 pub mod pdf;
 pub mod props;
 pub mod pruefen;
+pub mod schriften;
+pub mod schriftfeld_editor;
 pub mod suche;
+pub mod symbol_freigaben;
 pub mod symbol_kopie;
+pub mod symbol_stifte;
 pub mod symbols;
 pub mod titleblock;
 pub mod variantenrad;
@@ -160,6 +164,8 @@ pub fn setup_style(ctx: &egui::Context) {
     }
     bold_list.extend(prop.iter().cloned());
     fonts.families.insert(egui::FontFamily::Name("bold".into()), bold_list);
+    // Schriften je Text (Familien ep:<Name>|<Schnitt>) beim ersten Gebrauch nachladen, Ersatz Times
+    schriften::einrichten(ctx, &fonts, &prop);
     ctx.set_fonts(fonts);
 
     ctx.set_theme(egui::Theme::Light);

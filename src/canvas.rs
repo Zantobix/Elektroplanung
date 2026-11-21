@@ -39,7 +39,7 @@ pub fn times_styled(px: f32, bold: bool, italic: bool) -> FontId {
 #[allow(clippy::too_many_arguments)]
 pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32, align: Align, vertical: bool, st: &TextStyle, color: Color32, frame_stroke: Stroke) {
     let z = xf.z;
-    let font = times_styled(size_mm * z, st.bold, st.italic);
+    let font = crate::schriften::font_id(&st.font, size_mm * z, st.bold, st.italic);
     let Some((mn, mx)) = st.rect else {
         let galley = p.layout_no_wrap(text.to_string(), font, color);
         draw_galley(p, xf.s(pos), galley, align, vertical, color);
@@ -605,7 +605,9 @@ fn draw_title_block(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, x0: f32, x1: f
 }
 
 pub fn pen_stroke(project: &Project, pen: usize, z: f32) -> (Stroke, u8) {
-    let st = project.stifte.get(pen).cloned().unwrap_or(Stift { name: String::new(), style: 0, color: [0, 0, 0], width: 0.25 });
+    // im Symboleditor gelten die Stifte des Symbols (symbol_stifte::Ersatz)
+    let st = crate::symbol_stifte::ersatz(pen).unwrap_or_else(|| project.stifte.get(pen).cloned());
+    let st = st.unwrap_or(Stift { name: String::new(), style: 0, color: [0, 0, 0], width: 0.25 });
     (Stroke::new((st.width.max(0.05) * z).max(1.0), c32(st.color)), st.style)
 }
 
@@ -642,13 +644,19 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
         Kind::Text { pos, text, size, align, vertical, style } => {
             // eigene Schriftfarbe, außer bei Markierung/Vorschau
             let col = if color_override.is_none() && style.color != [0, 0, 0] { c32(style.color) } else { tc };
-            draw_text_box(p, xf, *pos, &dc.project.expand_placeholders(text), *size, *align, *vertical, style, col, stroke);
+            // ohne eigenen Schriftnamen gilt die Standardschrift des Projekts
+            let style = if style.font.is_empty() && !dc.project.schrift.is_empty() {
+                std::borrow::Cow::Owned(TextStyle { font: dc.project.schrift.clone(), ..style.clone() })
+            } else {
+                std::borrow::Cow::Borrowed(style)
+            };
+            draw_text_box(p, xf, *pos, &dc.project.expand_placeholders(text), *size, *align, *vertical, &style, col, stroke);
         }
         Kind::TextBox { a, b, text, size } => {
             let (mn, mx) = norm_rect(*a, *b);
             let r = Rect::from_min_max(xf.s(mn), xf.s(mx));
             styled_line(p, &sp(&[mn, P::new(mx.x, mn.y), mx, P::new(mn.x, mx.y), mn]), stroke, style, z);
-            let job = egui::text::LayoutJob::simple(text.clone(), times(size * z), tc, (r.width() - 1.0 * z).max(5.0));
+            let job = egui::text::LayoutJob::simple(text.clone(), crate::schriften::font_id(&dc.project.schrift, size * z, false, false), tc, (r.width() - 1.0 * z).max(5.0));
             let g = p.layout_job(job);
             p.with_clip_rect(r).galley(r.min + Vec2::splat(0.5 * z), g, tc);
         }
@@ -924,28 +932,33 @@ pub fn draw_symbol_full(p: &egui::Painter, xf: Xf, def: &SymDef, pos: P, rot: u8
         if !symbols::visible(option, def.vis.get(i)) || !symbols::flag_visible(flags, def.flag.get(i)) {
             continue;
         }
+        // Stift des Elements: eingebaute Stiftart oder eigener Stift des Symbols (Breite, Art, Farbe)
+        let (stroke, art) = match pr {
+            Prim::Line(.., st) | Prim::Poly(_, st) | Prim::Bezier(.., st) | Prim::Ellipse(.., st) => crate::symbol_stifte::strich(def, *st, stroke, xf.z),
+            _ => (stroke, 0),
+        };
         match pr {
-            Prim::Line(a, b, st) => styled_line(p, &[t(*a), t(*b)], stroke, *st, z),
+            Prim::Line(a, b, _) => styled_line(p, &[t(*a), t(*b)], stroke, art, z),
             Prim::Poly(v, _) if def.fill.get(i).copied().unwrap_or(false) => {
                 p.add(Shape::convex_polygon(v.iter().map(|q| t(*q)).collect(), stroke.color, stroke));
             }
             Prim::Ellipse(a, b, _) if def.fill.get(i).copied().unwrap_or(false) => {
                 p.add(Shape::convex_polygon(ellipse(*a, *b, 40).into_iter().map(t).collect(), stroke.color, stroke));
             }
-            Prim::Poly(v, st) => {
+            Prim::Poly(v, _) => {
                 let mut pts: Vec<Pos2> = v.iter().map(|q| t(*q)).collect();
                 if let Some(f) = pts.first().copied() {
                     pts.push(f);
                 }
-                styled_line(p, &pts, stroke, *st, z);
+                styled_line(p, &pts, stroke, art, z);
             }
-            Prim::Bezier(a, b, c, d, st) => {
+            Prim::Bezier(a, b, c, d, _) => {
                 let pts: Vec<Pos2> = bezier(*a, *b, *c, *d, 24).into_iter().map(t).collect();
-                styled_line(p, &pts, stroke, *st, z);
+                styled_line(p, &pts, stroke, art, z);
             }
-            Prim::Ellipse(a, b, st) => {
+            Prim::Ellipse(a, b, _) => {
                 let pts: Vec<Pos2> = ellipse(*a, *b, 40).into_iter().map(t).collect();
-                styled_line(p, &pts, stroke, *st, z);
+                styled_line(p, &pts, stroke, art, z);
             }
             Prim::TextBox(a, b, s, al) => {
                 // Alternativtext: Ersatz für diese Textnummer im gewählten Satz

@@ -105,7 +105,10 @@ pub struct SymEigenProps {
     pub sel_seite: usize,
     pub optionen: Vec<String>,
     pub sel_option: usize,
-    pub stifte: Vec<String>,
+    /// eigene Stifte des Symbols (Nummer, Stift), gewählte Zeile und gelöschte Nummern (in Löschreihenfolge)
+    pub stifte: Vec<(u32, Stift)>,
+    pub sel_stift: usize,
+    pub stift_geloescht: Vec<u32>,
     /// Textnummern der Textelemente (Spalten der Alternativtext-Tabelle) und je Satz die Texte
     pub text_cols: Vec<u32>,
     pub alt: Vec<Vec<String>>,
@@ -320,7 +323,9 @@ impl App {
             sel_seite: e.option as usize,
             optionen: e.flag_names.clone(),
             sel_option: 0,
-            stifte: self.project.stifte.iter().map(|s| s.name.clone()).collect(),
+            stifte: e.pens.clone(),
+            sel_stift: 0,
+            stift_geloescht: vec![],
             text_cols,
             alt,
             params: e.params.clone(),
@@ -534,6 +539,14 @@ impl App {
                         .collect();
                     e.frg = (sp.quer, sp.fuse);
                     e.params = crate::parameter::clean_params(&sp.params);
+                    // Stifte: gelöschte Nummern nacheinander aus den Elementen nehmen, dann die bearbeitete Liste
+                    for nr in &sp.stift_geloescht {
+                        let mut pens = std::mem::take(&mut e.pens);
+                        let mut el: Vec<(u64, &mut usize)> = e.sheet.objects.iter_mut().map(|o| (o.id, &mut o.pen)).collect();
+                        crate::symbol_stifte::loeschen(&mut pens, *nr, &mut el);
+                        e.pens = pens;
+                    }
+                    e.pens = sp.stifte.clone();
                 }
                 self.sym_frg_default = (sp.quer, sp.fuse);
             }
@@ -831,9 +844,7 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
         }
         1 => {
             ui.horizontal_top(|ui| {
-                let mut sel = 0;
-                let mut pens = s.stifte.clone();
-                ui.add_enabled_ui(false, |ui| list(ui, "stifte", &mut pens, &mut sel, 345.0, "Stift Löschen", usize::MAX));
+                crate::symbol_stifte::liste_ui(ui, &mut s.stifte, &mut s.sel_stift, &mut s.stift_geloescht);
                 ui.add_space(12.0);
                 crate::parameter::param_table_ui(ui, &mut s.params, &mut s.sel_param);
             });
@@ -1039,9 +1050,14 @@ fn font_window(ctx: &egui::Context, fd: &mut FontDlg, done: &mut Option<bool>) {
                     ui.label("Schriftart:");
                     ui.add(egui::TextEdit::singleline(&mut fd.font).desired_width(140.0));
                     egui::ScrollArea::vertical().id_salt("fl").max_height(90.0).show(ui, |ui| {
-                        for f in SCHRIFTEN {
-                            if ui.selectable_label(fd.font == *f, *f).clicked() {
-                                fd.font = f.to_string();
+                        // installierte Schriften (ohne Schriftordner die feste Auswahl)
+                        let mut liste = crate::schriften::familien_namen();
+                        if liste.is_empty() {
+                            liste = SCHRIFTEN.iter().map(|s| s.to_string()).collect();
+                        }
+                        for f in &liste {
+                            if ui.selectable_label(fd.font.eq_ignore_ascii_case(f), f).clicked() {
+                                fd.font = f.clone();
                             }
                         }
                     });
@@ -1081,7 +1097,7 @@ fn font_window(ctx: &egui::Context, fd: &mut FontDlg, done: &mut Option<bool>) {
                     ui.label("Effekte");
                     ui.checkbox(&mut fd.underline, "Unterstrichen");
                 });
-                let font = crate::canvas::times_styled(26.0, fd.schnitt >= 2, fd.schnitt % 2 == 1);
+                let font = crate::schriften::font_id(&fd.font, 26.0, fd.schnitt >= 2, fd.schnitt % 2 == 1);
                 ui.add_space(20.0);
                 ui.label(RichText::new("AaBbYyZz").font(font));
             });

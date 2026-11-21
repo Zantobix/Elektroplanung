@@ -24,13 +24,28 @@ def fix(s):
     except Exception:
         return s.replace('�', '?')
 
+# Bewusst nicht nachgebaut (docs/funktionsabdeckung.md Abschnitt 5): werden getrennt ausgewiesen und nicht gezählt
+BEWUSST = {
+    'TABOUTBOX': None,  # Info-Box mit Daten des Original-Autors; der Nachbau hat einen eigenen Info-Dialog
+    'TS7IMPORT': None,  # S7-Import: Aufrufstelle im Original unbekannt
+    'TFORM1': {'Anmelden', 'Abmelden'},  # Datenbankserver, im Original stillgelegt
+}
+
+def bewusst(name, label):
+    b = BEWUSST.get(name, set())
+    return b is None or label in b
+
 def labels(path):
     out = []
     for line in open(path, encoding='utf-8', errors='replace'):
         if 'Visible=False' in line:
             continue
+        # Caption = Komponentenname bei Werkzeugleisten und Bildknöpfen ("ToolBar1", "OB_Fang") wird nicht angezeigt
+        comp = re.match(r'\s*T(?:ToolBar|ToolButton) (\w+)', line)
         for key in ('Caption', 'Hint'):
             for m in re.finditer(key + r'=(.*?)(?= [A-Z][A-Za-z.]+=|$)', line):
+                if key == 'Caption' and comp and m.group(1).strip() == comp.group(1):
+                    continue
                 out.append(m.group(1).strip())
         for m in re.finditer(r'(?:Items|Tabs)\.Strings=\[(.*?)\]', line):
             out.extend(x.strip() for x in m.group(1).split(';'))
@@ -52,10 +67,14 @@ def found(label):
 total = hit = 0
 rows = []
 missing_all = []
+bewusst_all = []
 FORMULARE = os.environ.get('EP_FORMULARE') or os.path.join(ROOT, 'docs', 'original')
 for f in sorted(glob.glob(os.path.join(FORMULARE, '*.txt'))):
     name = os.path.basename(f)[:-4]
     ls = labels(f)
+    weg = [l for l in ls if bewusst(name, l) and not found(l)]
+    ls = [l for l in ls if l not in weg]
+    bewusst_all += [(name, l) for l in weg]
     if not ls:
         continue
     ok = [l for l in ls if found(l)]
@@ -69,7 +88,11 @@ w = max(len(r[0]) for r in rows)
 for name, ok, n, miss in rows:
     print(f'{name:<{w}}  {ok:>3}/{n:<3} {100 * ok / n:5.1f} %')
 print(f'{"GESAMT":<{w}}  {hit:>3}/{total:<3} {100 * hit / total:5.1f} %')
+print(f'bewusst nicht nachgebaut (nicht gezählt): {len(bewusst_all)}')
 if '--fehlend' in sys.argv:
     print()
     for name, m in missing_all:
         print(f'{name}: {m}')
+    print()
+    for name, m in bewusst_all:
+        print(f'bewusst: {name}: {m}')

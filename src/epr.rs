@@ -717,11 +717,12 @@ pub fn symdef_from_block(s: &Block) -> Option<SymDef> {
         text_idx: el.text_idx,
         alt_sets,
         raw: vec![],
-        frg: (true, false),
+        frg: crate::symbol_freigaben::aus_sym(&s.data).unwrap_or(crate::symbol_freigaben::VORGABE),
         params,
         value_pos: el.value_pos,
         text_mode: el.text_mode,
         fill: el.fill,
+        pens: crate::symbol_stifte::aus_grd(grd),
         options,
     })
 }

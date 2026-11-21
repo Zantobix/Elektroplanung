@@ -363,6 +363,8 @@ impl App {
         };
         let leitungen_n = self.project.leitungen.len();
         let mut rail_edit: Option<String> = None;
+        // Klemme › Bauteil "Bearbeiten": Bauteilzuordnung öffnen (Objekt-Id)
+        let mut part_edit: Option<u64> = None;
         // Tabelle › Daten „Inhaltsverzeichnis“: Blätter der aktuellen Anlage (inhalt.rs)
         let toc = if matches!(d, Dlg3::Tab { art: 1, .. }) { crate::inhalt::blaetter(&self.project, self.cur().map(|r| r.anlage).unwrap_or(0)) } else { vec![] };
         // … bzw. „Querverweise“ (berechnet.rs); auf dem Blatt wird beides bei jedem Zeichnen neu berechnet
@@ -551,7 +553,7 @@ impl App {
                         _ => {}
                     }
                 }
-                Dlg3::Klemme { leisten, leiste, titel, gr_auto, align, tx, ty, nummer, auto, korr, position, posk, ebene, funktion, ziel_wechsel, .. } => {
+                Dlg3::Klemme { id, leisten, leiste, titel, gr_auto, align, tx, ty, nummer, auto, korr, position, posk, ebene, funktion, ziel_wechsel } => {
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Klemmleiste");
                         combo(ui, "kleiste", leisten, leiste, 170.0);
@@ -594,6 +596,16 @@ impl App {
                         ui.checkbox(ziel_wechsel, "Ziel Wechsel");
                     });
                     field(ui, 60.0, "Funktion", funktion, 180.0);
+                    // Bauteil (TIn Klemm_Bauteil, gesperrt) mit Knopf "Bearbeiten" (Klemm_Liste) wie beim Symbol
+                    ui.horizontal(|ui| {
+                        lbl(ui, 76.0, "Bauteil");
+                        let mut bt = self.project.part_of.get(id).and_then(|i| self.project.bauteile.get(*i)).map(|b| b.name.clone()).unwrap_or_default();
+                        ui.add_enabled(false, egui::TextEdit::singleline(&mut bt).desired_width(150.0).background_color(egui::Color32::from_rgb(255, 255, 225)));
+                        let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::PartList, 20.0));
+                        if ui.add(btn.min_size(Vec2::new(31.0, 24.0))).on_hover_text("Bearbeiten").clicked() {
+                            part_edit = Some(*id);
+                        }
+                    });
                 }
                 Dlg3::Verweis { anlagen, anlage, blatt, link, zu, titel, .. } => {
                     let blaetter: Vec<String> = self.project.anlagen.get(*anlage).map(|a| a.sheets.iter().map(|s| format!("[{}] {}", s.number, s.name)).collect()).unwrap_or_default();
@@ -911,6 +923,10 @@ impl App {
             done = Some(false);
         }
         // Sammelschienen-Objekt › Bearbeiten: Objekt übernehmen, dann die Schiene bearbeiten
+        if let Some(obj) = part_edit {
+            let idx = self.project.part_of.get(&obj).copied().unwrap_or(0);
+            self.xdlg = Some(crate::extra::XDialog::PartAssign { obj, idx });
+        }
         if let Some(name) = rail_edit {
             if let Some(r) = self.cur() {
                 let _ = self.apply_dlg3(d);
