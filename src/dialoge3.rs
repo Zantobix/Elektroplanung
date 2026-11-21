@@ -32,7 +32,9 @@ pub enum Dlg3 {
     BlattIndex { anlage: usize, von: String, bis: String, ab: String, plus: String },
     Wahl { path: PathBuf, anlagen: Vec<(String, bool)> },
     UserDat { anlage: usize, breite: String, hoehe: String },
-    TextChange { ids: Vec<u64>, text: String },
+    /// Texteigenschaft (TTextchange): `wert` None = Bezeichner setzen (Texte bzw. BMK der Symbole),
+    /// Some(false/true) = Titel bzw. Wert eines Symbols (Eigenschaften eines Symboltextes)
+    TextChange { ids: Vec<u64>, text: String, wert: Option<bool> },
     Errliste { lines: Vec<String> },
     /// Listen Export (TListExport): Liste, Dateiformat, Meldung
     ListExport { art: usize, format: usize, msg: String },
@@ -327,7 +329,7 @@ impl App {
             Kind::Symbol { bmk, .. } => Some(bmk.clone()),
             _ => None,
         });
-        self.dlg3 = Some(Dlg3::TextChange { ids: objs.iter().map(|o| o.id).collect(), text: first.unwrap_or_default() });
+        self.dlg3 = Some(Dlg3::TextChange { ids: objs.iter().map(|o| o.id).collect(), text: first.unwrap_or_default(), wert: None });
     }
 
     /// Kontaktspiegel (TSSpiegel): verknüpftes Objekt unter der Spule, siehe kontaktspiegel.rs.
@@ -1162,11 +1164,12 @@ impl App {
                     a.set.format = ((num(&breite).unwrap_or(210.0) * 10.0) as i32, (num(&hoehe).unwrap_or(297.0) * 10.0) as i32);
                 }
             }
-            Dlg3::TextChange { ids, text } => {
+            Dlg3::TextChange { ids, text, wert } => {
                 self.with_sheet(|s, _| {
                     for o in s.objects.iter_mut().filter(|o| ids.contains(&o.id)) {
                         match &mut o.kind {
                             Kind::Text { text: t, .. } => *t = text.clone(),
+                            Kind::Symbol { value, .. } if wert == Some(true) => *value = text.clone(),
                             Kind::Symbol { bmk, .. } => *bmk = text.clone(),
                             _ => {}
                         }
