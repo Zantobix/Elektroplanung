@@ -80,7 +80,8 @@ fn ausdehnung(p: &Project) -> (u32, usize) {
 }
 
 #[test]
-fn umbruch_zeichnet_in_der_box() {
+fn umbruch_wird_wie_im_original_nicht_gezeichnet() {
+    // Im Original ist „Umbruch“ gesperrt und ohne Wirkung; zu langer Text wird am Boxrand abgeschnitten.
     let text = "eins zwei drei vier fuenf sechs sieben acht neun zehn";
     let bild = |wrap| {
         let mut p = Project::new_default();
@@ -90,8 +91,7 @@ fn umbruch_zeichnet_in_der_box() {
     let (r_ohne, z_ohne) = bild(false);
     let (r_mit, z_mit) = bild(true);
     let k = 150.0 / 25.4;
-    // ohne Umbruch läuft der Text über die Box (rechter Rand 60 mm) hinaus, mit Umbruch nicht
-    assert!(r_ohne as f32 > 61.0 * k, "{r_ohne}");
-    assert!((r_mit as f32) < 60.5 * k, "{r_mit}");
-    assert!(z_mit > 2 * z_ohne, "{z_mit} / {z_ohne}");
+    assert_eq!((r_ohne, z_ohne), (r_mit, z_mit));
+    // nichts ragt über den rechten Rand der Box (60 mm) hinaus
+    assert!((r_ohne as f32) < 60.5 * k, "{r_ohne}");
 }

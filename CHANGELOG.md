@@ -61,15 +61,15 @@ Neu:
   klappt auf bzw. zu (und springt zum ersten Kind bzw. zum übergeordneten Knoten)
 - Kontaktspiegel: Knopf „Set Referenz“ und Kontextmenü „Setze Referenz“ – der Dialog verschwindet, das danach
   angeklickte Symbol wird Referenz der markierten Zeile; beim Übernehmen wird die Spule sein Eigentümer
-- Textbox-Dialog: Schalter „Umbruch“ ist frei; umbrochene Texte werden an Leerzeichen auf die Boxbreite verteilt
-  (Zeichenfläche, Bild, PDF) und der Umbruch im `.epr` gespeichert
+- Textbox wie im Original: Text steht oben in der Box und wird am Boxrand abgeschnitten; „Umbruch“ ist wie im
+  Original gesperrt und ohne Wirkung (Wert wird gelesen, angezeigt und gespeichert); „Drehung“ als Auswahl 0°–270°
 - Bibliotheksverwaltung › Symbolgruppen › Hinzufügen legt eine leere Gruppe ohne Platzhalter-Symbol an (gemerkt in
   `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
 Behoben:
 - Neue Textbox wie im Original: Doppelklick und Eigenschaften öffnen den Textbox-Dialog (Abmessung, Rahmen,
   Umbruch, Fixiert, Ausrichtung, Drehung, Schrift, Text) statt nur „Text bearbeiten“; Vorgaben des Originals
-  (Rahmen an, Umbruch aus, 8 pt); Umbruch ist schaltbar und wird wie alle Einstellungen im `.epr` gespeichert.
+  (Rahmen an, Umbruch aus, 8 pt); alle Einstellungen werden im `.epr` gespeichert.
   Textboxen sind jetzt Texte mit Box (eine Art statt zwei); ältere `.epj` werden beim Laden umgewandelt.
   MCP `add_object` kennt `kind: textbox` (mit `frame`, `wrap`), `get_sheet` liefert Box, Rahmen und Umbruch
 - Kontaktspiegel wie im Original: steht unmittelbar über dem Schriftfeld (Unterkante der Zeichenfläche minus

@@ -49,7 +49,7 @@ pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32
         let r = Rect::from_min_max(xf.s(mn), xf.s(mx));
         p.rect_stroke(r, 0.0, frame_stroke, egui::StrokeKind::Middle);
     }
-    let lines: Vec<String> = if st.wrap {
+    let lines: Vec<String> = if st.wrap && crate::umbruch::ZEICHNEN {
         // Umbruch: Zeilen an Leerzeichen auf die Boxbreite (hochkant: Boxhöhe) verteilen, 0,5 mm Rand je Seite
         let breite = (if vertical { mx.y - mn.y } else { mx.x - mn.x } - 1.0).max(0.5) * z;
         let mass = |s: &str| p.layout_no_wrap(s.to_string(), font.clone(), color).size().x;
@@ -63,6 +63,8 @@ pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32
     let lh = gal.first().map(|g| g.size().y).unwrap_or(size_mm * z);
     let total = lh * gal.len() as f32;
     let (bmn, bmx) = (xf.s(mn), xf.s(mx));
+    // wie im Original (DrawText im Boxrechteck): was über die Box hinausragt, wird abgeschnitten
+    let p = &p.with_clip_rect(Rect::from_min_max(bmn, bmx).expand(1.0).intersect(p.clip_rect()));
     for (i, g) in gal.into_iter().enumerate() {
         let w = g.size().x;
         let underline = st.underline;
@@ -81,7 +83,8 @@ pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32
                 Align::Center => (bmn.x + bmx.x) / 2.0 - w / 2.0,
                 Align::Right => bmx.x - w,
             };
-            let y = (bmn.y + bmx.y) / 2.0 - total / 2.0 + i as f32 * lh;
+            // oben in der Box wie im Original (am 21.11.2026 an einer neuen Textbox beobachtet)
+            let y = bmn.y + i as f32 * lh;
             if underline && w > 0.0 {
                 let uy = y + lh * 0.92;
                 p.line_segment([Pos2::new(x, uy), Pos2::new(x + w, uy)], Stroke::new((0.06 * size_mm * z).max(1.0), color));

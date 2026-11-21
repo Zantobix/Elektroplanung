@@ -1,6 +1,11 @@
 //! Zeilenumbruch in Textboxen (Textbox-Dialog, Schalter „Umbruch“; .epr: ZCN Byte 0x19). Umbrochen wird an
 //! Leerzeichen; ein Wort, das allein breiter als die Box ist, bleibt ganz (wie Windows-DrawText mit Wortumbruch).
 
+/// Umbrochen gezeichnet wird nicht: Im Original ist der Schalter „Umbruch“ immer gesperrt und ein gesetzter
+/// Umbruch bleibt beim Zeichnen ohne Wirkung (am 21.11.2026 im Original beobachtet). Der Wert wird nur gelesen,
+/// angezeigt und geschrieben.
+pub const ZEICHNEN: bool = false;
+
 /// Eine Zeile (ohne Zeilenwechsel) in Stücke zerlegen, die höchstens `breite` breit sind; `mass` liefert die
 /// Breite eines Textes in derselben Einheit.
 pub fn umbrechen(zeile: &str, breite: f32, mass: &dyn Fn(&str) -> f32) -> Vec<String> {

@@ -80,7 +80,7 @@ pub fn text_umriss(pos: P, text: &str, size: f32, align: Align, vertical: bool, 
 /// Wie `text_umriss`, mit der Metrik einer Schrift (`None` = Times).
 pub fn umriss_mit(m: Option<&crate::schriftmass::Metrik>, pos: P, text: &str, size: f32, align: Align, vertical: bool, st: &TextStyle) -> (P, P) {
     let (mut w, mut h) = groesse_mit(m, text, size, st.bold, st.italic);
-    if let (true, Some((a, b))) = (st.wrap, st.rect) {
+    if let (true, Some((a, b))) = (st.wrap && crate::umbruch::ZEICHNEN, st.rect) {
         // mit Umbruch: Maße der umbrochenen Zeilen (wie canvas::draw_text_box)
         let bw = if vertical { (a.y - b.y).abs() } else { (a.x - b.x).abs() };
         let br = |s: &str| groesse_mit(m, s, size, st.bold, st.italic).0;

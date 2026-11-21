@@ -748,8 +748,9 @@ fn text_ui(ui: &mut egui::Ui, t: &mut TextProps) {
         ui.label(bt("Rahmen"));
         ui.checkbox(&mut t.rahmen, "");
         ui.add_space(8.0);
-        ui.label(bt("Umbruch"));
-        ui.checkbox(&mut t.umbruch, "");
+        // im Original immer gesperrt (zeigt nur den gespeicherten Wert)
+        ui.add_enabled(false, egui::Label::new(bt("Umbruch")));
+        ui.add_enabled(false, egui::Checkbox::new(&mut t.umbruch, ""));
         ui.add_space(8.0);
         ui.label(bt("Fixiert"));
         ui.checkbox(&mut t.fixiert, "");
@@ -770,7 +771,15 @@ fn text_ui(ui: &mut egui::Ui, t: &mut TextProps) {
     });
     ui.horizontal(|ui| {
         label(ui, 112.0, "Drehung", true);
-        edit(ui, &mut t.drehung, 90.0);
+        // Auswahl wie im Original (TAuswahl T_Drehung: 0°, 90°, 180°, 270°)
+        let cur = t.drehung.trim().parse::<i32>().unwrap_or(0).rem_euclid(360);
+        egui::ComboBox::from_id_salt("tdreh").width(84.0).selected_text(format!("{cur}°")).show_ui(ui, |ui| {
+            for g in [0, 90, 180, 270] {
+                if ui.selectable_label(cur == g, format!("{g}°")).clicked() {
+                    t.drehung = if g == 0 { String::new() } else { g.to_string() };
+                }
+            }
+        });
         if ui.add_sized([48.0, 19.0], egui::Button::new(RichText::new("Schrift").size(11.0))).clicked() {
             let schnitt = (t.bold as usize) * 2 + t.italic as usize;
             t.font_dlg = Some(FontDlg { font: t.font.clone(), schnitt, pt: t.pt.to_string(), underline: t.underline });
