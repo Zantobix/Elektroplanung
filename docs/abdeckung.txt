@@ -1,10 +1,10 @@
-TABOUTBOX                4/10   40.0 %
+TABOUTBOX                4/4   100.0 %
 TAUSRICHTUNG             6/6   100.0 %
 TBIBLIO                 19/19  100.0 %
 TBILD                   13/13  100.0 %
 TBLATTINDEX              9/9   100.0 %
 TERRLISTE                2/2   100.0 %
-TFORM1                 149/156  95.5 %
+TFORM1                 147/147 100.0 %
 TFORM10                  7/7   100.0 %
 TFORM3                  15/15  100.0 %
 TFORM4                  56/56  100.0 %
@@ -19,7 +19,7 @@ TPEXPORT                 5/5   100.0 %
 TPFADDIALOG              4/4   100.0 %
 TPOTENTIAL               3/3   100.0 %
 TPRJEIGEN               11/11  100.0 %
-TS7IMPORT                3/5    60.0 %
+TS7IMPORT                3/3   100.0 %
 TSAMMELS                13/13  100.0 %
 TSANLAGE                21/21  100.0 %
 TSBAUTEIL               14/14  100.0 %
@@ -45,4 +45,5 @@ TTEXTCHANGE              4/4   100.0 %
 TTITEL                  11/11  100.0 %
 TUSERDAT                 6/6   100.0 %
 TWAHL                    5/5   100.0 %
-GESAMT                 589/604  97.5 %
+GESAMT                 587/587 100.0 %
+bewusst nicht nachgebaut (nicht gezählt): 10

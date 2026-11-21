@@ -10,6 +10,13 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 ## [Unveröffentlicht]
 
 Neu:
+- Texte werden in ihrem eigenen Schriftnamen (sonst der Standardschrift des Projekts) gezeichnet – auf der
+  Zeichenfläche, im Bildexport und im PDF (dort als Times/Helvetica/Courier); der Schriftdialog listet die
+  installierten Schriften
+- Schriftfeld bearbeiten grafisch: Linien, Texte und Logo verschieben, in der Größe ändern, hinzufügen, löschen
+- Symboleditor: eigene Stifte des Symbols (SIT) anlegen, ändern, löschen und Elementen zuweisen; sie werden ins
+  `.epr` geschrieben und beim Zeichnen benutzt (Breite, Art, Farbe)
+- Klemmen-Dialog: Feld „Bauteil“ mit Knopf „Bearbeiten“ wie beim Symbol
 - Blattmenü › Parameter und › Alternativtext › Benutzerdefiniert: Tabelle wie im Original; Werte werden im
   `.epr` gespeichert (VSY › SPA / ALT)
 - Symboleditor: Reiter „Stifte / Parameter“ bearbeitet die Parameter des Symbols (GRD › PRA)
@@ -28,6 +35,7 @@ Neu:
 - .epr: Schriftname und Umbruch von Texten, Bilder auf dem Blatt (Typ 12) und Tabelleneinstellungen werden gelesen
 
 Behoben:
+- Elemente mit eigenem Symbolstift (Nummer ab 4) wurden gepunktet gezeichnet und als Stift 3 gespeichert
 - Die Rackposition überschrieb beim Speichern die Parameterwerte des Symbols (SPA)
 - .epr: Verschieben eines Textes oder einer Tabelle veränderte Schriftgrad bzw. Spalten/Zeilen im Originalblock
 

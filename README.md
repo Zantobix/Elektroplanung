@@ -151,10 +151,11 @@ nicht. Gemessen werden stattdessen:
 - **Dateiformat:** W2.epr wird zu 100 % byteidentisch gelesen und geschrieben; vom Original gespeicherte Änderungen
   stimmen Feld für Feld mit denen des Nachbaus überein (Tests).
 - **Oberfläche:** `python tools/abdeckung.py [--fehlend]` prüft jede sichtbare Beschriftung aller 47 Formulare
-  (Captions, Hinweise, Listeneinträge) gegen den Nachbau. Aktueller Stand: **589 von 604 = 97,5 %**,
-  je Formular in [docs/abdeckung.txt](docs/abdeckung.txt). Es fehlen bewusst: die Info-Box des Autors (6),
-  interne Komponentennamen ohne Anzeige (ToolBar1–3, OB_Fang, SizeRahmen), An-/Abmelden am Datenbankserver und
-  der S7-Import (kein Gegenstück im Nachbau).
+  (Captions, Hinweise, Listeneinträge) gegen den Nachbau. Aktueller Stand: **587 von 587 = 100 %**,
+  je Formular in [docs/abdeckung.txt](docs/abdeckung.txt). Nicht gezählt werden Komponentennamen von
+  Werkzeugleisten und Bildknöpfen ohne Anzeige (ToolBar1–3, OB_Fang, SizeRahmen …) und die 10 bewusst nicht
+  nachgebauten Beschriftungen (Info-Box des Autors, An-/Abmelden am Datenbankserver, S7-Import); das Werkzeug
+  listet sie getrennt auf. Nach der früheren Zählung (alle 604) sind es 589 = 97,5 %.
 
 ## Bekannte Grenzen
 
@@ -162,17 +163,22 @@ nicht. Gemessen werden stattdessen:
   Projektbild), Verweise und Sammelschienen werden geschrieben (`src/epr_neu.rs`); ihr Aufbau folgt der
   Speicherroutine des Originals, im Original geöffnet ist das Ergebnis noch nicht geprüft
   (`cargo run --example neu_objekte` erzeugt eine Testdatei).
-- Eigene Schriftarten pro Text: Schnitt, Grad, Farbe, Unterstreichung und Schriftname (STR nach dem STL) werden
-  gelesen und geschrieben; gezeichnet wird aber in Times wie die Projektschrift.
+- Schriftname je Text (STR nach dem STL, sonst die Standardschrift des Projekts): Zeichenfläche und Bildexport
+  zeichnen mit der installierten Schrift (gesucht über die Namenstabelle der Schriftdateien in den Schriftordnern
+  des Systems, unter Linux mit metrisch gleichen Ersatzschriften wie Liberation; fehlt sie, Times). Das PDF bettet
+  keine Schrift ein, sondern nimmt die Standardschriften Times, Helvetica (Arial, Segoe UI, Tahoma …) und
+  Courier (Courier New, Consolas …).
 - Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
   füllt das Original zur Laufzeit – der Nachbau listet die markierten Objekte.
-- Symboleditor: Stifte des Symbols (SIT) werden nur angezeigt und unverändert übernommen; Freigaben eines
-  Symbols gelten als Vorgabe für neu gesetzte Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
+- Symboleditor: Stifte des Symbols (SIT, Nummer ab 4) lassen sich anlegen, ändern, löschen und Elementen
+  zuweisen und werden ins `.epr` geschrieben; Freigaben eines Symbols gelten als Vorgabe für neu gesetzte
+  Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
 - Symboleigenschaften: Die Rackposition wird nur im eigenen Format (`.epj`) gespeichert; ihr Ablageort im
   VSY-Block ist unbekannt (SPA enthält die Parameterwerte).
 - Tabelle › Daten „Inhaltsverzeichnis“ füllt die Tabelle beim Bearbeiten mit den Blättern der Anlage; sie wird
   danach nicht selbständig nachgeführt.
-- Projektgrafiken, die im Nachbau neu angelegt oder geändert werden, schreibt das `.epr`-Format noch nicht.
+- Projektgrafiken: neu angelegte werden ins `.epr` geschrieben (BLD/JPG, über 64 KB geteilt); Umbenennen,
+  Ersetzen und Löschen vorhandener Grafiken noch nicht.
 - Optionen › Datenbank: Serverangaben werden nur gespeichert; der Nachbau liest die Bibliothek direkt aus Symbole.tfi.
 - Info-Dialog bewusst nicht 1:1 (Copyright, E-Mail und Registrierungsschlüssel des Original-Autors).
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
@@ -189,8 +195,8 @@ nicht. Gemessen werden stattdessen:
   Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift), Blattart
   (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Nur im
   eigenen Format (.epj) bleiben: Bauteile samt Zuordnung, Platzhaltergruppen, Projektstatus, "Alter Klemmenplan",
-  Schriftfeld "Absolut", Schalter der Sammelschienen (Querverweise, Pfeile …), Tabellenkopf fett, Bildausrichtung,
-  Verbindungsoptionen und Schriftnamen je Text – ihre Ablage im .epr ist noch unbekannt; der Nachbau nennt sie
-  beim Speichern als .epr.
+  Schriftfeld "Absolut", Schalter der Sammelschienen (Querverweise, Pfeile …), Verbindungsoptionen und
+  Rackposition – ihre Ablage im .epr ist noch unbekannt; der Nachbau nennt sie beim Speichern als .epr.
+  Überschrift/Autobreite von Tabellen, Rahmen und Art von Bildern sowie Schriftnamen je Text werden geschrieben.
 - Querverweise auf andere Anlagen: Pfeilrichtung aus zwei Beispielen abgeleitet (siehe MECHANICS.md).
 - Hilfsprogramme zur Formatanalyse: `cargo run --example dump|vsy|sym|obj -- <datei.epr> …`.
