@@ -9,7 +9,7 @@
 //! - Kreis: „Kreiskoordinaten“ (Position), „Kreiseigenschaften“ (Breite, Höhe, Füllfarbe, Stift, Fixiert)
 //! - Bezier: „Koordinaten vom Bezier“ (Anfangspunkt, Kontrollpunkt 1, 2, Endpunkt), „Eigenschaft vom Bezier“
 //!   (Farbe, Stift, Fixiert)
-//! Die Zeile „Seitenoffset“ der Tabelle zeigt das Original nicht an (Aufnahmen orig_dlg_linie/-bezier).
+//! Die Zeile „Seitenoffset“ der Tabelle zeigt das Original nicht an (Aufnahmen des Originals).
 //! Farbe bzw. Füllfarbe: FormShow 0x4a27f8 setzt als Vorgabe „Schwarz als Vorgabe“ (Linie, Bezier) bzw.
 //! „Transparent“ (Arten 3–5). Der Nachbau speichert keine eigene Farbe der Zeichenobjekte; die Zeile zeigt die
 //! Vorgabe und ist gesperrt.
