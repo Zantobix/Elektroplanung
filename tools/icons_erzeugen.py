@@ -322,6 +322,9 @@ ICONS.update({
                   f'<rect x="8" y="17.5" width="8" height="4" fill="{LB}" {st()}/><path d="M19.5 6.5V10M19.5 14v3.5" {st(R, DUENN)}/>'),
 })
 
+# Druckereinstellung (Dialog Drucken): Drucker + Stift-Abzeichen „bearbeiten“
+ICONS['edit_drucker'] = ICONS['print'] + badge_bearbeiten()
+
 # Verwendungsorte für die Übersichtsseite (Name → Beschreibung); jedes Icon braucht einen Eintrag.
 VERWENDUNG = {
     'obj_projekt': 'Grund-Icon Projekt',
@@ -350,18 +353,19 @@ VERWENDUNG = {
     'new_sammelschiene': 'Werkzeugleiste 2: „Neue Sammelschiene“',
     'new_leitung': 'Werkzeugleiste 2: „Neue Leitung“',
     'new_klemmleiste': 'Werkzeugleiste 2: „Neue Klemmleiste“',
-    'new_stift': 'Werkzeugleiste oben und Symboleditor: „Neuer Stift“',
+    'new_stift': 'Werkzeugleiste oben, Symboleditor und Leitungsdialog: „Neuer Stift“',
     'new_seite': 'Symboleditor: „Neue Seite“',
     'new_option': 'Symboleditor: „Neue Option“',
     'edit_sammelschiene': 'Dialog Sammelschiene: „Bearbeiten“ (Schiene)',
     'edit_bauteil': 'Dialoge Symbol und Klemme: „Bearbeiten“ (Bauteil)',
     'edit_symbol': 'Symboleditor: „Symboleigenschaften“',
-    'del_zeile': 'Tabellendialog: „Zeile löschen“',
-    'open': 'Werkzeugleiste oben: „Projekt laden“; Tabellendialog: „Liste laden“',
-    'save': 'Werkzeugleiste oben: „Speichern“; Tabellendialog: „Liste speichern“',
+    'edit_drucker': 'Dialog Drucken: „Druckereinstellung“',
+    'del_zeile': 'Tabellen- und Platzhalterdialog: „Zeile löschen“',
+    'open': 'Werkzeugleiste oben: „Projekt laden“; Tabellen- und Platzhalterdialog: „Liste laden“',
+    'save': 'Werkzeugleiste oben: „Speichern“; Tabellen- und Platzhalterdialog: „Liste speichern“',
     'save_project': 'Werkzeugleiste oben: „Projekt speichern“',
     'print': 'Werkzeugleiste oben: „Drucken“',
-    'delete': 'Tabellendialog: „Alles löschen“',
+    'delete': 'Tabellen- und Platzhalterdialog: „Alles löschen“',
     'cut': 'Werkzeugleiste oben: „Ausschneiden“',
     'copy': 'Werkzeugleiste oben: „Kopieren“',
     'paste': 'Werkzeugleiste oben: „Einfügen“',

@@ -271,7 +271,7 @@ impl TabDlg {
 }
 
 /// Knopf mit eigenem Icon (23 × 22 wie die TSpeedButtons) und dem Hinweis des Originals.
-fn icon_knopf(ui: &mut egui::Ui, icon: Icon, hint: &str) -> bool {
+pub fn icon_knopf(ui: &mut egui::Ui, icon: Icon, hint: &str) -> bool {
     ui.add(egui::Button::image(crate::icons::image(icon, 16.0)).min_size(Vec2::new(23.0, 22.0))).on_hover_text(hint).clicked()
 }
 

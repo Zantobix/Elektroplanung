@@ -11,6 +11,7 @@ pub mod blattnummer;
 pub mod canvas;
 pub mod dialoge;
 pub mod dialoge3;
+pub mod dialog_regeln;
 pub mod druck;
 pub mod dxf;
 pub mod eigentuemer;
@@ -68,6 +69,7 @@ pub mod view;
 pub mod zeiger;
 pub mod vorlage;
 pub mod vorschau;
+pub mod zeichen_dialog;
 pub mod zusatz;
 
 use eframe::egui;

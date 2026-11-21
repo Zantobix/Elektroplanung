@@ -100,6 +100,7 @@ icons! {
     EditSammelschiene => "edit_sammelschiene",
     EditBauteil => "edit_bauteil",
     EditSymbol => "edit_symbol",
+    EditDrucker => "edit_drucker",
     DelZeile => "del_zeile",
 }
 

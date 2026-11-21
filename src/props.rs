@@ -125,6 +125,8 @@ pub enum Props {
     Text(TextProps),
     Sheet(SheetProps),
     Anlage(AnlProps),
+    /// Zeichenobjekte (TZeichen): Koordinaten- und Eigenschaftstabelle, siehe zeichen_dialog.rs
+    Zeichen(crate::zeichen_dialog::ZeichenProps),
 }
 
 fn mm1(v: i32) -> String {
@@ -298,7 +300,13 @@ impl App {
                 }));
                 true
             }
-            _ => false,
+            _ => match crate::zeichen_dialog::aus_objekt(&o) {
+                Some(z) => {
+                    self.props = Some(Props::Zeichen(z));
+                    true
+                }
+                None => false,
+            },
         }
     }
 
@@ -388,6 +396,7 @@ impl App {
         let Some(mut p) = self.props.take() else { return };
         let mut result: Option<bool> = None;
         let anlagen: Vec<String> = self.project.anlagen.iter().map(|a| a.name.clone()).collect();
+        let stifte: Vec<String> = self.project.stifte.iter().map(|s| s.name.clone()).collect();
         let (title, size) = match &p {
             Props::SymEigen(_) => ("Symboleigenschaften", [692.0, 478.0]),
             _ => ("Eigenschaften", [289.0, 405.0]),
@@ -400,6 +409,7 @@ impl App {
                     Props::Sheet(s) => sheet_ui(ui, s, &anlagen),
                     Props::Anlage(a) => anlage_ui(ui, a),
                     Props::SymEigen(s) => symeigen_ui(ui, s),
+                    Props::Zeichen(z) => crate::zeichen_dialog::ui(ui, z, &stifte),
                 }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -453,6 +463,13 @@ impl App {
     fn apply_props(&mut self, p: Props) {
         self.checkpoint();
         match p {
+            Props::Zeichen(z) => {
+                self.with_sheet(|sh, _| {
+                    if let Some(o) = sh.objects.iter_mut().find(|o| o.id == z.id) {
+                        crate::zeichen_dialog::anwenden(&z, o);
+                    }
+                });
+            }
             Props::Symbol(s) => {
                 let title_changed = (s.tx.clone(), s.ty.clone()) != s.initial_title;
                 self.with_sheet(|sh, _| {
