@@ -150,7 +150,7 @@ impl App {
             if rr.inner {
                 self.raster_idx = ri;
             }
-            if tool_button(ui, Icon::Grid, "Rasterfang ein/aus", true, self.grid).clicked() {
+            if tool_button(ui, Icon::Grid, "Rasterfanggitter anzeigen – Rasterfang ein/aus", true, self.grid).clicked() {
                 self.grid = !self.grid;
             }
             sep(ui, 5.0);
