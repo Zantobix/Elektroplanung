@@ -67,6 +67,8 @@ Neu:
   `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
 Behoben:
+- Tools › Ausrichtung: Referenzpunkt wie im Original „Mitte“, „Links/Oben“, „Rechts/Unten“ – Bezug ist die
+  gemeinsame Umrandung der Auswahl (bisher ein einzelnes markiertes Objekt)
 - Projektbaum: Ein einfacher Klick auf eine Gruppe klappte sie schon um, ein Doppelklick daher auf und gleich
   wieder zu. Jetzt markiert ein Klick nur, Doppelklick und Kästchen klappen um
 - Verweise wie im Original-Ausdruck der Installationspläne: Pfeil 2,4 mm lang zwischen Lage und Richtung,

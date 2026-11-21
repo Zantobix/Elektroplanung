@@ -256,15 +256,9 @@ impl App {
             return;
         }
         let objs = self.selected_objs();
-        let names: Vec<String> = objs
-            .iter()
-            .enumerate()
-            .map(|(i, o)| match &o.kind {
-                Kind::Symbol { bmk, .. } if !bmk.is_empty() => format!("{} {}", i + 1, bmk),
-                Kind::Text { text, .. } => format!("{} {}", i + 1, text.lines().next().unwrap_or("")),
-                k => format!("{} {}", i + 1, crate::epr_write::kind_name(k)),
-            })
-            .collect();
+        // Referenzpunkt wie im Original (TAuswahl "Referenz"): fester Bezug innerhalb der Auswahl, kein Einzelobjekt –
+        // am Original beobachtet: "Links/Oben" + Horizontal setzt alle Objekte auf die oberste Kante der Auswahl
+        let names: Vec<String> = REFERENZPUNKTE.iter().map(|s| s.to_string()).collect();
         let mut open = true;
         let mut action: Option<u8> = None;
         egui::Window::new("Ausrichtung")
@@ -323,39 +317,7 @@ impl App {
             let (a, b) = crate::canvas::obj_bounds(o, &lib);
             (o.id, a, b)
         }).collect();
-        let r = self.align_ref.min(bounds.len() - 1);
-        let (_, rmn, rmx) = bounds[r];
-        let mut moves: Vec<(u64, P)> = vec![];
-        match mode {
-            0 => {
-                let cy = (rmn.y + rmx.y) / 2.0;
-                for (id, a, b) in &bounds {
-                    moves.push((*id, P::new(0.0, cy - (a.y + b.y) / 2.0)));
-                }
-            }
-            1 => {
-                let cx = (rmn.x + rmx.x) / 2.0;
-                for (id, a, b) in &bounds {
-                    moves.push((*id, P::new(cx - (a.x + b.x) / 2.0, 0.0)));
-                }
-            }
-            _ => {
-                let horiz = mode == 2;
-                let mut v = bounds.clone();
-                v.sort_by(|x, y| {
-                    let (kx, ky) = if horiz { (x.1.x, y.1.x) } else { (x.1.y, y.1.y) };
-                    kx.partial_cmp(&ky).unwrap_or(std::cmp::Ordering::Equal)
-                });
-                let first = if horiz { v[0].1.x } else { v[0].1.y };
-                let last = if horiz { v[v.len() - 1].1.x } else { v[v.len() - 1].1.y };
-                let step = (last - first) / (v.len() - 1) as f32;
-                for (i, (id, a, _)) in v.iter().enumerate() {
-                    let target = first + step * i as f32;
-                    let d = target - if horiz { a.x } else { a.y };
-                    moves.push((*id, if horiz { P::new(d, 0.0) } else { P::new(0.0, d) }));
-                }
-            }
-        }
+        let moves = ausrichten(&bounds, mode, self.align_ref);
         self.checkpoint();
         self.with_sheet(|s, _| {
             for (id, d) in moves {
@@ -365,5 +327,70 @@ impl App {
             }
         });
         self.dirty = true;
+    }
+}
+
+/// Einträge der Liste "Referenzpunkt" im Werkzeugfenster Ausrichtung (wie im Original).
+pub const REFERENZPUNKTE: [&str; 3] = ["Mitte", "Links/Oben", "Rechts/Unten"];
+
+/// Verschiebungen für Ausrichten (0 Horizontal = gleiche Höhe, 1 Vertikal = gleiche x-Lage) bzw. gleichmäßiges
+/// Verteilen (2 Abstand horizontal, 3 Abstand vertikal). `referenz`: 0 Mitte, 1 Links/Oben, 2 Rechts/Unten –
+/// Bezug ist die gemeinsame Umrandung der Auswahl bzw. beim Verteilen die jeweilige Kante/Mitte jedes Objekts.
+pub fn ausrichten(bounds: &[(u64, P, P)], mode: u8, referenz: usize) -> Vec<(u64, P)> {
+    if bounds.len() < 2 {
+        return vec![];
+    }
+    let horiz = mode == 0 || mode == 3; // Lage entlang y
+    let k = |a: &P, b: &P| -> f32 {
+        let (lo, hi) = if horiz { (a.y, b.y) } else { (a.x, b.x) };
+        match referenz {
+            1 => lo,
+            2 => hi,
+            _ => (lo + hi) / 2.0,
+        }
+    };
+    let verschiebung = |d: f32| if horiz { P::new(0.0, d) } else { P::new(d, 0.0) };
+    match mode {
+        0 | 1 => {
+            let lo = bounds.iter().map(|(_, a, _)| if horiz { a.y } else { a.x }).fold(f32::MAX, f32::min);
+            let hi = bounds.iter().map(|(_, _, b)| if horiz { b.y } else { b.x }).fold(f32::MIN, f32::max);
+            let ziel = match referenz {
+                1 => lo,
+                2 => hi,
+                _ => (lo + hi) / 2.0,
+            };
+            bounds.iter().map(|(id, a, b)| (*id, verschiebung(ziel - k(a, b)))).collect()
+        }
+        _ => {
+            let mut v: Vec<&(u64, P, P)> = bounds.iter().collect();
+            v.sort_by(|x, y| k(&x.1, &x.2).partial_cmp(&k(&y.1, &y.2)).unwrap_or(std::cmp::Ordering::Equal));
+            let first = k(&v[0].1, &v[0].2);
+            let last = k(&v[v.len() - 1].1, &v[v.len() - 1].2);
+            let step = (last - first) / (v.len() - 1) as f32;
+            v.iter().enumerate().map(|(i, (id, a, b))| (*id, verschiebung(first + step * i as f32 - k(a, b)))).collect()
+        }
+    }
+}
+
+#[cfg(test)]
+mod ausrichten_tests {
+    use super::*;
+
+    #[test]
+    fn links_oben_setzt_auf_oberste_kante() {
+        let b = [(1, P::new(0.0, 10.0), P::new(4.0, 14.0)), (2, P::new(20.0, 30.0), P::new(24.0, 34.0))];
+        let m = ausrichten(&b, 0, 1);
+        assert_eq!(m[0].1, P::new(0.0, 0.0));
+        assert_eq!(m[1].1, P::new(0.0, -20.0));
+        let m = ausrichten(&b, 1, 2);
+        assert_eq!(m[0].1, P::new(20.0, 0.0));
+        assert_eq!(m[1].1, P::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn verteilen_gleichmaessig() {
+        let b = [(1, P::new(0.0, 0.0), P::new(2.0, 2.0)), (2, P::new(3.0, 0.0), P::new(5.0, 2.0)), (3, P::new(20.0, 0.0), P::new(22.0, 2.0))];
+        let m = ausrichten(&b, 2, 0);
+        assert_eq!(m[1].1, P::new(7.0, 0.0));
     }
 }

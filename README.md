@@ -173,8 +173,6 @@ nicht. Gemessen werden stattdessen:
   wie auf dem Bildschirm); Times bleibt Standardschrift. Nicht einbettbare Schriften (nicht installiert,
   CFF-Umrisse, Lizenzbits) und der Schrift fehlende Zeichen kommen wie bisher als Times, Helvetica (Arial,
   Segoe UI, Tahoma …) oder Courier (Courier New, Consolas …).
-- Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
-  füllt das Original zur Laufzeit – der Nachbau listet die markierten Objekte.
 - Symboleditor: Stifte des Symbols (SIT, Nummer ab 4) lassen sich anlegen, ändern, löschen und Elementen
   zuweisen und werden ins `.epr` geschrieben. Die Freigaben eines Symbols (Querverweise, Sicherungsübersicht,
   SYM Byte 112, Bit 0/1, an W2.epr ermittelt) werden gelesen und geschrieben und gelten als Vorgabe für neu
