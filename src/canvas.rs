@@ -377,8 +377,9 @@ pub fn draw_sheet_base(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, colors: &Sh
     p.rect_stroke(fr, 0.0, black, egui::StrokeKind::Middle);
 
     let th = dc.project.title_h();
-    // Strompfad-Spaltenleiste (Klemmplan und Sicherungsübersicht haben keine, wie im Original-Ausdruck)
-    if sheet.art == 4 || sheet.art == 5 {
+    // Strompfad-Spaltenleiste (Klemmplan und Sicherungsübersicht haben keine, wie im Original-Ausdruck; ebenso
+    // die übrigen Listenblätter Inhaltsverzeichnis und Artikelliste)
+    if matches!(sheet.art, 1 | 4 | 5 | 6) {
         draw_title_block(dc, sheet, anlage, fx0, fx1, fy1 - th, fy1);
         draw_generated(dc, sheet, anlage);
         return;
@@ -503,6 +504,9 @@ pub fn draw_generated(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
     } else if sheet.art == 4 {
         // Klemmplan (Original-Ausdruck Seite 12): siehe klemmplan.rs
         crate::klemmplan::draw(dc, sheet, anlage);
+    } else {
+        // Artikelliste, Inhaltsverzeichnis: siehe berechnet.rs
+        crate::berechnet::draw(dc, sheet, anlage);
     }
 }
 

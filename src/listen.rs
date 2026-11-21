@@ -1,8 +1,9 @@
 //! Listen Export (TListExport des Originals): Auswahl der Liste, Vorschau als Tabelle, Export als Textdatei.
 //! Listen wie im Original: „Stückliste“, „Betriebsmittelkennzeichnung“, „Klemmenbezeichnung“; Dateiformate
 //! „Tabulator“, „Trennzeichen(;)“, „Trennzeichen(#)“ (*.txt).
-//! Die Spalten sind nicht aus dem Original belegt (es zeigt sie erst nach der Auswahl) und hier so gewählt, dass
-//! die Listen zum Beschriften taugen: je Zeile ein Betriebsmittel bzw. eine Klemme.
+//! Die Spalten der Stückliste sind die der Artikelliste des Originals (Texte der Exe); die der beiden anderen
+//! Listen sind nicht belegt und so gewählt, dass sie zum Beschriften taugen: je Zeile ein Betriebsmittel bzw. eine
+//! Klemme.
 
 use crate::canvas::{bmk_ctx, natural_key};
 use crate::model::*;
@@ -15,21 +16,18 @@ pub const FORMATE: &[&str] = &["Tabulator", "Trennzeichen(;)", "Trennzeichen(#)"
 /// Kopfzeile und Zeilen einer Liste.
 pub fn liste(p: &Project, art: usize) -> (Vec<&'static str>, Vec<Vec<String>>) {
     match art {
-        // Summenliste der zugeordneten Bauteile
+        // Summenliste der zugeordneten Bauteile (Spalten wie die Artikelliste des Originals)
         0 => {
-            let mut n: std::collections::BTreeMap<usize, usize> = Default::default();
+            let mut rows: Vec<Vec<String>> = vec![];
             for a in &p.anlagen {
-                for o in a.sheets.iter().flat_map(|s| &s.objects) {
-                    if let Some(i) = p.part_of.get(&o.id) {
-                        *n.entry(*i).or_default() += 1;
+                for r in crate::berechnet::artikel_rows(p, a) {
+                    match rows.iter_mut().find(|x| x[1..] == r[1..]) {
+                        Some(x) => x[0] = (x[0].parse::<usize>().unwrap_or(0) + r[0].parse::<usize>().unwrap_or(0)).to_string(),
+                        None => rows.push(r),
                     }
                 }
             }
-            let rows = n
-                .into_iter()
-                .filter_map(|(i, c)| p.bauteile.get(i).map(|b| vec![c.to_string(), b.name.clone(), b.typ.clone(), b.firma.clone(), b.artikel.clone(), b.nummer.clone()]))
-                .collect();
-            (vec!["Anzahl", "Bauteil", "Typ", "Firma", "Artikel", "Nummer"], rows)
+            (vec!["Menge", "Bezeichnung", "Typnummer", "Hersteller", "Bestellnummer"], rows)
         }
         // je Betriebsmittel (aufgelöste BMK) eine Zeile, erste Fundstelle
         1 => {

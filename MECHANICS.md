@@ -205,3 +205,20 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Querverweis (Feld 4 = 0x0101FFFF): hochkant = Bit 0 XOR (Feld 14 = 1800); ohne Text gilt Bit 0 unverändert.
   Drehen (R) um die Pfeilspitze: Richtung −90°, Text wechselt waagerecht/hochkant.
 - PDF: Verweise und Sammelschienen-Querverweise sind Verknüpfungen (/Link, /Dest auf die Zielseite).
+
+## Nachtrag 21.11.2026 – Klemmstellen, Klemmleisten, Klemmplan
+- OBJ Byte 0x14 = Objektart: 0 Klemmstelle, 1 Sammelschiene, 2 Verweis. Klemmstelle: Byte 0x12 Ausrichtung des
+  Titels (0/1/2, daher Feld 4 = 0x2FFFF bei „Rechts“), Feld 9 Nummer, 10 Position, Byte 0x2C Ebene, Byte 0x2D
+  Bit 0 Automatisch / Bit 1 Korrektur Nummer / Bit 2 Korrektur Position / Bit 3 Ziel Wechsel, Byte 0x2E
+  Gruppenautomatik; Unterblock FKT = Funktion (vor TIT). Neue Klemme im Original: 0x2D = 1, 0x2E = 1, 0x2C = 1.
+- KLM: Byte 0–43 Name, Feld 10/11 Titelposition, 13 Kennung, 15 Ebenen, 18/19 nächste Nummer/Position;
+  KFO = Kennung der Klemmstelle, Kennung ihres Blattes (BLT @72), Nummer, Position. Der Klemmplan geht die KFO durch.
+- Gruppenautomatik: nächste Klemmstelle links auf gleicher Höhe < 2 cm und gleiche Leiste → Titel ab %C ("2B").
+- Klemmplan-Richtungen (Routine 0x4830a8): Klemmenende → Nachbarpunkt der Verbindung: 0 oben, 1 links, 2 rechts,
+  3 unten (Ziel Wechsel: 3 − Richtung); erste Verbindung je Richtung; Von = erste Richtung mit Ziel, Nach = unten
+  falls Von oben, sonst die nächste. Klemmen derselben Leiste sind nur über „Verbindung ist Brücke“ (VBG Feld 14
+  Bit 0x100) Brücken, sonst Ziele ("-X2 2"); Ziel auf Klemmen ohne Etagenbuchstaben. VSY › OWR Byte 0–7 =
+  Kennung des Eigentümers (VSY Byte 96) – der Klemmplan zeigt dessen BMK ("-K1").
+- BLT Feld 32 ab Bit 8 = Klemmleiste des Klemmplans; Zusätze der Blattarten (Texte der Exe): Deckblatt mit/ohne
+  Rahmen, Querverweise 1–3 Tabellen, Klemmenplan Klemmleiste, Artikelliste Summenliste/Summe+BMK/Einzelliste.
+- Listen Export (TListExport): Stückliste, Betriebsmittelkennzeichnung, Klemmenbezeichnung; Tabulator, ';', '#'.

@@ -158,8 +158,9 @@ nicht. Gemessen werden stattdessen:
 
 ## Bekannte Grenzen
 
-- Textboxen, Tabellen, Bilder und Klemmstellen, die im Nachbau **neu** angelegt werden, kann das `.epr`-Format
-  des Nachbaus noch nicht schreiben (vorhandene bleiben erhalten); der Nachbau meldet sie beim Speichern.
+- Textboxen, Tabellen und Bilder, die im Nachbau **neu** angelegt werden, kann das `.epr`-Format des Nachbaus
+  noch nicht schreiben (vorhandene bleiben erhalten); der Nachbau meldet sie beim Speichern. Neue Klemmstellen
+  und Klemmleisten werden geschrieben (OBJ, KLM mit KFO-Einträgen, siehe `src/klemmen.rs`).
 - Eigene Schriftarten pro Text: Schnitt, Grad, Farbe und Unterstreichung werden geschrieben, der Schriftname
   (Original: Zeiger in Feld 9) noch nicht; gezeichnet wird in Times wie die Projektschrift.
 - Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
@@ -172,11 +173,13 @@ nicht. Gemessen werden stattdessen:
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
   neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
-- Klemmplan: "Von Ziel"/"Nach Ziel" und Brücken werden aus den Verbindungen verfolgt (Regeln in
-  `src/klemmplan.rs`); bei Klemmen mit mehr als zwei Zielen wählt das Original nach einer nicht geklärten
-  Reihenfolge, der Nachbau nach der Lage der Anschlüsse (oben vor rechts vor unten). Die Spalte "Funktion"
-  bleibt leer (Klemmenfunktion wird noch nicht aus dem .epr gelesen); "Alter Klemmenplan" zeigt die
-  8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken.
+- Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",
+  Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); die Brücken mehrstöckiger Leisten fasst der
+  Nachbau zu Gruppen zusammen, wo das Original einzelne Ketten zeichnet. "Alter Klemmenplan" zeigt die
+  8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken. Folgeblätter: direkt folgende
+  Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
+- Inhaltsverzeichnis und Artikelliste (Summenliste) als Blattart: Spalten der Artikelliste wie im Original,
+  Maße und Spalten des Inhaltsverzeichnisses ohne Vorlage; Querverweis-Blätter bleiben leer.
 - Neue Einstellungen der Dialoge (Tabellenkopf fett, Bildausrichtung, Verbindungsoptionen, Sammelschienen-
   Einstellungen, Begrenzungslinien, Schriftfeldhöhe) speichert der Nachbau im eigenen Format (.epj); ihre
   Ablage im .epr ist noch unbekannt.

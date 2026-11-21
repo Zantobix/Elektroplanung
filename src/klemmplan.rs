@@ -555,9 +555,11 @@ pub fn draw(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
         }
     }
     // Brücken: Punkt je Klemme, senkrechte Linie von der ersten bis zur letzten (Spuren nebeneinander)
-    if !alt && !mehr {
+    // bei mehrstöckigen Leisten rechts neben den Etagen-Kreisen (Ausdruck Seite 39)
+    if !alt {
+        let x0 = if mehr { xs[5] + plan.etagen as f32 * 3.0 + 1.2 } else { xs[5] + 4.2 };
         for b in &plan.bruecken {
-            let x = xs[5] + 4.2 + b.lane as f32 * 3.3;
+            let x = x0 + b.lane as f32 * 3.3;
             let vis: Vec<usize> = b.rows.iter().copied().filter(|r| *r >= off && *r < off + rows).map(|r| r - off).collect();
             let (Some(lo), Some(hi)) = (vis.first(), vis.last()) else { continue };
             p.line_segment([xf.s(P::new(x, row_y(*lo))), xf.s(P::new(x, row_y(*hi)))], stroke);
