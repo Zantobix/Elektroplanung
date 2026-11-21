@@ -49,9 +49,17 @@ fn pdf_bettet_installierte_schrift_ein() {
     assert!(s.contains("/E1 "), "Schriftverzeichnis");
     assert!(s.lines().any(|l| l.starts_with("BT /E1 ") && l.contains("] TJ ET")), "Text in der eingebetteten Schrift");
     assert!(s.lines().any(|l| l.starts_with("BT /F6 ") && l.contains("(?) Tj")), "fehlendes Zeichen in der Standardschrift");
-    // Teilmenge: viel kleiner als die Schriftdatei
+    // Teilmenge: die eingebettete Schrift (erstes FontFile2, /Length1) ist viel kleiner als die Schriftdatei. Nicht
+    // die ganze PDF-Datei vergleichen: unter Linux steht für „Arial“ oft eine kleine Ersatzschrift (Liberation Sans,
+    // gut 130 KB), dann übersteigen Seite, Schriftfeld und Standardschriften das Viertel der Datei.
     let datei = std::fs::metadata(elektroplanung::schriften::finden("Arial", true, false).unwrap().pfad).unwrap().len() as usize;
-    assert!(bytes.len() < datei / 4, "{} von {datei}", bytes.len());
+    let teilmenge: usize = s
+        .split("/Length1 ")
+        .nth(1)
+        .and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next())
+        .and_then(|n| n.parse().ok())
+        .expect("/Length1 der eingebetteten Schrift");
+    assert!(teilmenge < datei / 4, "Teilmenge {teilmenge} von {datei}");
 }
 
 /// Breite der dunklen Pixel (Spalten) einer Zeile im Bildexport.
