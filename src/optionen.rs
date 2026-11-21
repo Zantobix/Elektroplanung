@@ -68,6 +68,8 @@ pub struct Optionen {
     pub passwort: String,
     /// eigene Tastenkürzel (Befehl → Kombination), sonst Vorgaben aus kuerzel.rs
     pub tasten: std::collections::BTreeMap<String, String>,
+    /// zuletzt gewählte Rasterweite je Projektdatei (Pfad, Index in RASTER), neueste zuerst – siehe `raster.rs`
+    pub raster_je_projekt: Vec<(String, usize)>,
 }
 
 impl Default for Optionen {
@@ -114,6 +116,7 @@ impl Default for Optionen {
             user: "root".into(),
             passwort: String::new(),
             tasten: Default::default(),
+            raster_je_projekt: vec![],
         }
     }
 }

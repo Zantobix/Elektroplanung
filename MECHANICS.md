@@ -54,7 +54,14 @@ x=9369 (y 2000…7333). Die Textfelder sind 1:1 in `src/titleblock.rs` übernomm
 - Rahmen: links 5, rechts 5, oben 20, unten 5 mm. Spaltenleiste oben 5 mm hoch, 8 Strompfade (je 35,875 mm),
   Nummern 1…8 mittig in Times New Roman.
 - Schriftfeld: volle Rahmenbreite, 15 mm hoch, am unteren Rahmen.
-- Rasterursprung: (5 mm, 5 mm) ab Blattecke.
+- Rasterursprung (Fangroutine 0x41645c, Zeichnen 0x438b94): mit „Rand ist Ursprung“ (INI/Form1 +0xa37) quer
+  (linker Rand ANL +0xa4, oberer Rand ANL +0xa8 + Strompfadleiste ANL +0xb4) = (5, 15) mm in W2, hoch (+0xa8, +0xa0 +
+  +0xb4) = (10, 10) mm; ohne die Option die Blattecke. Gefangen wird auf absolute Rasterpunkte ab dem Ursprung (Rest
+  < 0,49 Weite abrunden); Verschieben = Differenz der gefangenen Mauspunkte, Bestandsobjekte neben dem Raster behalten
+  ihren Rest. Rasterlinien ab dem Ursprung nach rechts/unten, nur ab 5 Pixel Abstand (sonst kein Gitter); Farbe
+  Blattfarbe − 1/16. Rasterindex 0x9f0 (INI, Starteinstellung), im .epr nicht gespeichert; „Kein“ = 0,1 mm,
+  Pfeiltasten um eine Rasterweite (Umschalt 0,1 mm). Der Nachbau merkt die Auswahl je Projektdatei in den
+  Einstellungen (`raster.rs`, `raster_je_projekt`).
 - Ansicht: Blatt passt mit ca. 5 px Rand in die Höhe und steht mittig.
 
 ## Symbolbibliothek (Datenbank\Gruppen.tfi, Symbole.tfi – selbst entschlüsselt)
