@@ -121,8 +121,8 @@ fn zeichen(art: u8) -> &'static [(f32, f32, f32, f32)] {
     match art {
         // Öffner: Schaltglied liegt am Haken des rechten Anschlusses an
         1 => &[(-3.0, 0.0, -1.5, 0.0), (1.5, 0.0, 3.0, 0.0), (1.5, 0.0, 1.5, -1.3), (-1.5, 0.0, 1.8, -1.1)],
-        // Wechsler: gemeinsamer Anschluss links, Öffnerseite unten mit Haken, Schließerseite oben
-        2 => &[(-3.0, 0.0, -1.5, 0.0), (1.5, 0.5, 3.0, 0.5), (1.5, 0.5, 1.5, -0.6), (1.5, -1.9, 3.0, -1.9), (-1.5, 0.0, 1.8, -0.8)],
+        // Wechsler wie im Original: gemeinsamer Anschluss links, Öffnerseite (11) oben mit Haken, Schließerseite (14) unten
+        2 => &[(-3.0, 0.0, -1.5, 0.0), (1.5, -1.9, 3.0, -1.9), (1.5, -1.9, 1.5, -0.8), (1.5, 0.5, 3.0, 0.5), (-1.5, 0.0, 1.8, -0.8)],
         // Schließer
         _ => &[(-3.0, 0.0, -1.5, 0.0), (1.5, 0.0, 3.0, 0.0), (-1.5, 0.0, 1.5, -1.0)],
     }
@@ -131,7 +131,7 @@ fn zeichen(art: u8) -> &'static [(f32, f32, f32, f32)] {
 /// Lage der Anschlussnummern 1–3 relativ zum Zeilenpunkt und ihre Ausrichtung.
 fn nummern_lage(art: u8) -> [(f32, f32, Align2); 3] {
     match art {
-        2 => [(-NUMMER_X, 0.0, Align2::RIGHT_CENTER), (NUMMER_X, 0.5, Align2::LEFT_CENTER), (NUMMER_X, -1.9, Align2::LEFT_CENTER)],
+        2 => [(-NUMMER_X, 0.0, Align2::RIGHT_CENTER), (NUMMER_X, -1.9, Align2::LEFT_CENTER), (NUMMER_X, 0.5, Align2::LEFT_CENTER)],
         _ => [(-NUMMER_X, 0.0, Align2::RIGHT_CENTER), (NUMMER_X, 0.0, Align2::LEFT_CENTER), (NUMMER_X, 0.0, Align2::LEFT_CENTER)],
     }
 }
