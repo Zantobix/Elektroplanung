@@ -25,6 +25,10 @@ Neu:
 - Datei › Als Bild exportieren…: PNG mit 150/300/600 dpi, aktuelles Blatt oder alle Blätter der Anlage
 - Sammelschienenassistent wie im Original (L1, L2, L3, N, PE, vorhandene Schienen werden wiederverwendet)
 - Bauteil zuordnen: neues Bauteil direkt aus dem Dialog anlegen
+- Variantenrad beim Setzen von Symbolen mit mehreren Bildern (wie im Original; abschaltbar in den Optionen)
+- Querverweise: Doppelklick springt zum Ziel (auch Querverweistexte von Sammelschienen), Verweise lassen sich
+  drehen, das Ziel wird gespeichert; im PDF sind Querverweise anklickbar
+- Option „Rasterdarstellung“: Stärke des Rasters (Hell, Mittel, Kräftig oder eigene Farbe)
 
 Behoben / geändert wie im Original:
 - Strompfadausrichtung richtet Symbole beim Setzen und Verschieben auf die Mitte des Strompfads aus
