@@ -303,3 +303,16 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - VBG Feld 14 Bit 0x40 Zielführung links/oben, 0x80 rechts/unten, 0x100 Brücke; BZD Byte 0x0B Bit 0 Hochkant,
   Feld 7 Bit 0 Markierung, Bit 1 Unterstrichen, Bit 2 Durch Markierung.
 - VSY Feld 37 = Rackposition (−1 = keine).
+
+## Neue Kurve und Leitungsführung beim Zeichnen (src/kurve.rs, src/leitung_fuehrung.rs)
+
+- Neue Kurve (Werkzeug 2, Schrittzähler +0x78c): vier Klicks – Anfang, Ende (bis dahin gerade Linie zur Maus),
+  Kontrollpunkt 1 (Vorschau: beide Kontrollpunkte auf der Maus), Kontrollpunkt 2. Beim Anlegen ordnet das Original
+  die Klickfolge [1, 2, 3, 4] in die gespeicherte Bézierfolge [1, 3, 4, 2] um. Nachbau zusätzlich: Ziehen vom Anfang
+  weg setzt den Endpunkt beim Loslassen. Markierte Kurve: graue Quadrate (7 px) an Anfang/Ende, grüne gefüllte
+  Kreise (7 px) an den Kontrollpunkten, grüne Hilfslinien Anfang–Kontrolle 1 und Ende–Kontrolle 2; alle vier Punkte
+  ziehbar (Zieh-Index +0x8e0).
+- Leitung (Zustand +0x78d = 10): Loslassen auf einem Anschluss beginnt sie, jeder Klick auf freie Fläche setzt einen
+  Eckpunkt, rechtwinklig zum letzten Punkt (|dx| < |dy| → senkrecht, sonst waagerecht; < 6 px wird übergangen;
+  gerade Fortsetzung verschiebt den letzten Punkt). Klick auf einen Anschluss beendet, Rechtsklick bricht ab.
+  Nachbau zusätzlich: Ziehen vom Anschluss zum Ziel, die erste deutliche Zugrichtung bestimmt das erste Teilstück.
