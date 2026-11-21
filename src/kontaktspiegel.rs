@@ -17,8 +17,19 @@
 //!   bekommt davor 2 mm (außer in der ersten Zeile) und danach 0,5 mm mehr. Die Schaltzeichen liegen waagerecht
 //!   (Anschlüsse bei ±1,5…3 mm um X), ohne eigene Nummern zeigen sie die Anschlusstexte des referenzierten Symbols.
 //!   Daneben steht die Lage des referenzierten Kontakts.
-//! Eigene Zeichnung im Nachbau (keine Grafik aus der Exe); Schriftgrößen und Lage der Texte sind geschätzt.
-//! Ungeprüft: ALT-Inhalt (hier Feld 0 = Nummer 1–3) und Feld 14 (in W2 30 = Höhe einer Zeile?).
+//! - ALT (8 Byte) vor dem STR einer Anschlussnummer: Feld 0 = Spalte 1–3 (Übernehmen ruft die Listenroutine
+//!   0x403084 mit Gitterspalte − 1 auf, Gitterspalten 2–4 = „1“–„3“, und hört bei der ersten leeren Spalte auf),
+//!   Feld 1 = 0.
+//! - Feld 14 (OBJ 0x38) = Höhe des Spiegels in 0,1 mm: Übernehmen zählt je Zeile 30, vor einem Wechsler (außer in
+//!   der ersten Zeile) 25 dazu, mindestens 30 (W2: 30 beim Spiegel ohne Zeilen).
+//! - Lage: Gezeichnet wird an der eigenen X-Lage (OBJ Feld 6). Die Spule wird nur im Kontextmenü (gibt es schon
+//!   einen Spiegel zu ihr?) und im Dialog aufgelöst; keine Stelle verschiebt den Spiegel mit der Spule oder löscht
+//!   ihn mit ihr (W2 enthält einen Spiegel, dessen Spule gelöscht ist). Der Nachbau macht es ebenso.
+//! - „Alles markieren“ (0x42a710) und Kopieren (0x41a3e4) lassen Kontaktspiegel aus; beim Einfügen eines Spiegels
+//!   leert das Original Zeilen und Spule (0x45a3c8).
+//! - Die Schaltzeichen nimmt das Original aus drei Bibliothekssymbolen der Programmeinstellungen (Schließer,
+//!   Öffner, Wechsler); der Nachbau zeichnet eigene Zeichen (keine Grafik aus der Exe), Schriftgrößen und Lage der
+//!   Texte sind geschätzt.
 
 use crate::app::App;
 use crate::canvas::{bmk_ctx, times, DrawCtx};
@@ -78,6 +89,13 @@ pub fn zeilen_y(y0: f32, rows: &[Zeile]) -> Vec<f32> {
         y += ZEILE;
     }
     v
+}
+
+/// Höhe des Spiegels in 0,1 mm wie beim Übernehmen im Original (OBJ Feld 14): je Zeile 30, vor einem Wechsler
+/// außer in der ersten Zeile 25 mehr, mindestens 30.
+pub fn hoehe(rows: &[Zeile]) -> i32 {
+    let h: i32 = rows.iter().enumerate().map(|(i, r)| if r.art == 2 && i > 0 { 55 } else { 30 }).sum();
+    h.max(30)
 }
 
 /// Umriss des Spiegels (für Markierung und Treffer).
@@ -214,40 +232,6 @@ pub fn nachfuehren(p: &mut Project, lib: &[SymDef]) -> bool {
     changed
 }
 
-/// Letzte bekannte X-Lage von Spule und Spiegel je Spiegel (für `folgen`).
-pub type Lagen = std::collections::HashMap<u64, (u64, f32, f32)>;
-
-/// Der Spiegel folgt waagerecht seiner Spule: wurde seit dem letzten Aufruf nur die Spule verschoben (auf welchem
-/// Weg auch immer – Ziehen, Pfeiltasten, Ausrichten, MCP), wandert der Spiegel um denselben Weg mit. Wurden beide
-/// bewegt (gemeinsam verschoben, Rückgängig), bleibt er, wo er ist. Rückgabe: ob sich etwas geändert hat.
-pub fn folgen(p: &mut Project, lagen: &mut Lagen) -> bool {
-    let mut neu: Vec<(u64, u64, f32, f32)> = vec![];
-    for o in p.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects) {
-        let Kind::Spiegel { pos, owner, .. } = &o.kind else { continue };
-        let Some((_, Obj { kind: Kind::Symbol { pos: sp, .. }, .. })) = p.find_obj(*owner).filter(|_| *owner != 0) else { continue };
-        neu.push((o.id, *owner, sp.x, pos.x));
-    }
-    let mut changed = false;
-    let mut weiter = Lagen::default();
-    for (id, owner, spule_x, x) in neu {
-        let mut x_neu = x;
-        if let Some((o0, s0, x0)) = lagen.get(&id) {
-            if *o0 == owner && (spule_x - s0).abs() > 1e-4 && (x - x0).abs() <= 1e-4 {
-                x_neu = x + (spule_x - s0);
-                if let Some(o) = p.anlagen.iter_mut().flat_map(|a| &mut a.sheets).flat_map(|s| &mut s.objects).find(|o| o.id == id) {
-                    if let Kind::Spiegel { pos, .. } = &mut o.kind {
-                        pos.x = x_neu;
-                        changed = true;
-                    }
-                }
-            }
-        }
-        weiter.insert(id, (owner, spule_x, x_neu));
-    }
-    *lagen = weiter;
-    changed
-}
-
 /// Kontaktspiegel zeichnen.
 pub fn draw(dc: &DrawCtx, pos: P, rows: &[Zeile], stroke: Stroke) {
     let p = dc.painter;
@@ -356,11 +340,7 @@ pub fn block(p: &Project, o: &Obj, eigene: u64, kennung: &dyn Fn(&Obj) -> u64, o
     let Kind::Spiegel { pos, owner, rows, .. } = &o.kind else { return None };
     let mut b = match o.raw.as_deref() {
         Some(r) => r.block.clone(),
-        None => {
-            let mut b = Block::new("OBJ", vec![0; 0x40]);
-            b.set_i32(14, 30);
-            b
-        }
+        None => Block::new("OBJ", vec![0; 0x40]),
     };
     if b.data.len() < 0x40 {
         b.data.resize(0x40, 0);
@@ -374,6 +354,7 @@ pub fn block(p: &Project, o: &Obj, eigene: u64, kennung: &dyn Fn(&Obj) -> u64, o
         b.data[0x20..0x28].copy_from_slice(&k.to_le_bytes());
     }
     b.data[0x2c] = (b.data[0x2c] & !1) | (!rows.is_empty()) as u8;
+    b.set_i32(14, hoehe(rows));
     b.kids.retain(|k| !k.is("STB"));
     for z in rows {
         let mut stb = Block::new("STB", vec![0; 0x1c]);
@@ -583,29 +564,29 @@ mod tests {
     }
 
     #[test]
-    fn spiegel_folgt_spule_und_geloeschten_kontakten() {
+    fn geloeschter_kontakt_entfaellt() {
         let mut p = Project::new_default();
         let s = &mut p.anlagen[0].sheets[0];
         s.objects.push(sym(1, "-K1", 40.0));
         s.objects.push(sym(2, "-K1", 120.0));
         let rows = vec![Zeile { art: 0, referenz: 2, ..Default::default() }];
         s.objects.push(Obj { id: 9, kind: Kind::Spiegel { pos: P::new(40.0, 180.0), owner: 1, rows, auto: false }, pen: 0, fixed: false, group: None, raw: None });
-        let x = |p: &Project| if let Some((_, Obj { kind: Kind::Spiegel { pos, .. }, .. })) = p.find_obj(9) { pos.x } else { panic!() };
-        let mut lagen = Lagen::default();
-        assert!(!folgen(&mut p, &mut lagen));
-        // nur die Spule verschoben: der Spiegel zieht mit
-        p.anlagen[0].sheets[0].objects[0].kind.translate(P::new(10.0, 5.0));
-        assert!(folgen(&mut p, &mut lagen));
-        assert_eq!(x(&p), 50.0);
-        // beide verschoben (gemeinsam bzw. Rückgängig): keine doppelte Verschiebung
-        p.anlagen[0].sheets[0].objects[0].kind.translate(P::new(-10.0, 0.0));
-        p.anlagen[0].sheets[0].objects[2].kind.translate(P::new(-10.0, 0.0));
-        assert!(!folgen(&mut p, &mut lagen));
-        assert_eq!(x(&p), 40.0);
         // gelöschter Kontakt: Zeile entfällt auch ohne automatische Aufnahme
         p.anlagen[0].sheets[0].objects.remove(1);
         assert!(nachfuehren(&mut p, &[]));
         assert!(matches!(&p.find_obj(9).unwrap().1.kind, Kind::Spiegel { rows, .. } if rows.is_empty()));
+        // gelöschte Spule: der Spiegel bleibt wie im Original (W2.epr enthält einen solchen Spiegel)
+        p.anlagen[0].sheets[0].objects.remove(0);
+        nachfuehren(&mut p, &[]);
+        assert!(p.find_obj(9).is_some());
+    }
+
+    #[test]
+    fn hoehe_wie_im_original() {
+        let r = |art| Zeile { art, ..Default::default() };
+        assert_eq!(hoehe(&[]), 30);
+        assert_eq!(hoehe(&[r(2)]), 30);
+        assert_eq!(hoehe(&[r(0), r(2), r(1)]), 115);
     }
 
     #[test]
@@ -617,7 +598,7 @@ mod tests {
         let o = Obj { id: 9, kind: Kind::Spiegel { pos: P::new(40.0, 180.0), owner: 1, rows, auto: false }, pen: 0, fixed: false, group: None, raw: None };
         let b = block(&p, &o, 77, &|x| x.id * 1000, &|_| (5, 6)).unwrap();
         assert!(ist_spiegel(&b));
-        assert_eq!((b.i32(6), id_at(&b.data, 0), id_at(&b.data, 0x20), b.data[0x2c] & 1), (400, 77, 1000, 1));
+        assert_eq!((b.i32(6), id_at(&b.data, 0), id_at(&b.data, 0x20), b.data[0x2c] & 1, b.i32(14)), (400, 77, 1000, 1, 30));
         let stb = b.kid("STB").unwrap();
         assert_eq!((stb.data.len(), id_at(&stb.data, 0), id_at(&stb.data, 8), id_at(&stb.data, 16), stb.data[0x18]), (0x1c, 2000, 5, 6, 2));
         let Kind::Spiegel { rows, pos, .. } = lesen(&b, &p.anlagen[0].sheets[0]) else { panic!() };
