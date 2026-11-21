@@ -170,8 +170,8 @@ nicht. Gemessen werden stattdessen:
   Symbols gelten als Vorgabe für neu gesetzte Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
 - Symboleigenschaften: Die Rackposition wird nur im eigenen Format (`.epj`) gespeichert; ihr Ablageort im
   VSY-Block ist unbekannt (SPA enthält die Parameterwerte).
-- Tabelle › Daten „Inhaltsverzeichnis“ füllt die Tabelle beim Bearbeiten mit den Blättern der Anlage; sie wird
-  danach nicht selbständig nachgeführt.
+- Tabelle › Daten „Inhaltsverzeichnis“/„Querverweise“: der Inhalt wird bei jedem Zeichnen aus dem Projekt
+  berechnet (Zeilenzahl bleibt die der Tabelle); Spaltenbreiten geschätzt.
 - Projektgrafiken, die im Nachbau neu angelegt oder geändert werden, schreibt das `.epr`-Format noch nicht.
 - Optionen › Datenbank: Serverangaben werden nur gespeichert; der Nachbau liest die Bibliothek direkt aus Symbole.tfi.
 - Info-Dialog bewusst nicht 1:1 (Copyright, E-Mail und Registrierungsschlüssel des Original-Autors).
@@ -183,8 +183,10 @@ nicht. Gemessen werden stattdessen:
   Nachbau zu Gruppen zusammen, wo das Original einzelne Ketten zeichnet. "Alter Klemmenplan" zeigt die
   8 Spalten des Originals (Kennung, Anschluß, Pfad, Klemme), ohne Brücken. Folgeblätter: direkt folgende
   Klemmplan-Blätter derselben Leiste (bzw. Sicherungsübersichten, Listenblätter) setzen die Liste fort.
-- Inhaltsverzeichnis und Artikelliste (Summenliste) als Blattart: Spalten der Artikelliste wie im Original,
-  Maße und Spalten des Inhaltsverzeichnisses ohne Vorlage; Querverweis-Blätter bleiben leer.
+- Inhaltsverzeichnis, Querverweise (1–3 Tabellen) und Artikelliste (Summenliste, Summe+BMK, Einzelliste) als
+  Blattart: Spaltenköpfe wie im Original, Maße und Spaltenbreiten ohne Vorlage (kein Ausdruck vorhanden).
+- Kontaktspiegel: verknüpftes Objekt unter der Spule (Lage der Kontakte, neue/gelöschte Kontakte, folgt der
+  Spule); die Schaltzeichen sind eigene Zeichnung, Schriftgrößen und Abstände geschätzt.
 - Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
   Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift), Blattart
   (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Nur im

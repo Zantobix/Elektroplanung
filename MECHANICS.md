@@ -235,7 +235,14 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Text (Typ 11): Feld 6 Byte 1 = Umbruch (Dialog TTextbox: Rahmen +0x1a, Umbruch +0x19, Ausrichtung +0x18, Drehung +0x14).
 - Bild (Typ 12): Feld 0–3 Rechteck, Feld 4 = Nummer des Projektbildes (BLD Feld 5), Feld 5 Byte 0 Rahmen,
   Byte 1 Ausrichtung (0 Zentriert, 1 Eingepasst, 2 Gestreckt), Feld 15 Bit 16 Fixiert.
-- Tabelle (Typ 13): Feld 6 „Ab“, Feld 9 Byte 0 Überschrift, Byte 1 Autobreite, Byte 2 Art (Benutzerdaten/Inhaltsverzeichnis).
+- Tabelle (Typ 13): Feld 6 „Ab“, Feld 9 Byte 0 Überschrift, Byte 1 Autobreite, Byte 2 Art (0 Benutzerdaten,
+  1 Inhaltsverzeichnis, 2 Querverweise); berechnete Tabellen zeichnet der Nachbau stets mit dem aktuellen Inhalt.
+- Kontaktspiegel (OBJ, Byte 0x14 = 5): Feld 6 X in 0,1 mm, Feld 8/9 Kennung der Spule (VSY Byte 96), Byte 0x2c
+  Bit 0 = Zeilen vorhanden; je Zeile STB (0x1c Byte: Kennung Kontakt, Blatt (BLT Byte 72), Anlage (ANL Byte 0x88),
+  Byte 0x18 Art 0 Schließer/1 Öffner/2 Wechsler) mit ALT (Feld 0 = Nummer 1–3) + STR je Anschlussnummer.
+  Y = Rahmenhöhe des Blattes, Zeilen 3 mm (Wechsler +2 mm davor, +0,5 mm danach). Details in `src/kontaktspiegel.rs`.
+- BLT Feld 32 Byte 1 (0x81) = Zusatz: Deckblatt 0 mit/1 ohne Rahmen, Querverweise 1–3 Tabellen, Artikelliste
+  0 Summenliste/1 Summe+BMK/2 Einzelliste (Klemmplan: ab Bit 8 die Leiste).
 - OBJ (0x40 Byte): Feld 4 Wort 0 = 0xFFFF, Byte 2 Art (0 Sammelschiene, 1 Verweis, 2 Klemmstelle), Byte 3 = 1 Ziel in
   anderer Anlage; Feld 5 Byte 0 (1 Sammelschiene, 2 Verweis); Verweis-Vorgabe Textversatz (0, −6 mm). Unterblock TIT = Text.
 - VBG: Feld 2/3 und 6/7 = Kennungen der verbundenen Objekte, 10/11 eigene Kennung (fortlaufende Zeitstempel), 13 Leitung.
