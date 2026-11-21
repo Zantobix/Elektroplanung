@@ -39,7 +39,7 @@ pub fn times_styled(px: f32, bold: bool, italic: bool) -> FontId {
 #[allow(clippy::too_many_arguments)]
 pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32, align: Align, vertical: bool, st: &TextStyle, color: Color32, frame_stroke: Stroke) {
     let z = xf.z;
-    let font = times_styled(size_mm * z, st.bold, st.italic);
+    let font = crate::schriften::font_id(&st.font, size_mm * z, st.bold, st.italic);
     let Some((mn, mx)) = st.rect else {
         let galley = p.layout_no_wrap(text.to_string(), font, color);
         draw_galley(p, xf.s(pos), galley, align, vertical, color);
@@ -634,13 +634,19 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
         Kind::Text { pos, text, size, align, vertical, style } => {
             // eigene Schriftfarbe, außer bei Markierung/Vorschau
             let col = if color_override.is_none() && style.color != [0, 0, 0] { c32(style.color) } else { tc };
-            draw_text_box(p, xf, *pos, &dc.project.expand_placeholders(text), *size, *align, *vertical, style, col, stroke);
+            // ohne eigenen Schriftnamen gilt die Standardschrift des Projekts
+            let style = if style.font.is_empty() && !dc.project.schrift.is_empty() {
+                std::borrow::Cow::Owned(TextStyle { font: dc.project.schrift.clone(), ..style.clone() })
+            } else {
+                std::borrow::Cow::Borrowed(style)
+            };
+            draw_text_box(p, xf, *pos, &dc.project.expand_placeholders(text), *size, *align, *vertical, &style, col, stroke);
         }
         Kind::TextBox { a, b, text, size } => {
             let (mn, mx) = norm_rect(*a, *b);
             let r = Rect::from_min_max(xf.s(mn), xf.s(mx));
             styled_line(p, &sp(&[mn, P::new(mx.x, mn.y), mx, P::new(mn.x, mx.y), mn]), stroke, style, z);
-            let job = egui::text::LayoutJob::simple(text.clone(), times(size * z), tc, (r.width() - 1.0 * z).max(5.0));
+            let job = egui::text::LayoutJob::simple(text.clone(), crate::schriften::font_id(&dc.project.schrift, size * z, false, false), tc, (r.width() - 1.0 * z).max(5.0));
             let g = p.layout_job(job);
             p.with_clip_rect(r).galley(r.min + Vec2::splat(0.5 * z), g, tc);
         }

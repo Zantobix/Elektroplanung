@@ -1,6 +1,6 @@
 //! PDF-Ausgabe (für "PDF Export" und "Drucken"): Die Blätter werden mit denselben Zeichenroutinen wie auf
 //! dem Bildschirm in eine unsichtbare Ebene gezeichnet; die entstandenen Formen werden als Vektor-PDF
-//! (Linien, Kurven, Text in Times-Roman) geschrieben.
+//! (Linien, Kurven, Text in den PDF-Standardschriften Times, Helvetica, Courier; `schriften::pdf_art`) geschrieben.
 
 use eframe::egui::{self, epaint::ClippedShape, Color32, Pos2, Rect, Shape};
 
@@ -206,12 +206,19 @@ impl W<'_> {
         let g = &t.galley;
         let size_px = g.job.sections.first().map(|s| s.format.font_id.size).unwrap_or(12.0);
         let size_pt = size_px / self.page.z * PT_PER_MM;
-        // Schnitt aus der Schriftfamilie: F1 Times-Roman, F2 Fett, F3 Kursiv, F4 Fett Kursiv
+        // Schrift und Schnitt aus der Schriftfamilie: F1–F4 Times, F5–F8 Helvetica, F9–F12 Courier
+        // (je Standard, Fett, Kursiv, Fett Kursiv)
         let fname = match g.job.sections.first().map(|s| &s.format.font_id.family) {
-            Some(egui::FontFamily::Name(n)) if &**n == "times_b" => "F2",
-            Some(egui::FontFamily::Name(n)) if &**n == "times_i" => "F3",
-            Some(egui::FontFamily::Name(n)) if &**n == "times_bi" => "F4",
-            _ => "F1",
+            Some(fam) => {
+                let (name, bold, italic) = crate::schriften::aus_familie(fam);
+                let basis = match crate::schriften::pdf_art(&name) {
+                    crate::schriften::PdfArt::Times => 1,
+                    crate::schriften::PdfArt::Helvetica => 5,
+                    crate::schriften::PdfArt::Courier => 9,
+                };
+                format!("F{}", basis + bold as usize + 2 * italic as usize)
+            }
+            None => "F1".to_string(),
         };
         let color =t.override_text_color.or_else(|| g.job.sections.first().map(|s| s.format.color)).unwrap_or(t.fallback_color);
         let (sin, cos) = t.angle.sin_cos();
@@ -269,9 +276,22 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
     let kids: Vec<String> = (0..n).map(|i| format!("{} 0 R", 4 + i * 2)).collect();
     objs.push("<< /Type /Catalog /Pages 2 0 R >>".into());
     objs.push(format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), n));
-    // Objekt 3: Schriftverzeichnis mit den vier Times-Schnitten
+    // Objekt 3: Schriftverzeichnis mit den Standardschriften Times, Helvetica und Courier in je vier Schnitten
     objs.push(
-        ["Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic"]
+        [
+            "Times-Roman",
+            "Times-Bold",
+            "Times-Italic",
+            "Times-BoldItalic",
+            "Helvetica",
+            "Helvetica-Bold",
+            "Helvetica-Oblique",
+            "Helvetica-BoldOblique",
+            "Courier",
+            "Courier-Bold",
+            "Courier-Oblique",
+            "Courier-BoldOblique",
+        ]
             .iter()
             .enumerate()
             .map(|(i, n)| format!("/F{} << /Type /Font /Subtype /Type1 /BaseFont /{n} /Encoding /WinAnsiEncoding >>", i + 1))

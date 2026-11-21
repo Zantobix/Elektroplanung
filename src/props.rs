@@ -1015,9 +1015,14 @@ fn font_window(ctx: &egui::Context, fd: &mut FontDlg, done: &mut Option<bool>) {
                     ui.label("Schriftart:");
                     ui.add(egui::TextEdit::singleline(&mut fd.font).desired_width(140.0));
                     egui::ScrollArea::vertical().id_salt("fl").max_height(90.0).show(ui, |ui| {
-                        for f in SCHRIFTEN {
-                            if ui.selectable_label(fd.font == *f, *f).clicked() {
-                                fd.font = f.to_string();
+                        // installierte Schriften (ohne Schriftordner die feste Auswahl)
+                        let mut liste = crate::schriften::familien_namen();
+                        if liste.is_empty() {
+                            liste = SCHRIFTEN.iter().map(|s| s.to_string()).collect();
+                        }
+                        for f in &liste {
+                            if ui.selectable_label(fd.font.eq_ignore_ascii_case(f), f).clicked() {
+                                fd.font = f.clone();
                             }
                         }
                     });
@@ -1057,7 +1062,7 @@ fn font_window(ctx: &egui::Context, fd: &mut FontDlg, done: &mut Option<bool>) {
                     ui.label("Effekte");
                     ui.checkbox(&mut fd.underline, "Unterstrichen");
                 });
-                let font = crate::canvas::times_styled(26.0, fd.schnitt >= 2, fd.schnitt % 2 == 1);
+                let font = crate::schriften::font_id(&fd.font, 26.0, fd.schnitt >= 2, fd.schnitt % 2 == 1);
                 ui.add_space(20.0);
                 ui.label(RichText::new("AaBbYyZz").font(font));
             });
