@@ -242,7 +242,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
                     if pts.len() >= 2 {
                         // Feld 13 = Kennung der Leitung (LTG Feld 9)
                         let leitung = p.leitungen.iter().position(|l| l.id == k.i32(13) && l.id != 0).unwrap_or(0);
-                        Some((Kind::Wire { pts, leitung, bez: k.kids_of("BZD").filter_map(bzd).collect(), opts: 0 }, 0))
+                        Some((Kind::Wire { pts, leitung, bez: k.kids_of("BZD").filter_map(bzd).collect(), opts: crate::epr_zusatz::wire_opts(k) }, 0))
                     } else {
                         None
                     }
@@ -289,6 +289,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
     }
     p.next_id = next_id + 10;
     crate::epr_projekt::import(prj, &mut p);
+    crate::epr_zusatz::import(prj, &mut p);
     Ok(p)
 }
 
@@ -528,8 +529,8 @@ fn symbol(k: &Block) -> Option<(Kind, usize)> {
                 querverweise: k.i32(20) & 1 == 0,
                 sicherung: (k.i32(20) >> 24) & 1 == 1,
                 funktion: k.kid("FKT").map(|t| txt(&t.data)).unwrap_or_default(),
-                // Rackposition: Ablage im VSY unbekannt (SPA sind Parameterwerte, nicht die Rackposition)
-                rack: -1,
+                // Rackposition (VSY Feld 37, Feld LO_RekY des Originals; −1 = keine)
+                rack: crate::epr_zusatz::rack(k),
                 counter: k.i32(38).max(0),
                 texts: k.kids_of("ALT").map(|a| (a.i32(0).max(0) as u32, a.kid("STR").map(|t| txt(&t.data)).unwrap_or_default())).collect(),
                 params: k.kids_of("SPA").map(|s| (i32_at(&s.data, 0).max(0) as u32, s.kid("STR").map(|t| txt(&t.data)).unwrap_or_default())).collect(),

@@ -1186,8 +1186,18 @@ impl App {
                 return Some(Dlg3::Titel { formel, dir1, dir2, wahl, hilfe, msg: format!("{n} Objekt(e) beschriftet") });
             }
             Dlg3::Schriftfeld { absolut, hoehe } => {
+                // Das Modell führt das Schriftfeld relativ; beim Umschalten rechnet das .epr-Schreiben um wie das
+                // Original. Bleibt es absolut und ändert sich die Höhe, behalten die Elemente wie im Original ihre
+                // Lage in mm (relativ umgerechnet).
+                let alt_h = (self.project.title_h() * 10.0).round() as i32;
+                let war_absolut = self.project.tb_absolut;
                 self.project.tb_absolut = absolut;
                 self.project.tb_hoehe = num(&hoehe).unwrap_or(TITLE_H).clamp(5.0, 60.0);
+                let neu_h = (self.project.title_h() * 10.0).round() as i32;
+                if war_absolut && absolut && alt_h != neu_h {
+                    let tb = if self.project.titleblock.is_empty() { crate::titleblock::default_owned() } else { self.project.titleblock.clone() };
+                    self.project.titleblock = crate::titleblock::nach_relativ(&crate::titleblock::nach_absolut(&tb, alt_h), neu_h);
+                }
             }
             Dlg3::NeuesSchriftfeld { aus_datei, pfad, .. } => {
                 if aus_datei {

@@ -178,12 +178,8 @@ nicht. Gemessen werden stattdessen:
   gesetzte Symbole; in der Symbolbibliothek (Symbole.tfi) ist ihre Ablage noch unbekannt.
 - Schriftfeld bearbeiten: Linien, Texte (bis 8 Zeilen) und Logo werden grafisch bearbeitet und ins `.epr`
   geschrieben (FUS › GRS/STR); unbekannte Elementarten des Originals bleiben angehängt erhalten.
-- Symboleigenschaften: Die Rackposition wird nur im eigenen Format (`.epj`) gespeichert; ihr Ablageort im
-  VSY-Block ist unbekannt (SPA enthält die Parameterwerte).
 - Tabelle › Daten „Inhaltsverzeichnis“/„Querverweise“: der Inhalt wird bei jedem Zeichnen aus dem Projekt
   berechnet (Zeilenzahl bleibt die der Tabelle); Spaltenbreiten geschätzt.
-- Projektgrafiken: neu angelegte werden ins `.epr` geschrieben (BLD/JPG, über 64 KB geteilt); Umbenennen,
-  Ersetzen und Löschen vorhandener Grafiken noch nicht.
 - Optionen › Datenbank: Serverangaben werden nur gespeichert; der Nachbau liest die Bibliothek direkt aus Symbole.tfi.
 - Info-Dialog bewusst nicht 1:1 (Copyright, E-Mail und Registrierungsschlüssel des Original-Autors).
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
@@ -200,10 +196,12 @@ nicht. Gemessen werden stattdessen:
   Spule); die Schaltzeichen sind eigene Zeichnung, Schriftgrößen und Abstände geschätzt.
 - Projekt- und Anlagenebene im .epr (`src/epr_projekt.rs`): Stifte, Leitungsdaten, Potentialwerte, Eigentümer/
   Kunde/Standardschrift, Schriftfeld samt Höhe, Zeichnungsnummer, neue Sammelschienen (Potential, Stift), Blattart
-  (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Nur im
-  eigenen Format (.epj) bleiben: Bauteile samt Zuordnung, Platzhaltergruppen, Projektstatus, "Alter Klemmenplan",
-  Schriftfeld "Absolut", Schalter der Sammelschienen (Querverweise, Pfeile …), Verbindungsoptionen und
-  Rackposition – ihre Ablage im .epr ist noch unbekannt; der Nachbau nennt sie beim Speichern als .epr.
-  Überschrift/Autobreite von Tabellen, Rahmen und Art von Bildern sowie Schriftnamen je Text werden geschrieben.
+  (Klemmleisten und Blattart/Leiste der Klemmpläne: `src/klemmen.rs`), Ort, Strompfade, Pfadbeschreibungen und Begrenzungslinien werden geschrieben. Weitere Angaben (`src/epr_zusatz.rs`): Bauteile samt
+  Zuordnung zu Symbolen und Klemmen (BTL/IDL), Platzhaltergruppen (ERS/TLI), Projektstatus, "Alter Klemmenplan",
+  Schriftfeld "Absolut", Schalter der Sammelschienen, Verbindungsoptionen, Rackposition sowie Umbenennen,
+  Ersetzen und Löschen von Projektgrafiken. Nur im eigenen Format (.epj) bleiben der Ort auf Projektebene (das Original kennt ihn nur je Blatt), Änderungen an
+  den fest eingebauten Stiften, ein zweites Kürzel einer Sammelschiene und das Setzen einer Einspeisung; zu lange
+  Texte werden gekürzt. Der Nachbau nennt all das beim Speichern als .epr.
+  Testdatei für die Gegenprobe im Original: `cargo run --release --example gegenprobe_epr3`.
 - Querverweise auf andere Anlagen: Pfeilrichtung aus zwei Beispielen abgeleitet (siehe MECHANICS.md).
 - Hilfsprogramme zur Formatanalyse: `cargo run --example dump|vsy|sym|obj -- <datei.epr> …`.
