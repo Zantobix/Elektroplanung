@@ -171,11 +171,12 @@ fn r01(p: P) -> P {
 }
 
 impl App {
-    /// Angezeigte Texte (BMK aufgelöst, Wert mit ersetzten Platzhaltern) eines Symbols auf dem aktuellen Blatt.
-    pub fn beschriftung_texte(&self, k: &Kind) -> (String, String) {
-        let Kind::Symbol { bmk, value, ext, .. } = k else { return (String::new(), String::new()) };
+    /// Angezeigte Texte (BMK aufgelöst bzw. die des Eigentümers, Wert mit ersetzten Platzhaltern) eines Symbols auf
+    /// dem aktuellen Blatt.
+    pub fn beschriftung_texte(&self, o: &Obj) -> (String, String) {
+        let Kind::Symbol { value, .. } = &o.kind else { return (String::new(), String::new()) };
         let ctx = self.cur().and_then(|r| Some(canvas::bmk_ctx(self.project.anlagen.get(r.anlage)?, self.project.sheet(r)?))).unwrap_or_default();
-        (crate::symbols::display_bmk(bmk, ext.counter, &ctx), self.project.expand_placeholders(value))
+        (crate::eigentuemer::anzeige_bmk(&self.project, o, &ctx), self.project.expand_placeholders(value))
     }
 
     /// Beschriftung (Titel/Wert) eines Symbols unter `m` auf dem aktuellen Blatt – wie im Original auch ohne
@@ -186,7 +187,7 @@ impl App {
         }
         let s = self.sheet()?;
         s.objects.iter().rev().filter(|o| matches!(o.kind, Kind::Symbol { .. }) && self.selectable(o)).find_map(|o| {
-            let (b, v) = self.beschriftung_texte(&o.kind);
+            let (b, v) = self.beschriftung_texte(o);
             let (wert, off) = beschriftung_bei_mit(&o.kind, &b, &v, m, tol)?;
             let r = beschriftungen_mit(&o.kind, &b, &v)[wert as usize]?;
             Some((o.id, wert, off, r))

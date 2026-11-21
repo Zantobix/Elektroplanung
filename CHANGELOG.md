@@ -73,6 +73,12 @@ Behoben:
 - Eigentümer (VSY › OWR): Symbole mit Eigentümer zeigen dessen Kennzeichnung und darunter klein seine Lage
   („-K1“ mit „/5“ statt „-Q1+W2“); Kontaktspiegel › Übernehmen und Eigentümer › Setzen schreiben das OWR
   (bisher wurde die Kennzeichnung der Spule in den Kontakt kopiert)
+- Querverweisliste (Blattart 2, Tabelle „Querverweise“): Kontakte mit Eigentümer stehen wie im Original mit ihrer
+  Fundstelle unter der Kennzeichnung der Spule („-K1“ mit „6/5 6/6“), nicht unter ihrer eigenen
+- Klemmplan, Artikelliste, Listen-Export, Suche, Projekt prüfen, Sicherungsübersicht und Beschriftung greifen
+  nutzen dieselbe Eigentümer-Quelle wie die Zeichnung: auch im Nachbau gesetzte oder entfernte Eigentümer wirken
+  (bisher wertete der Klemmplan nur das gelesene OWR aus); doppelte Kennzeichnung meldet Kontakte mit Eigentümer
+  nicht mehr
 - Rahmen quer beginnt immer 10 mm unter der Blattkante (oberer Rand der Anlage); BLT Feld 24 ist die Unterkante
   der Zeichenfläche, keine Rahmenhöhe (neue Blätter und Listenblätter lagen bisher bei 20 mm)
 - .epr: Anschlussnummern im Kontaktspiegel als STR im ALT (das Original meldete „Fehler beim erzeugen des

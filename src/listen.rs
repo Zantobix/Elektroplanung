@@ -7,7 +7,6 @@
 
 use crate::canvas::{bmk_ctx, natural_key};
 use crate::model::*;
-use crate::symbols;
 use eframe::egui::{self, RichText};
 
 pub const LISTEN: &[&str] = &["Stückliste", "Betriebsmittelkennzeichnung", "Klemmenbezeichnung"];
@@ -36,8 +35,9 @@ pub fn liste(p: &Project, art: usize) -> (Vec<&'static str>, Vec<Vec<String>>) {
                 for s in &a.sheets {
                     let ctx = bmk_ctx(a, s);
                     for o in &s.objects {
-                        if let Kind::Symbol { bmk, value, ext, pos, .. } = &o.kind {
-                            let b = symbols::display_bmk(bmk, ext.counter, &ctx);
+                        if let Kind::Symbol { value, ext, pos, .. } = &o.kind {
+                            // angezeigte BMK, bei Symbolen mit Eigentümer dessen Kennzeichnung
+                            let b = crate::eigentuemer::anzeige_in(&p.anlagen, o, &ctx);
                             if b.is_empty() || rows.iter().any(|r| r[0] == a.name && r[1] == b) {
                                 continue;
                             }
@@ -60,7 +60,7 @@ pub fn liste(p: &Project, art: usize) -> (Vec<&'static str>, Vec<Vec<String>>) {
                     }
                 }
                 for l in leisten {
-                    for z in crate::klemmplan::plan(a, &l, &p.symdefs).zeilen {
+                    for z in crate::klemmplan::plan_projekt(p, a, &l, &p.symdefs).zeilen {
                         rows.push(vec![a.name.clone(), l.clone(), z.label, z.funktion]);
                     }
                 }

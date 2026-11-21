@@ -64,20 +64,25 @@ pub fn verknuepfen(p: &mut Project) {
     }
 }
 
-/// Unmittelbarer Eigentümer eines Symbols (muss ein Symbol im Projekt sein).
-fn schritt<'a>(p: &'a Project, o: &Obj) -> Option<(SheetRef, &'a Obj)> {
+/// Symbol mit Objekt-Id `id` in `anlagen` (mit Blatt).
+fn finde(anlagen: &[Anlage], id: u64) -> Option<(SheetRef, &Obj)> {
+    anlagen.iter().enumerate().find_map(|(ai, a)| a.sheets.iter().enumerate().find_map(|(si, s)| s.objects.iter().find(|o| o.id == id).map(|o| (SheetRef { anlage: ai, sheet: si }, o))))
+}
+
+/// Unmittelbarer Eigentümer eines Symbols (muss ein Symbol in `anlagen` sein).
+fn schritt<'a>(anlagen: &'a [Anlage], o: &Obj) -> Option<(SheetRef, &'a Obj)> {
     let Kind::Symbol { ext, .. } = &o.kind else { return None };
     if ext.eigentuemer == 0 || ext.eigentuemer == o.id {
         return None;
     }
-    p.find_obj(ext.eigentuemer).filter(|(_, w)| matches!(w.kind, Kind::Symbol { .. }))
+    finde(anlagen, ext.eigentuemer).filter(|(_, w)| matches!(w.kind, Kind::Symbol { .. }))
 }
 
-/// Letzter Eigentümer in der Kette (None = keiner).
-pub fn eigentuemer_von<'a>(p: &'a Project, o: &Obj) -> Option<(SheetRef, &'a Obj)> {
-    let mut cur = schritt(p, o)?;
+/// Letzter Eigentümer in der Kette, gesucht in `anlagen` (None = keiner); `SheetRef` zählt in `anlagen`.
+pub fn eigentuemer_in<'a>(anlagen: &'a [Anlage], o: &Obj) -> Option<(SheetRef, &'a Obj)> {
+    let mut cur = schritt(anlagen, o)?;
     for _ in 1..STUFEN {
-        match schritt(p, cur.1) {
+        match schritt(anlagen, cur.1) {
             Some(n) if n.1.id != o.id => cur = n,
             _ => break,
         }
@@ -85,21 +90,39 @@ pub fn eigentuemer_von<'a>(p: &'a Project, o: &Obj) -> Option<(SheetRef, &'a Obj
     Some(cur)
 }
 
+/// Letzter Eigentümer in der Kette (None = keiner).
+pub fn eigentuemer_von<'a>(p: &'a Project, o: &Obj) -> Option<(SheetRef, &'a Obj)> {
+    eigentuemer_in(&p.anlagen, o)
+}
+
+/// Kennzeichnung des Eigentümers, gesucht in `anlagen` (aufgelöst auf dessen Blatt); None ohne Eigentümer.
+/// Für Auswertungen, die nur eine Anlage kennen: `std::slice::from_ref(anlage)`.
+pub fn kennzeichnung_in(anlagen: &[Anlage], o: &Obj) -> Option<String> {
+    let (r, w) = eigentuemer_in(anlagen, o)?;
+    let Kind::Symbol { bmk, ext, .. } = &w.kind else { return None };
+    let a = anlagen.get(r.anlage)?;
+    Some(symbols::display_bmk(bmk, ext.counter, &bmk_ctx(a, a.sheets.get(r.sheet)?)))
+}
+
 /// Kennzeichnung, die ein Symbol mit Eigentümer zeigt (die des Eigentümers, aufgelöst auf dessen Blatt);
 /// None ohne Eigentümer.
 pub fn kennzeichnung(p: &Project, o: &Obj) -> Option<String> {
-    let (r, w) = eigentuemer_von(p, o)?;
-    let Kind::Symbol { bmk, ext, .. } = &w.kind else { return None };
-    let a = p.anlagen.get(r.anlage)?;
-    Some(symbols::display_bmk(bmk, ext.counter, &bmk_ctx(a, a.sheets.get(r.sheet)?)))
+    kennzeichnung_in(&p.anlagen, o)
+}
+
+/// Angezeigte Kennzeichnung eines Symbols (Eigentümer gesucht in `anlagen`): die des Eigentümers, sonst die
+/// eigene mit `ctx`. Einzige Quelle für alle Anzeigen und Auswertungen der BMK (Blatt, Listen, Klemmplan, Suche,
+/// Prüfen, Export).
+pub fn anzeige_in(anlagen: &[Anlage], o: &Obj, ctx: &BmkCtx) -> String {
+    kennzeichnung_in(anlagen, o).unwrap_or_else(|| match &o.kind {
+        Kind::Symbol { bmk, ext, .. } => symbols::display_bmk(bmk, ext.counter, ctx),
+        _ => String::new(),
+    })
 }
 
 /// Angezeigte Kennzeichnung eines Symbols: die des Eigentümers, sonst die eigene mit `ctx`.
 pub fn anzeige_bmk(p: &Project, o: &Obj, ctx: &BmkCtx) -> String {
-    kennzeichnung(p, o).unwrap_or_else(|| match &o.kind {
-        Kind::Symbol { bmk, ext, .. } => symbols::display_bmk(bmk, ext.counter, ctx),
-        _ => String::new(),
-    })
+    anzeige_in(&p.anlagen, o, ctx)
 }
 
 /// Lage eines Symbols von Blatt `hier` aus gesehen: „/Pfad“ auf demselben Blatt, sonst „Blatt/Pfad“.
