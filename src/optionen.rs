@@ -26,11 +26,15 @@ pub struct Optionen {
     pub backup: bool,
     /// vor Drucken/PDF-Export das Projekt prüfen und bei Hinweisen nachfragen
     pub pruefen_vor_druck: bool,
+    /// beim Platzieren eines Symbols mit mehreren Bildern das Variantenrad zeigen (Original: immer)
+    pub variantenrad: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
     pub sym_hoehe: f32,
     // Programm › Farben, Maus
     pub blatt_farbe: [u8; 3],
+    /// Farbe des Rastergitters (Original: "Rasterdarstellung", dort ausgeblendet)
+    pub raster_farbe: [u8; 3],
     pub mausrad_umkehren: bool,
     // Projektvorgaben1
     pub format: (i32, i32),
@@ -76,9 +80,11 @@ impl Default for Optionen {
             doppelklick_verweis: 0,
             backup: true,
             pruefen_vor_druck: true,
+            variantenrad: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
             blatt_farbe: [238, 221, 221],
+            raster_farbe: rgb(RASTER_MITTEL),
             mausrad_umkehren: false,
             format: a.format,
             hochformat: false,
@@ -133,6 +139,19 @@ pub struct OptDlg {
     pub capture: Option<&'static str>,
 }
 
+/// Rasterfarben zur Auswahl: hell (frühere Vorgabe), mittel (Vorgabe), kräftig
+pub const RASTER_HELL: Color32 = Color32::from_rgb(224, 208, 208);
+pub const RASTER_MITTEL: Color32 = Color32::from_rgb(208, 188, 188);
+pub const RASTER_KRAEFTIG: Color32 = Color32::from_rgb(192, 168, 168);
+
+fn rgb(c: Color32) -> [u8; 3] {
+    [c.r(), c.g(), c.b()]
+}
+
+fn farbe(c: [u8; 3]) -> Color32 {
+    Color32::from_rgb(c[0], c[1], c[2])
+}
+
 const FORMATE: &[(&str, (i32, i32))] = &[("A4", (2100, 2970)), ("A3", (2970, 4200)), ("A2", (4200, 5940)), ("A1", (5940, 8410)), ("Benutzerdefiniert", (0, 0))];
 const ZIEL: &[&str] = &["Ziel anzeigen", "Eigenschaften"];
 
@@ -163,6 +182,7 @@ impl App {
         // aktuelle Programmzustände übernehmen
         o.blatt_farbe = [self.sheet_color.r(), self.sheet_color.g(), self.sheet_color.b()];
         o.mausrad_umkehren = self.invert_wheel;
+        o.raster_farbe = rgb(self.grid_color);
         let t = vec![
             f1(o.sym_breite),
             f1(o.sym_hoehe),
@@ -253,6 +273,7 @@ impl App {
                                     });
                                     mark(ui, &mut o.backup, "Backup-Datei erzeugen!");
                                     mark(ui, &mut o.pruefen_vor_druck, "Vor dem Drucken Projekt prüfen");
+                                    mark(ui, &mut o.variantenrad, "Variantenrad beim Platzieren");
                                 });
                                 egui::Frame::group(ui.style()).show(ui, |ui| {
                                     ui.set_width(330.0);
@@ -268,6 +289,19 @@ impl App {
                                         let mut c = Color32::from_rgb(o.blatt_farbe[0], o.blatt_farbe[1], o.blatt_farbe[2]);
                                         if ui.color_edit_button_srgba(&mut c).changed() {
                                             o.blatt_farbe = [c.r(), c.g(), c.b()];
+                                        }
+                                    });
+                                    // Rasterstärke: im Original ausgeblendetes Feld "Rasterdarstellung"; wirkt sofort
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new("Rasterdarstellung").font(bold(13.0)));
+                                        let mut c = farbe(o.raster_farbe);
+                                        if ui.color_edit_button_srgba(&mut c).changed() {
+                                            o.raster_farbe = rgb(c);
+                                        }
+                                        for (n, f) in [("Hell", RASTER_HELL), ("Mittel", RASTER_MITTEL), ("Kräftig", RASTER_KRAEFTIG)] {
+                                            if ui.selectable_label(o.raster_farbe == rgb(f), n).clicked() {
+                                                o.raster_farbe = rgb(f);
+                                            }
                                         }
                                     });
                                 });
@@ -466,8 +500,12 @@ impl App {
             }
         }
         match result {
-            None => self.opt_dlg = Some(d),
-            Some(false) => {}
+            None => {
+                // Rasterfarbe sofort sichtbar, solange der Dialog offen ist
+                self.grid_color = farbe(d.o.raster_farbe);
+                self.opt_dlg = Some(d);
+            }
+            Some(false) => self.grid_color = farbe(self.opt.raster_farbe),
             Some(true) => {
                 let t = &d.t;
                 let o = &mut d.o;
@@ -490,6 +528,7 @@ impl App {
                 // sofort wirksam: Farbe, Mausrad
                 self.sheet_color = Color32::from_rgb(o.blatt_farbe[0], o.blatt_farbe[1], o.blatt_farbe[2]);
                 self.invert_wheel = o.mausrad_umkehren;
+                self.grid_color = farbe(o.raster_farbe);
                 self.opt = d.o;
             }
         }
@@ -506,5 +545,30 @@ impl App {
         self.fix_active = o.fixierung;
         self.invert_wheel = o.mausrad_umkehren;
         self.sheet_color = Color32::from_rgb(o.blatt_farbe[0], o.blatt_farbe[1], o.blatt_farbe[2]);
+        self.grid_color = farbe(o.raster_farbe);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rasterfarbe_vorgabe_und_alte_einstellungen() {
+        let o = Optionen::default();
+        assert_eq!(o.raster_farbe, rgb(RASTER_MITTEL));
+        assert!(o.variantenrad);
+        // mittel liegt zwischen hell und kräftig
+        for k in 0..3 {
+            assert!(RASTER_KRAEFTIG.to_array()[k] <= o.raster_farbe[k] && o.raster_farbe[k] <= RASTER_HELL.to_array()[k]);
+        }
+        // gespeicherte Optionen ohne die neuen Felder: Vorgaben
+        let alt: Optionen = serde_json::from_str(r#"{"gitter": false}"#).unwrap();
+        assert!(!alt.gitter);
+        assert_eq!(alt.raster_farbe, rgb(RASTER_MITTEL));
+        assert!(alt.variantenrad);
+        let j = serde_json::to_string(&Optionen { raster_farbe: rgb(RASTER_HELL), ..Default::default() }).unwrap();
+        let back: Optionen = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.raster_farbe, rgb(RASTER_HELL));
     }
 }
