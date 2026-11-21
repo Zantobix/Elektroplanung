@@ -1103,9 +1103,11 @@ impl App {
             _ => {}
         }
         // Vormarkierung (gestricheltes Rechteck) und Zusatz am Mauszeiger, siehe hover.rs
-        if let (Some(z), Some(h)) = (crate::hover::gemerkt(ui.ctx()), hover) {
+        if let (Some(z), Some(_)) = (crate::hover::gemerkt(ui.ctx()), hover) {
             crate::hover::rechteck(&clip, xf, &z);
-            crate::hover::zusatz(&clip, h, &z);
+        }
+        if let Some(h) = hover {
+            crate::zeiger::zeichnen(&clip, h, ui.ctx());
         }
         if let Some(ring) = &self.ring {
             // Variantenrad: Ring mit den Bildern, im Loch das gewählte Bild um die Absetzstelle zentriert
@@ -1213,6 +1215,11 @@ impl App {
                 self.mouse_mm = self.snap(xf.m(h));
             }
         }
+        // Vormarkierung des Auswahlwerkzeugs und Mauszeiger mit Zusatz wie im Original (hover.rs, zeiger.rs)
+        let frei = self.tool == Tool::Select && matches!(self.drag, Drag::None) && self.placing.is_none() && self.ring.is_none() && !self.zoom_tool && self.owner_pick.is_none() && !self.spiegel_pick_aktiv();
+        let vormarkierung = hover.filter(|_| inside && frei).and_then(|h| self.vormarkierung(xf.m(h), tol, xf.z));
+        let wahl = hover.filter(|_| inside).map(|h| crate::zeiger::waehlen(&self.zeiger_zustand(xf.m(h), tol, xf.z, vormarkierung, ctrl)));
+        crate::zeiger::setzen(ui.ctx(), wahl);
         // Variantenrad offen: nimmt (wie das modale Fenster des Originals mit Mausfang) alle Eingaben
         if self.ring.is_some() {
             self.ring_input(ui, xf);
@@ -1338,7 +1345,7 @@ impl App {
 
         // Vormarkierung und Mauszeiger beim Überfahren (über Verweisen Hand und Hinweis); Strg+Klick springt zum Ziel
         if inside && self.tool == Tool::Select && matches!(self.drag, Drag::None) {
-            crate::hover::setzen(ui.ctx(), resp, self.vormarkierung(m, tol, xf.z));
+            crate::hover::setzen(ui.ctx(), resp, vormarkierung);
             if ctrl && pressed_l && self.verweis_strg_klick(m, tol) {
                 return;
             }
@@ -1375,7 +1382,8 @@ impl App {
                     if !shift && !ctrl && self.beschriftung_greifen(m, tol) {
                         return;
                     }
-                    if let Some(pin) = self.pin_near(m, tol, &[]) {
+                    // mit Strg zählt ein Anschluss nicht (wie im Original): Klick markiert bzw. verschiebt das Symbol
+                    if let Some(pin) = self.pin_near(m, tol, &[]).filter(|_| !ctrl) {
                         let on_selected = self.selected_objs().iter().any(|o| canvas::hit(o, m, tol, &self.lib));
                         if !on_selected {
                             self.drag = Drag::Wire { start: pin };
@@ -1527,23 +1535,26 @@ impl App {
             if self.tool != Tool::Select {
                 self.tool = Tool::Select;
                 self.drag = Drag::None;
-            } else if let Some(id) = self.hit_top(m, tol) {
-                if !self.selection.contains(&id) {
-                    self.selection = vec![id];
-                    self.expand_groups();
-                }
-            } else {
+            }
+            // Kontextmenü je nach Objekt unter der Maus wie im Original (kontextmenue.rs)
+            let ziel = self.menue_ziel(m, tol);
+            crate::kontextmenue::merken(ui.ctx(), ziel);
+            match ziel {
+                // Titel/Wert eines Symbols: Markierung bleibt (Ausrichtung gilt dann für alle markierten Symbole)
+                crate::kontextmenue::MenueZiel::Symboltext { .. } => {}
                 // freie Fläche: Markierung aufheben (Menü "Objekt einfügen / Verweis einfügen")
-                self.selection.clear();
+                crate::kontextmenue::MenueZiel::Leer => self.selection.clear(),
+                z => {
+                    if let Some(id) = z.id().filter(|id| !self.selection.contains(id)) {
+                        self.selection = vec![id];
+                        self.expand_groups();
+                    }
+                }
             }
         }
-        let has_sel = !self.selection.is_empty();
-        let objs = self.selected_objs();
-        let is_sym = objs.iter().any(|o| matches!(o.kind, Kind::Symbol { .. }));
-        let is_text = objs.iter().any(|o| matches!(o.kind, Kind::Text { .. }));
         resp.context_menu(|ui| {
             ui.style_mut().override_font_id = Some(FontId::proportional(12.0));
-            self.canvas_menu(ui, has_sel, is_sym, is_text);
+            self.canvas_menu(ui);
         });
     }
 

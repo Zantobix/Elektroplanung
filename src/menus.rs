@@ -1,13 +1,8 @@
-//! Kontextmenü des Blattes wie im Original (PopupMenu1 der Formularressource TFORM1; Sichtbarkeit je
-//! nach markiertem Objekt, verglichen mit Bildschirmfotos des Originals):
-//! - Symbol: Löschen | Optionen ▸, Bildindex ▸, Alternativtext ▸, Eigentümer ▸, Kontaktspiegel hinzufügen,
-//!   Bauteilliste ▸ | Symbol bearbeiten | Eigenschaften
-//! - Text: Löschen | Ausrichtung ▸, Eigenschaften, Fixieren ▸
-//! - Verbindung: Löschen | Sammelschiene ▸ | Eigenschaften
-//! - Zeichenobjekt: Löschen | Eigenschaften, Fixieren ▸
-//! - freie Fläche: Objekt einfügen ▸, Verweis einfügen ▸ | Eigenschaften, Pfadbezeichnung
+//! Kontextmenü des Blattes wie im Original (PopupMenu1 der Formularressource TFORM1). Welche Einträge erscheinen,
+//! hängt wie im Original vom Objekt unter der Maus beim Rechtsklick ab – Regeln und Tests in `kontextmenue.rs`.
 
 use crate::app::App;
+use crate::kontextmenue::{self, Eintrag, MenueZiel};
 use crate::model::*;
 use crate::symbols;
 use eframe::egui;
@@ -23,63 +18,154 @@ impl App {
         self.dirty = true;
     }
 
-    pub fn canvas_menu(&mut self, ui: &mut egui::Ui, has_sel: bool, is_sym: bool, is_text: bool) {
-        let objs = self.selected_objs();
-        let is_wire = objs.iter().any(|o| matches!(o.kind, Kind::Wire { .. }));
+    /// Kontextmenü des Blattes: Einträge je nach Objekt unter der Maus beim Rechtsklick (`kontextmenue.rs`).
+    pub fn canvas_menu(&mut self, ui: &mut egui::Ui) {
+        let ziel = kontextmenue::gemerkt(ui.ctx());
+        let lage = self.menue_lage(ziel);
         let at = self.mouse_ctx;
-
-        if !has_sel {
-            // freie Blattfläche
-            ui.menu_button("Objekt einfügen", |ui| {
-                let defs: Vec<(String, String)> = self.project.symdefs.iter().map(|d| (d.key.clone(), d.name.clone())).collect();
-                egui::ScrollArea::vertical().max_height(500.0).show(ui, |ui| {
-                    for (k, n) in defs {
-                        if ui.button(n).clicked() {
-                            self.place_symbol(k, at);
+        let obj = ziel.id().and_then(|id| self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == id)).cloned());
+        for e in kontextmenue::eintraege(&lage) {
+            match e {
+                Eintrag::Trenner => {
+                    ui.separator();
+                }
+                Eintrag::Loeschen => {
+                    if ui.add(egui::Button::new("Löschen").shortcut_text("Del")).clicked() {
+                        self.delete_selection();
+                        ui.close();
+                        return;
+                    }
+                }
+                Eintrag::ObjektEinfuegen => {
+                    ui.add_enabled_ui(lage.projektsymbole, |ui| {
+                        ui.menu_button("Objekt einfügen", |ui| {
+                            let defs: Vec<(String, String)> = self.project.symdefs.iter().map(|d| (d.key.clone(), d.name.clone())).collect();
+                            egui::ScrollArea::vertical().max_height(500.0).show(ui, |ui| {
+                                for (k, n) in defs {
+                                    if ui.button(n).clicked() {
+                                        self.place_symbol(k, at);
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        });
+                    });
+                }
+                Eintrag::VerweisEinfuegen => {
+                    ui.menu_button("Verweis einfügen", |ui| {
+                        for (n, start) in [("Start", true), ("Ziel", false)] {
+                            if ui.button(n).clicked() {
+                                self.xdlg = Some(crate::extra::XDialog::Verweis { text: String::new(), start });
+                                ui.close();
+                            }
+                        }
+                    });
+                }
+                Eintrag::Sammelschiene => {
+                    ui.menu_button("Sammelschiene", |ui| {
+                        if ui.button("Nach Unten").clicked() {
+                            self.busbar_down();
                             ui.close();
                         }
+                    });
+                }
+                Eintrag::Ausrichtung => self.menu_ausrichtung(ui, ziel, obj.as_ref()),
+                Eintrag::Eigenschaften => {
+                    if ui.add_enabled(kontextmenue::eigenschaften_aktiv(&lage), egui::Button::new("Eigenschaften")).clicked() {
+                        match ziel {
+                            MenueZiel::Leer => {
+                                if let Some(r) = self.cur() {
+                                    self.open_sheet_props(r);
+                                }
+                            }
+                            MenueZiel::Symboltext { id, wert } => self.symboltext_eigenschaften(id, wert),
+                            z => {
+                                if let Some(id) = z.id() {
+                                    self.props_command(id);
+                                }
+                            }
+                        }
+                        ui.close();
                     }
-                });
-            });
-            ui.menu_button("Verweis einfügen", |ui| {
-                if ui.button("Start").clicked() {
-                    self.xdlg = Some(crate::extra::XDialog::Verweis { text: String::new(), start: true });
-                    ui.close();
                 }
-                if ui.button("Ziel").clicked() {
-                    self.xdlg = Some(crate::extra::XDialog::Verweis { text: String::new(), start: false });
-                    ui.close();
+                Eintrag::ZielSetzen => {
+                    if ui.button("Ziel setzen").clicked() {
+                        if let Some(id) = ziel.id() {
+                            self.open_props3(id);
+                        }
+                        ui.close();
+                    }
                 }
-            });
+                Eintrag::BezeichnerSetzen => {
+                    if ui.button("Bezeichner setzen").clicked() {
+                        self.open_textchange();
+                        ui.close();
+                    }
+                }
+                Eintrag::Fixieren => {
+                    let fest = obj.as_ref().is_some_and(|o| o.fixed);
+                    ui.menu_button("Fixieren", |ui| {
+                        for (n, v) in [("Ja", true), ("Nein", false)] {
+                            if ui.radio(fest == v, n).clicked() {
+                                self.set_fixed(v);
+                                ui.close();
+                            }
+                        }
+                    });
+                }
+                Eintrag::Pfadbezeichnung => {
+                    if ui.button("Pfadbezeichnung").clicked() {
+                        self.open_columns_dialog();
+                        ui.close();
+                    }
+                }
+                e => self.menu_symbol(ui, e, obj.as_ref()),
+            }
+        }
+    }
+
+    /// Untermenü Ausrichtung für Symboltexte (Titel/Wert) und Texte, mit Häkchen wie im Original.
+    fn menu_ausrichtung(&mut self, ui: &mut egui::Ui, ziel: MenueZiel, obj: Option<&Obj>) {
+        let wert = match ziel {
+            MenueZiel::Symboltext { wert, .. } => Some(wert),
+            _ => None,
+        };
+        let haken = obj.map(|o| kontextmenue::ausrichtung_haken(&o.kind, wert)).unwrap_or_default();
+        ui.menu_button("Ausrichtung", |ui| {
+            let mut wahl: Option<(Option<u8>, Option<bool>)> = None;
+            for (i, n) in ["Links", "Mittig", "Rechts"].iter().enumerate() {
+                if ui.radio(haken[i], *n).clicked() {
+                    wahl = Some((Some(i as u8), None));
+                }
+            }
             ui.separator();
-            if ui.button("Eigenschaften").clicked() {
-                if let Some(r) = self.cur() {
-                    self.open_sheet_props(r);
-                }
-                ui.close();
+            if ui.radio(haken[3], "Hochkant").clicked() {
+                wahl = Some((None, Some(true)));
             }
-            if ui.button("Pfadbezeichnung").clicked() {
-                self.open_columns_dialog();
-                ui.close();
+            if ui.radio(haken[4], "Waagerecht").clicked() {
+                wahl = Some((None, Some(false)));
             }
-            return;
-        }
-
-        if ui.add(egui::Button::new("Löschen").shortcut_text("Del")).clicked() {
-            self.delete_selection();
+            let Some((al, hoch)) = wahl else { return };
+            match ziel {
+                MenueZiel::Symboltext { id, wert } => self.symboltext_ausrichten(id, wert, al, hoch),
+                _ => self.set_text_align(al.map(|a| [Align::Left, Align::Center, Align::Right][a as usize]), hoch),
+            }
             ui.close();
-            return;
-        }
-        ui.separator();
+        });
+    }
 
-        if is_sym {
-            let Some(so) = objs.iter().find(|o| matches!(o.kind, Kind::Symbol { .. })).cloned() else { return };
-            let Kind::Symbol { key, option, flags, ext, .. } = &so.kind else { return };
-            let def = symbols::find(&self.lib, key).cloned();
-            let id = so.id;
+    /// Einträge für Symbole: Bildindex, Optionen, Parameter, Alternativtext, Eigentümer, Kontaktspiegel,
+    /// Bauteilliste, Symbol bearbeiten.
+    fn menu_symbol(&mut self, ui: &mut egui::Ui, e: Eintrag, obj: Option<&Obj>) {
+        let Some(so) = obj else { return };
+        let Kind::Symbol { key, option, flags, ext, .. } = &so.kind else { return };
+        let def = symbols::find(&self.lib, key).cloned();
+        let id = so.id;
+        match e {
             // Optionen: Zusatzoptionen zum An-/Abhaken (OPT-Blöcke)
-            let names = def.as_ref().map(|d| d.flag_names.clone()).unwrap_or_default();
-            if !names.is_empty() {
+            Eintrag::Optionen => {
+                let names = def.as_ref().map(|d| d.flag_names.clone()).unwrap_or_default();
+                let flags = *flags;
                 ui.menu_button("Optionen", |ui| {
                     for (i, n) in names.iter().enumerate() {
                         if n.is_empty() {
@@ -98,11 +184,12 @@ impl App {
                 });
             }
             // Bildindex: Bildvarianten (SEI)
-            let bilder = def.as_ref().map(|d| d.options.clone()).unwrap_or_default();
-            if bilder.len() > 1 {
+            Eintrag::Bildindex => {
+                let bilder = def.as_ref().map(|d| d.options.clone()).unwrap_or_default();
+                let option = *option;
                 ui.menu_button("Bildindex", |ui| {
                     for (i, n) in bilder.iter().enumerate() {
-                        if ui.radio(*option as usize == i, n.as_str()).clicked() {
+                        if ui.radio(option as usize == i, n.as_str()).clicked() {
                             self.change_symbol(id, |k| {
                                 if let Kind::Symbol { option, ext, .. } = k {
                                     *option = i as u16;
@@ -115,135 +202,83 @@ impl App {
                 });
             }
             // Parameter: Werte der Symbolparameter (Tabelle wie TTextAbfrage, parameter.rs)
-            if ui.button("Parameter").clicked() {
-                self.open_param_dialog(id, 2);
-                ui.close();
+            Eintrag::Parameter => {
+                if ui.button("Parameter").clicked() {
+                    self.open_param_dialog(id, 2);
+                    ui.close();
+                }
             }
             // Alternativtext: Standard, die Sätze des Symbols, Benutzerdefiniert
-            let sets = def.as_ref().map(|d| d.alt_sets.clone()).unwrap_or_default();
-            let custom = !ext.texts.is_empty();
-            ui.menu_button("Alternativtext", |ui| {
-                let cur = if custom { u16::MAX } else { ext.alt };
-                let mut items = vec!["Standard".to_string()];
-                items.extend(sets.iter().map(|s| symbols::alt_label(s)));
-                for (i, n) in items.iter().enumerate() {
-                    if ui.radio(cur as usize == i, n.as_str()).clicked() {
-                        self.change_symbol(id, |k| {
-                            if let Kind::Symbol { ext, .. } = k {
-                                ext.alt = i as u16;
-                                // ein Satz ersetzt die benutzerdefinierten Texte
-                                ext.texts.clear();
-                            }
-                        });
+            Eintrag::Alternativtext => {
+                let sets = def.as_ref().map(|d| d.alt_sets.clone()).unwrap_or_default();
+                let cur = if ext.texts.is_empty() { ext.alt } else { u16::MAX };
+                ui.menu_button("Alternativtext", |ui| {
+                    let mut items = vec!["Standard".to_string()];
+                    items.extend(sets.iter().map(|s| symbols::alt_label(s)));
+                    for (i, n) in items.iter().enumerate() {
+                        if ui.radio(cur as usize == i, n.as_str()).clicked() {
+                            self.change_symbol(id, |k| {
+                                if let Kind::Symbol { ext, .. } = k {
+                                    ext.alt = i as u16;
+                                    // ein Satz ersetzt die benutzerdefinierten Texte
+                                    ext.texts.clear();
+                                }
+                            });
+                            ui.close();
+                        }
+                    }
+                    if ui.radio(cur as usize >= items.len(), "Benutzerdefiniert").clicked() {
+                        self.open_param_dialog(id, 1);
                         ui.close();
                     }
-                }
-                if ui.radio(cur as usize >= items.len(), "Benutzerdefiniert").clicked() {
-                    self.open_param_dialog(id, 1);
-                    ui.close();
-                }
-            });
-            ui.menu_button("Eigentümer", |ui| {
-                if ui.button("Eigenschaften").clicked() {
-                    self.edit_props(id);
-                    ui.close();
-                }
-                let any_sym = self.selected_objs().iter().any(|o| matches!(o.kind, Kind::Symbol { .. }));
-                if ui.add_enabled(any_sym, egui::Button::new("Setzen")).clicked() {
-                    self.start_owner_pick();
-                    ui.close();
-                }
-                if ui.add_enabled(self.selection.len() == 1, egui::Button::new("Suchen")).clicked() {
-                    self.find_same_bmk(id);
-                    ui.close();
-                }
-            });
-            if ui.button("Kontaktspiegel hinzufügen").clicked() {
-                self.open_spiegel();
-                ui.close();
+                });
             }
-            if ui.button("Bezeichner setzen").clicked() {
-                self.open_textchange();
-                ui.close();
-            }
-            ui.menu_button("Bauteilliste", |ui| {
-                if ui.button("Bearbeiten").clicked() {
-                    let idx = self.project.part_of.get(&id).copied().unwrap_or(0);
-                    self.xdlg = Some(crate::extra::XDialog::PartAssign { obj: id, idx });
-                    ui.close();
-                }
-                if ui.button("Loeschen").clicked() {
-                    self.checkpoint();
-                    self.project.part_of.remove(&id);
-                    ui.close();
-                }
-            });
-            ui.separator();
-            if ui.button("Symbol bearbeiten").clicked() {
-                self.open_symbol_editor_fuer(id);
-                ui.close();
-            }
-            ui.separator();
-            if ui.button("Eigenschaften").clicked() {
-                self.props_command(id);
-                ui.close();
-            }
-            return;
-        }
-
-        if is_wire {
-            ui.menu_button("Sammelschiene", |ui| {
-                if ui.button("Nach Unten").clicked() {
-                    self.busbar_down();
-                    ui.close();
-                }
-            });
-            ui.separator();
-        }
-        if is_text {
-            ui.menu_button("Ausrichtung", |ui| {
-                for (n, al) in [("Links", Align::Left), ("Mittig", Align::Center), ("Rechts", Align::Right)] {
-                    if ui.button(n).clicked() {
-                        self.set_text_align(Some(al), None);
+            // Eigentümer: Suchen (zum Eigentümer) nur aktiv, wenn einer gesetzt ist – wie im Original
+            Eintrag::Eigentuemer => {
+                let hat = ext.eigentuemer != 0;
+                ui.menu_button("Eigentümer", |ui| {
+                    if ui.button("Eigenschaften").clicked() {
+                        self.edit_props(id);
                         ui.close();
                     }
-                }
-                ui.separator();
-                if ui.button("Hochkant").clicked() {
-                    self.set_text_align(None, Some(true));
-                    ui.close();
-                }
-                if ui.button("Waagerecht").clicked() {
-                    self.set_text_align(None, Some(false));
-                    ui.close();
-                }
-            });
-        }
-        if ui.button("Eigenschaften").clicked() {
-            if let Some(id) = self.selection.first().copied() {
-                self.props_command(id);
+                    let any_sym = self.selected_objs().iter().any(|o| matches!(o.kind, Kind::Symbol { .. }));
+                    if ui.add_enabled(any_sym, egui::Button::new("Setzen")).clicked() {
+                        self.start_owner_pick();
+                        ui.close();
+                    }
+                    if ui.add_enabled(hat, egui::Button::new("Suchen")).clicked() {
+                        self.find_same_bmk(id);
+                        ui.close();
+                    }
+                });
             }
-            ui.close();
-        }
-        // Verweis: Ziel (Anlage, Blatt, Verweislink) setzen
-        let verweis = objs.iter().find(|o| matches!(o.kind, Kind::Verweis { .. })).map(|o| o.id);
-        if let Some(id) = verweis {
-            if ui.button("Ziel setzen").clicked() {
-                self.open_props3(id);
-                ui.close();
+            Eintrag::Kontaktspiegel => {
+                if ui.button("Kontaktspiegel hinzufügen").clicked() {
+                    self.open_spiegel();
+                    ui.close();
+                }
             }
-        }
-        if !is_wire {
-            ui.menu_button("Fixieren", |ui| {
-                if ui.button("Ja").clicked() {
-                    self.set_fixed(true);
+            Eintrag::Bauteilliste => {
+                ui.menu_button("Bauteilliste", |ui| {
+                    if ui.button("Bearbeiten").clicked() {
+                        let idx = self.project.part_of.get(&id).copied().unwrap_or(0);
+                        self.xdlg = Some(crate::extra::XDialog::PartAssign { obj: id, idx });
+                        ui.close();
+                    }
+                    if ui.button("Loeschen").clicked() {
+                        self.checkpoint();
+                        self.project.part_of.remove(&id);
+                        ui.close();
+                    }
+                });
+            }
+            Eintrag::SymbolBearbeiten => {
+                if ui.button("Symbol bearbeiten").clicked() {
+                    self.open_symbol_editor_fuer(id);
                     ui.close();
                 }
-                if ui.button("Nein").clicked() {
-                    self.set_fixed(false);
-                    ui.close();
-                }
-            });
+            }
+            _ => {}
         }
     }
 }
