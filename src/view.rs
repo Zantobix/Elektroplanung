@@ -964,7 +964,7 @@ impl App {
             }
         }
         if let Some(hp) = hover {
-            if area.contains(hp) && !self.zoom_tool {
+            if area.contains(hp) && !self.zoom_tool && self.ring.is_none() {
                 self.draw_snap_points(&clip, xf, xf.m(hp));
             }
         }
@@ -1013,7 +1013,15 @@ impl App {
             }
             _ => {}
         }
-        if let (Some(key), Some(h)) = (self.placing.clone(), hover) {
+        if let Some(ring) = &self.ring {
+            // Variantenrad: Ring mit den Bildern, im Loch das abgesetzte Symbol (Bild 0) an der Absetzstelle
+            if let Some(def) = symbols::find(&self.lib, &ring.key) {
+                let pin0 = def.pins.first().copied().unwrap_or_default();
+                let pos = self.align_to_path(self.snap(ring.at.add(pin0)).sub(pin0));
+                crate::variantenrad::zeichnen(&clip, xf.s(ring.at), def, ring);
+                canvas::draw_symbol(&clip, xf, def, pos, 0, false, false, 1.0, 0, Stroke::new((0.25 * xf.z).max(1.0), PREVIEW));
+            }
+        } else if let (Some(key), Some(h)) = (self.placing.clone(), hover) {
             if area.contains(h) {
                 if let Some(def) = symbols::find(&self.lib, &key) {
                     let pin0 = def.pins.first().copied().unwrap_or_default();
@@ -1112,6 +1120,11 @@ impl App {
                 self.mouse_mm = self.snap(xf.m(h));
             }
         }
+        // Variantenrad offen: nimmt (wie das modale Fenster des Originals mit Mausfang) alle Eingaben
+        if self.ring.is_some() {
+            self.ring_input(ui, xf);
+            return;
+        }
         // Mausrad: egui verteilt eine Rastung (≈ 50 Punkte) über mehrere Bilder; der Zoom folgt dem Betrag,
         // eine Rastung ≈ 10 % (vorher 15 % je Bild, also mehrere Stufen je Rastung)
         if inside && scroll.abs() > 0.01 {
@@ -1150,6 +1163,14 @@ impl App {
         // Symbol aus der Bibliothek platzieren (Klick oder Ziehen aus dem Baum)
         if let Some(key) = self.placing.clone() {
             if inside && (pressed_l || (released_l && (dragging || self.lib_drag))) {
+                // Symbol mit Bildvarianten: erst das Variantenrad (Original: PaintBox1DragDrop)
+                let n = symbols::find(&self.lib, &key).map(crate::variantenrad::bilder).unwrap_or(0);
+                if n > 0 && self.opt.variantenrad {
+                    self.ring = Some(crate::variantenrad::Ring::new(key, m, n));
+                    self.lib_drag = false;
+                    self.drag = Drag::None;
+                    return;
+                }
                 self.place_symbol(key, m);
                 self.lib_drag = false;
                 self.placing = None;

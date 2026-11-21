@@ -160,6 +160,8 @@ pub struct App {
     pub view_sheet: Option<SheetRef>,
     pub drag: Drag,
     pub placing: Option<String>,
+    /// offenes Variantenrad beim Platzieren eines Symbols mit mehreren Bildern
+    pub ring: Option<crate::variantenrad::Ring>,
     pub lib_dir: Option<PathBuf>,
     pub lib_info: String,
     /// Bibliothek kam aus dem Zwischenspeicher (Datenbank gesperrt) → regelmäßig neu versuchen
@@ -290,6 +292,7 @@ impl App {
             view: View { zoom: 4.0, offset: Vec2::ZERO, user: false, last_size: Vec2::ZERO, last_portrait: false },
             drag: Drag::None,
             placing: None,
+            ring: None,
             mouse_mm: P::new(65.0, 45.0),
             right_tab: RightTab::Symbole,
             tab_first: 0,
@@ -312,7 +315,7 @@ impl App {
             info: String::new(),
             shot: shot.map(|path| Shot { path, frames: 0, requested: false, done: Arc::new(AtomicBool::new(false)) }),
             sheet_color: Color32::from_rgb(238, 221, 221),
-            grid_color: Color32::from_rgb(192, 168, 168),
+            grid_color: crate::optionen::RASTER_MITTEL,
             invert_wheel: false,
             images: HashMap::new(),
             sheet_screen_rect: Rect::NOTHING,
@@ -696,7 +699,13 @@ impl App {
     /// Symbol platzieren: erster Anschluss liegt auf dem Raster. Wie im Original wird eine Leitung, auf die das
     /// Symbol gesetzt wird, immer aufgetrennt; mit automatischen Verbindungen werden freie Anschlüsse verbunden.
     pub fn place_symbol(&mut self, key: String, at: P) {
+        self.place_symbol_opt(key, at, 0);
+    }
+
+    /// Wie `place_symbol`, mit Bild (Bildindex/Seite), z. B. aus dem Variantenrad.
+    pub fn place_symbol_opt(&mut self, key: String, at: P, option: u16) {
         let Some(def) = symbols::find(&self.lib, &key).cloned() else { return };
+        let option = if (option as usize) < def.options.len() { option } else { 0 };
         let pin0 = def.pins.first().copied().unwrap_or_default();
         let mut pos = self.snap(at.add(pin0)).sub(pin0);
         pos = self.align_to_path(pos);
@@ -707,10 +716,17 @@ impl App {
         // BMK-Lage wie das Original sie speichert (VSY Feld 10/11, Ausrichtung Feld 12): rechtsbündig am Titelanker
         // der Bibliothek bzw. links neben dem Symbol. Ohne eigene Lage übernahm der Schreiber die Werte eines
         // Vorlageblocks (hochkant, im Symbol) – das Original zeigte die BMK dann winzig und senkrecht.
-        let (title, title_align) = symbol_title_rot(&def, 0, 0);
+        let (title, title_align) = symbol_title_rot(&def, 0, option);
         let ext = SymExt { querverweise: def.frg.0, sicherung: def.frg.1, title_align, ..Default::default() };
-        let id = self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option: 0, title: Some((title, false)), flags: 0, ext });
-        let wpins: Vec<P> = def.pins.iter().map(|q| sym_xform(*q, pos, 0, false, false)).collect();
+        let id = self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option, title: Some((title, false)), flags: 0, ext });
+        // nur die Anschlüsse des gewählten Bildes (ohne Zusatzoptionen)
+        let wpins: Vec<P> = def
+            .pins
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| symbols::visible(option, def.pin_vis.get(*i)) && symbols::flag_visible(0, def.pin_info.get(*i).map(|x| &x.1)))
+            .map(|(_, q)| sym_xform(*q, pos, 0, false, false))
+            .collect();
         self.insert_into_wire(&wpins);
         if self.auto_conn_eff() {
             // gehört zum selben Rückgängig-Schritt wie das Setzen (add_obj hat ihn schon angelegt)
