@@ -310,8 +310,7 @@ impl App {
         out.push(grp("prj/img", "Grafiken", ico::GRAFIKEN, nodes));
         out.push(grp("prj/bt", "Bauteile", ico::BAUTEILE, self.project.bauteile.iter().enumerate().map(|(i, b)| leaf(format!("prj/bt/{i}"), b.name.clone(), TAction::None)).collect()));
         out.push(grp("prj/ph", "Platzhaltergruppen", ico::PLATZHALTER, self.project.platzhalter.iter().enumerate().map(|(i, g)| leaf(format!("prj/ph/{i}"), g.name.clone(), TAction::Platz(i))).collect()));
-        // Installationspläne: Gruppe wie im Original (ohne Symbol); Inhalte werden noch nicht eingelesen
-        out.push(TNode { id: "prj/inst".into(), label: "Installationspläne".into(), bold: true, icon: ico::KEINS, action: TAction::None, children: vec![] });
+        // Installationspläne stehen im .epr als erste Anlage („Installationspläne“) und erscheinen deshalb mit den Anlagen
         for (ai, a) in self.project.anlagen.iter().enumerate() {
             let leaf = |id: String, label: String| TNode { id, label, bold: false, icon: 0, action: TAction::None, children: vec![] };
             let mk = |id: String, label: String, action: TAction| TNode { id, label, bold: false, icon: 0, action, children: vec![] };
