@@ -805,7 +805,9 @@ fn encode_elements(def: &crate::symbols::SymDef) -> (Vec<u8>, Vec<String>, Vec<S
     }
     for (i, p) in def.pins.iter().enumerate() {
         let vis = def.pin_vis.get(i).copied().unwrap_or((0, 1));
-        el(7, &[*p, *p], 0, vis, 0, &[]);
+        // Feld 5: Textnummer der Anschlussbezeichnung; Zusatzoption wie bei den Grundelementen
+        let (t, flag) = def.pin_info.get(i).copied().unwrap_or((0, 0));
+        el(7, &[*p, *p], 0, vis, flag, &[(5, t as i32)]);
     }
     (out, texts, def.options.clone())
 }

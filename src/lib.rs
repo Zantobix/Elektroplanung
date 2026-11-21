@@ -11,6 +11,7 @@ pub mod epr_write;
 pub mod eprfile;
 pub mod extra;
 pub mod icons;
+pub mod klemmplan;
 pub mod kuerzel;
 pub mod mcp;
 pub mod mcp_symbol;

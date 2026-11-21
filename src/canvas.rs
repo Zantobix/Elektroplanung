@@ -184,12 +184,12 @@ pub fn triangle_pts(a: P, b: P) -> [P; 3] {
 /// Weltkoordinaten der Anschlüsse eines Objekts.
 pub fn obj_pins(o: &Obj, lib: &[SymDef]) -> Vec<P> {
     match &o.kind {
-        Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, .. } => symbols::find(lib, key)
+        Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, flags, .. } => symbols::find(lib, key)
             .map(|d| {
                 d.pins
                     .iter()
                     .enumerate()
-                    .filter(|(i, _)| symbols::visible(*option, d.pin_vis.get(*i)))
+                    .filter(|(i, _)| symbols::visible(*option, d.pin_vis.get(*i)) && symbols::flag_visible(*flags, d.pin_info.get(*i).map(|x| &x.1)))
                     .map(|(_, q)| sym_xf(*q, *pos, *rot, *mirror_h, *mirror_v, *scale))
                     .collect()
             })
@@ -492,56 +492,8 @@ pub fn draw_generated(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
             }
         }
     } else if sheet.art == 4 {
-        // Klemmplan (Original-Ausdruck Seite 12): Titelzeile mit der Klemmleiste, "Von Ziel"/"Nach Ziel",
-        // Kopfzeile, je Klemme eine Zeile mit Nummer und Brückenspalte
-        let ki = anlage.klemmen.iter().find(|k| k.id == sheet.klm);
-        let (x0, x1) = (fx0 + 4.0, fx1 - 4.0);
-        let y0 = fy0 + 10.0;
-        let y1 = fy1 - dc.project.title_h() - 4.0;
-        let base = [57.0, 33.6, 9.4, 42.0, 9.5, 20.5, 35.0, 8.0, 64.0];
-        let f = (x1 - x0) / base.iter().sum::<f32>();
-        let widths: Vec<f32> = base.iter().map(|w| w * f).collect();
-        let (th, rh) = (9.0, 4.4);
-        let n = (((y1 - y0 - th) / rh).floor().max(3.0)) as usize;
-        let ybot = y0 + th + n as f32 * rh;
-        p.rect_stroke(Rect::from_min_max(xf.s(P::new(x0, y0)), xf.s(P::new(x1, ybot))), 0.0, stroke, egui::StrokeKind::Middle);
-        p.line_segment([xf.s(P::new(x0, y0 + th)), xf.s(P::new(x1, y0 + th))], stroke);
-        text(P::new((x0 + x1) / 2.0, y0 + th / 2.0), ki.map(|k| k.name.as_str()).unwrap_or(""), 2.6, Align2::CENTER_CENTER);
-        let mut xs = vec![x0];
-        for w in &widths {
-            xs.push(xs.last().unwrap() + w);
-        }
-        for (i, x) in xs.iter().enumerate().skip(1).take(widths.len() - 1) {
-            // Gruppenzeile "Von Ziel"/"Nach Ziel": senkrechte Linien nur an den Gruppengrenzen
-            let top = if matches!(i, 1 | 4 | 6) { y0 + th } else { y0 + th + rh };
-            p.line_segment([xf.s(P::new(*x, top)), xf.s(P::new(*x, ybot))], stroke);
-        }
-        for r in 1..n {
-            let y = y0 + th + r as f32 * rh;
-            let (a, b) = if r == 1 { (xs[1], xs[9]) } else { (x0, x1) };
-            p.line_segment([xf.s(P::new(a, y)), xf.s(P::new(b, y))], stroke);
-        }
-        text(P::new(xs[1] + 0.8, y0 + th + rh / 2.0), "Von Ziel", 2.2, Align2::LEFT_CENTER);
-        text(P::new(xs[6] + 0.8, y0 + th + rh / 2.0), "Nach Ziel", 2.2, Align2::LEFT_CENTER);
-        let head = ["Funktion", "Kennung", "KL", "Pfad", "Nr", "Brücken", "Kennung", "KL", "Pfad"];
-        for (c, h) in head.iter().enumerate() {
-            let y = y0 + th + 1.5 * rh;
-            if c == 4 || c == 5 {
-                text(P::new((xs[c] + xs[c + 1]) / 2.0, y), h, 2.2, Align2::CENTER_CENTER);
-            } else {
-                text(P::new(xs[c] + 0.8, y), h, 2.2, Align2::LEFT_CENTER);
-            }
-        }
-        let mut nrs = ki.map(|k| k.nrs.clone()).unwrap_or_default();
-        nrs.sort_unstable();
-        nrs.dedup();
-        for r in 2..n {
-            let y = y0 + th + (r as f32 + 0.5) * rh;
-            if let Some(nr) = nrs.get(r - 2) {
-                text(P::new(xs[5] - 0.8, y), &nr.to_string(), 2.2, Align2::RIGHT_CENTER);
-            }
-            p.circle_stroke(xf.s(P::new(xs[5] + 2.0, y)), 0.8 * z, stroke);
-        }
+        // Klemmplan (Original-Ausdruck Seite 12): siehe klemmplan.rs
+        crate::klemmplan::draw(dc, sheet, anlage);
     }
 }
 
