@@ -236,14 +236,14 @@ pub fn obj_bounds(o: &Obj, lib: &[SymDef]) -> (P, P) {
         },
         Kind::Terminal { pos, .. } => (P::new(pos.x - 1.2, pos.y - 1.2), P::new(pos.x + 1.2, pos.y + 1.2)),
         Kind::Spiegel { pos, rows, .. } => crate::kontaktspiegel::bounds(*pos, rows),
-        Kind::Verweis { pos, text_pos, text, dir, vertical, .. } => {
+        Kind::Verweis { pos, text_pos, text, dir, vertical, spitze, .. } => {
             // Pfeil (in jeder Drehung ganz) und – falls vorhanden – Text
-            let (ta, tb) = pts_bounds(&verweis_triangle(*pos, *dir));
+            let (ta, tb) = pts_bounds(&verweis_triangle(*pos, *dir, *spitze));
             let (ta, tb) = (P::new(ta.x.min(pos.x - 0.5) - 0.3, ta.y.min(pos.y - 0.5) - 0.3), P::new(tb.x.max(pos.x + 0.5) + 0.3, tb.y.max(pos.y + 0.5) + 0.3));
             if text.is_empty() {
                 return (ta, tb);
             }
-            let t = Obj { id: 0, kind: Kind::Text { pos: *text_pos, text: text.clone(), size: VERWEIS_TEXT, align: Align::Center, vertical: *vertical, style: Default::default() }, pen: 0, fixed: false, group: None, raw: None };
+            let t = Obj { id: 0, kind: Kind::Text { pos: verweis_textmitte(*text_pos, *vertical), text: text.clone(), size: VERWEIS_TEXT, align: Align::Center, vertical: *vertical, style: Default::default() }, pen: 0, fixed: false, group: None, raw: None };
             let (a, b) = obj_bounds(&t, lib);
             (P::new(a.x.min(ta.x), a.y.min(ta.y)), P::new(b.x.max(tb.x), b.y.max(tb.y)))
         }
@@ -253,13 +253,26 @@ pub fn obj_bounds(o: &Obj, lib: &[SymDef]) -> (P, P) {
 /// Schrifthöhe der Verweistexte in mm (gemessen im Original-Ausdruck, so groß wie BMK)
 pub const VERWEIS_TEXT: f32 = 2.5;
 
-/// Pfeil eines Verweises: gefülltes Dreieck, Spitze an `pos` in Richtung `dir` (Grad, 0 = rechts, 90 = oben).
-pub fn verweis_triangle(pos: P, dir: u16) -> [P; 3] {
+/// Pfeil eines Verweises: gefülltes Dreieck (2,4 mm lang, 1,7 mm breit, vermessen im Original-Ausdruck), Spitze in
+/// Richtung `dir` (Grad, 0 = rechts, 90 = oben); mit `spitze` liegt die Spitze an `pos`, sonst die Mitte der
+/// Grundseite (siehe `crate::epr::verweis`).
+pub fn verweis_triangle(pos: P, dir: u16, spitze: bool) -> [P; 3] {
     let a = (dir as f32).to_radians();
     let (ux, uy) = (a.cos(), -a.sin());
-    let (len, half) = (1.6, 0.8);
-    let base = P::new(pos.x - ux * len, pos.y - uy * len);
-    [pos, P::new(base.x - uy * half, base.y + ux * half), P::new(base.x + uy * half, base.y - ux * half)]
+    let (len, half) = (2.4, 0.85);
+    let (tip, base) = if spitze { (pos, P::new(pos.x - ux * len, pos.y - uy * len)) } else { (P::new(pos.x + ux * len, pos.y + uy * len), pos) };
+    [tip, P::new(base.x - uy * half, base.y + ux * half), P::new(base.x + uy * half, base.y - ux * half)]
+}
+
+/// Textmitte eines Verweises: Der Textversatz zeigt im Original auf die Mitte der Textoberkante (Ausdruck W2,
+/// Seiten 1–4: waagerechte Texte beginnen 0,4 mm unter dem Versatz, hochkant gelesene 0,6 mm rechts davon).
+pub fn verweis_textmitte(text_pos: P, vertical: bool) -> P {
+    let d = 0.6 * VERWEIS_TEXT;
+    if vertical {
+        P::new(text_pos.x + d, text_pos.y)
+    } else {
+        P::new(text_pos.x, text_pos.y + d)
+    }
 }
 
 pub fn pts_bounds(pts: &[P]) -> (P, P) {
@@ -621,12 +634,11 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             styled_line(p, &sp(&[t[0], t[1], t[2], t[0]]), stroke, style, z);
         }
         Kind::Circle { a, b } => styled_line(p, &sp(&ellipse(*a, *b, 64)), stroke, style, z),
-        Kind::Verweis { pos, text_pos, text, dir, vertical, .. } => {
-            let tri: Vec<Pos2> = verweis_triangle(*pos, *dir).iter().map(|q| xf.s(*q)).collect();
+        Kind::Verweis { pos, text_pos, text, dir, vertical, spitze, .. } => {
+            let tri: Vec<Pos2> = verweis_triangle(*pos, *dir, *spitze).iter().map(|q| xf.s(*q)).collect();
             p.add(Shape::convex_polygon(tri, tc, Stroke::NONE));
             let shown = dc.project.expand_placeholders(text);
-            // Textversatz zeigt auf die Textmitte (gemessen im Original-PDF, Seite 1: "=S3+W2", "Raum 12")
-            draw_text(p, xf.s(*text_pos), &shown, VERWEIS_TEXT * z, Align::Center, *vertical, tc);
+            draw_text(p, xf.s(verweis_textmitte(*text_pos, *vertical)), &shown, VERWEIS_TEXT * z, Align::Center, *vertical, tc);
         }
         Kind::Text { pos, text, size, align, vertical, style } => {
             // eigene Schriftfarbe, außer bei Markierung/Vorschau

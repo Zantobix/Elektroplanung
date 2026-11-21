@@ -545,29 +545,20 @@ fn symbol(k: &Block) -> Option<(Kind, usize)> {
 }
 
 
-/// Verweis (OBJ): Feld 6/7 Lage der Pfeilspitze, 2/3 Textversatz, 14 Richtung in 0,1°, 15 Bit 0 hochkant.
-/// Querverweise auf andere Anlagen (Feld 4 = 0x0101FFFF) zählen die Richtung um 90° versetzt
-/// (aus "=S1+W2" ▼ bei 0° und "=UV3+W2" ▲ bei 180° in W2.epr; nur zwei Beispiele, daher geschätzt).
+/// Verweis (OBJ): Feld 6/7 Lage, 2/3 Textversatz, 14 Richtung in 0,1° (0 rechts, 900 oben), Feld 15 Bit 0 Spitze
+/// an der Lage, Feld 4 Byte 3 Text hochkant. Vermessen an allen 13 Verweisen der Installationspläne im
+/// Original-Ausdruck von W2 (Seiten 1–4): Das Dreieck (2,4 mm lang, 1,7 mm breit) liegt zwischen der Lage und
+/// 2,4 mm in Richtung Feld 14; ohne Bit 0 zeigt die Spitze dorthin ("Raum 12" ►, "=S3+W2" ▼), mit Bit 0 liegt sie
+/// an der Lage und zeigt zurück ("Raum 10" auf Blatt 4 ◄ bei 0°, die Pfeile im Schriftfeld ▼ bei 90°, ► bei 180°).
+/// Hochkant stehen genau die Texte mit Feld 4 = 0x0101FFFF (Blatt "Altbau EG").
 fn verweis(k: &Block, text: String) -> Kind {
     let pos = P::new(mm(k.i32(6)), mm(k.i32(7)));
     let text_pos = P::new(mm(k.i32(6) + k.i32(2)), mm(k.i32(7) + k.i32(3)));
-    let ang = k.i32(14).rem_euclid(3600);
-    let cross = k.i32(4) == 0x0101_ffff;
-    let mut vertical = k.i32(15) & 1 == 1;
-    let mut dir = ang / 10;
-    if text.is_empty() {
-        // Verweis ohne Text (Pfeil im Schriftfeld): Feld 14 = 900 zeigt ▼, 1800 ► (Original-Ausdruck Seite 5 und 35);
-        // Bit 0 hat ohne Text keine sichtbare Wirkung, bleibt aber für Drehen/Zurückschreiben erhalten
-        return Kind::Verweis { pos, text_pos, text, dir: ((dir + 180) % 360) as u16, vertical, ziel: None };
-    }
-    if cross {
-        dir = (dir + 270) % 360;
-        // bei 180° hochkant ohne Bit 0 ("=UV3+W2"); als Umkehrung von Bit 0 gelesen, damit jede Lage darstellbar ist
-        vertical ^= ang == 1800;
-    } else if vertical {
-        dir = (dir + 90) % 360;
-    }
-    Kind::Verweis { pos, text_pos, text, dir: dir as u16, vertical, ziel: None }
+    let ang = k.i32(14).rem_euclid(3600) / 10;
+    let spitze = k.i32(15) & 1 == 1;
+    let vertical = (k.i32(4) >> 24) & 1 == 1;
+    let dir = if spitze { (ang + 180) % 360 } else { ang };
+    Kind::Verweis { pos, text_pos, text, dir: dir as u16, vertical, spitze, ziel: None }
 }
 
 /// Kennung (8 Byte) eines Blocks ab Byte `at`, 0 wenn zu kurz.

@@ -81,8 +81,8 @@ fn drehen_und_ziel_ins_originalformat() {
         for k in &erwartet {
             // Lage, Richtung, Hochkant und Ziel überstehen Speichern + Laden (Objekt-Ids werden neu vergeben)
             let gleich = |a: &Kind, b: &Kind| match (a, b) {
-                (Kind::Verweis { pos, text_pos, text, dir, vertical, ziel }, Kind::Verweis { pos: p2, text_pos: t2, text: x2, dir: d2, vertical: v2, ziel: z2 }) => {
-                    pos.dist(*p2) < 0.01 && text_pos.dist(*t2) < 0.06 && text == x2 && dir == d2 && vertical == v2 && ziel.as_ref().map(|z| (&z.anlage, z.blatt)) == z2.as_ref().map(|z| (&z.anlage, z.blatt))
+                (Kind::Verweis { pos, text_pos, text, dir, vertical, spitze, ziel }, Kind::Verweis { pos: p2, text_pos: t2, text: x2, dir: d2, vertical: v2, spitze: s2, ziel: z2 }) => {
+                    pos.dist(*p2) < 0.01 && text_pos.dist(*t2) < 0.06 && text == x2 && dir == d2 && vertical == v2 && spitze == s2 && ziel.as_ref().map(|z| (&z.anlage, z.blatt)) == z2.as_ref().map(|z| (&z.anlage, z.blatt))
                 }
                 _ => false,
             };
