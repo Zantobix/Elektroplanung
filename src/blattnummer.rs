@@ -14,6 +14,10 @@ pub fn pruefen(p: &Project, r: SheetRef, nummer: &str, subindex: &str, art: u8) 
     if n < 0 {
         return Err("Die Blattnummer darf nicht kleiner als 0 sein!".into());
     }
+    // Subindex über 255: Meldung des Originals (Blatt1SubindexChange)
+    if subindex.trim().parse::<i64>().is_ok_and(|v| v > 255) {
+        return Err(format!("{}{}", crate::meldungen::SUBINDEX_1, crate::meldungen::SUBINDEX_2));
+    }
     let sub: u8 = if subindex.trim().is_empty() { 0 } else { subindex.trim().parse().map_err(|_| "Der Subindex muss zwischen 0 und 255 liegen!".to_string())? };
     if n == 0 && art == 3 {
         return Err("Die Blattnummer '0' kann nicht mit der Blatteinstellung 'Schaltplan'\nvergeben werden!".into());

@@ -301,13 +301,25 @@ impl App {
     /// Datei › Projekt hinzufügen: Anlagen auswählen (TWahl), dann übernehmen.
     pub fn open_add_project(&mut self) {
         let Some(p) = rfd::FileDialog::new().add_filter("Elektroplanung Projekt", &["epj", "epr"]).pick_file() else { return };
+        // wie das Original: Projekt hinzufügen nimmt nur Dateien ab Version 6.0.0
+        if crate::vorlage::is_epr_format(&p) {
+            if let Some((titel, text)) = crate::meldungen::ladefehler_vorab(&std::fs::read(&p), true) {
+                crate::meldungen::warnung(titel, &text);
+                return;
+            }
+        }
         match crate::mcp::open_project(&p) {
             Ok(prj) => self.dlg3 = Some(Dlg3::Wahl { path: p, anlagen: prj.anlagen.iter().map(|a| (a.name.clone(), true)).collect() }),
-            Err(e) => self.dialog = Some(Dialog::Message(format!("Projekt wird gelesen – Fehler:\n{e}"))),
+            Err(e) => crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, &format!("{}\n{e}", crate::meldungen::L_FEHLER)),
         }
     }
 
     pub fn open_neues_schriftfeld(&mut self) {
+        // Original (Schriftfeld1Click): nicht, solange das Schriftfeld im Editor offen ist
+        if matches!(self.xdlg, Some(crate::extra::XDialog::Title { .. })) {
+            crate::meldungen::warnung(crate::meldungen::T_ACHTUNG, crate::meldungen::SCHRIFTFELD_IN_BEARBEITUNG);
+            return;
+        }
         self.dlg3 = Some(Dlg3::NeuesSchriftfeld { anlage: 0, aus_datei: false, pfad: String::new() });
     }
 
@@ -689,8 +701,9 @@ impl App {
                     });
                 }
                 Dlg3::NeuesSchriftfeld { anlage, aus_datei, pfad } => {
-                    let mut items = vec!["Alle Anlagen".to_string()];
-                    items.extend(self.project.anlagen.iter().map(|a| a.name.clone()));
+                    // wie TFORM10.FormShow: „Gesamtes Projekt“, dann die Anlagen (ohne Namen: „[AnlageX ohne Namen]“)
+                    let mut items = vec!["Gesamtes Projekt".to_string()];
+                    items.extend(self.project.anlagen.iter().enumerate().map(|(i, a)| if a.name.is_empty() { "[AnlageX ohne Namen]".replace('X', &(i + 1).to_string()) } else { a.name.clone() }));
                     ui.horizontal(|ui| {
                         lbl(ui, 40.0, "Für");
                         combo(ui, "sfanl", &items, anlage, 190.0);
@@ -1021,7 +1034,9 @@ impl App {
                 // Ziel setzen; mit Verweislink wird der Gegenverweis wie im Original zurückverknüpft
                 let ziel_ref = SheetRef { anlage, sheet: blatt };
                 let gegen = link.checked_sub(1).and_then(|i| verweis_links(&self.project, ziel_ref).get(i).map(|(g, _)| *g));
-                if self.project.sheet(ziel_ref).is_some() {
+                // Original (0x48056c): ist der Gegenverweis schon mit einem anderen verbunden, erst fragen (Nein = nichts verknüpfen)
+                let bestaetigt = !crate::meldungen::zielverweis_belegt(&self.project, id, gegen) || crate::meldungen::frage(crate::meldungen::T_SICHER_F, crate::meldungen::ZIELVERWEIS_BELEGT);
+                if bestaetigt && self.project.sheet(ziel_ref).is_some() {
                     let msg = crate::verweise::verknuepfen(&mut self.project, id, ziel_ref, gegen);
                     if let Some(m) = msg {
                         self.info = m;
@@ -1100,6 +1115,9 @@ impl App {
             }
             Dlg3::Titel { formel, dir1, dir2, wahl, hilfe, .. } => {
                 let n = self.apply_titel(&formel, dir1, dir2, wahl);
+                if n == 0 {
+                    crate::meldungen::hinweis(crate::meldungen::T_TEXTGENERATOR, crate::meldungen::TEXTGENERATOR_LEER);
+                }
                 return Some(Dlg3::Titel { formel, dir1, dir2, wahl, hilfe, msg: format!("{n} Objekt(e) beschriftet") });
             }
             Dlg3::Schriftfeld { absolut, hoehe } => {
@@ -1108,10 +1126,23 @@ impl App {
                 // Lage in mm (relativ umgerechnet).
                 let alt_h = (self.project.title_h() * 10.0).round() as i32;
                 let war_absolut = self.project.tb_absolut;
+                let alt_hoehe = self.project.tb_hoehe;
                 self.project.tb_absolut = absolut;
                 self.project.tb_hoehe = num(&hoehe).unwrap_or(TITLE_H).clamp(5.0, 60.0);
                 let neu_h = (self.project.title_h() * 10.0).round() as i32;
-                if war_absolut && absolut && alt_h != neu_h {
+                // Original (0x47b828): bei geänderter Höhe fragen, ob die Zeichenobjekte mitgehen (Ja = anpassen,
+                // Nein = Lage in mm behalten, Abbrechen = nichts ändern)
+                let antwort = if alt_h != neu_h {
+                    crate::meldungen::zeigen(crate::meldungen::T_ANPASSEN, crate::meldungen::SE_HOEHE_FRAGE, crate::meldungen::Knoepfe::JaNeinAbbrechen, false)
+                } else {
+                    crate::meldungen::Antwort::Ja
+                };
+                if antwort == crate::meldungen::Antwort::Abbrechen {
+                    self.project.tb_absolut = war_absolut;
+                    self.project.tb_hoehe = alt_hoehe;
+                    return None;
+                }
+                if (war_absolut || absolut) && alt_h != neu_h && antwort == crate::meldungen::Antwort::Nein {
                     let tb = if self.project.titleblock.is_empty() { crate::titleblock::default_owned() } else { self.project.titleblock.clone() };
                     self.project.titleblock = crate::titleblock::nach_relativ(&crate::titleblock::nach_absolut(&tb, alt_h), neu_h);
                 }
@@ -1140,11 +1171,24 @@ impl App {
             }
             Dlg3::PExport { .. } | Dlg3::Errliste { .. } | Dlg3::ListExport { .. } => {}
             Dlg3::BlattIndex { anlage, von, bis, ab, plus } => {
-                let (v, b) = (von.trim().parse::<usize>().unwrap_or(1).max(1), bis.trim().parse::<usize>().unwrap_or(usize::MAX));
-                let (start, step) = (ab.trim().parse::<u32>().unwrap_or(1).max(1), plus.trim().parse::<u32>().unwrap_or(1).max(1));
-                if let Some(a) = self.project.anlagen.get_mut(anlage) {
-                    for (k, s) in a.sheets.iter_mut().enumerate().filter(|(k, _)| *k + 1 >= v && *k + 1 <= b) {
-                        s.number = start + (k + 1 - v) as u32 * step;
+                // Prüfungen und Rückfrage wie das Original (0x49c834); Fehler: Dialog bleibt offen
+                let Some(a) = self.project.anlagen.get(anlage) else {
+                    crate::meldungen::warnung(crate::meldungen::T_ACHTUNG, crate::meldungen::NN_KEINE_ANLAGE);
+                    return Some(Dlg3::BlattIndex { anlage, von, bis, ab, plus });
+                };
+                let nummern: Vec<(u32, u8)> = a.sheets.iter().map(|s| (s.number, s.subindex)).collect();
+                match crate::meldungen::neunummerierung(&nummern, &von, &bis, &ab, &plus) {
+                    Err(m) => {
+                        crate::meldungen::warnung(crate::meldungen::T_ACHTUNG, m);
+                        return Some(Dlg3::BlattIndex { anlage, von, bis, ab, plus });
+                    }
+                    Ok((neu, reihenfolge)) => {
+                        if reihenfolge && !crate::meldungen::frage_ok(crate::meldungen::T_ACHTUNG, crate::meldungen::NN_FRAGE) {
+                            return Some(Dlg3::BlattIndex { anlage, von, bis, ab, plus });
+                        }
+                        for (s, n) in self.project.anlagen[anlage].sheets.iter_mut().zip(neu) {
+                            s.number = n;
+                        }
                     }
                 }
             }

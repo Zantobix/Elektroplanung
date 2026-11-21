@@ -80,20 +80,23 @@ impl App {
         self.info = format!("{} (nur dieses Symbol)", self.info);
     }
 
-    /// Frage "Änderung auf alle N Symbole dieses Typs übernehmen?" (Alle / Nur dieses / Abbrechen).
+    /// Frage des Originals (0x47d564, Überschrift „Hallo Frage!“): „Diese Änderung wirkt sich auf alle Symbole des
+    /// Typs:'…' im gesamten Projekt aus. Soll statt dessen ein neues Symbol angelegt werden?“ – Ja = nur dieses
+    /// (neues Symbol), Nein = alle ändern, Abbrechen.
     pub fn symbol_frage_ui(&mut self, ctx: &egui::Context) {
-        let Some(n) = self.sym_edit.as_ref().and_then(|e| e.frage) else { return };
+        let Some(name) = self.sym_edit.as_ref().filter(|e| e.frage.is_some()).map(|e| e.name.clone()) else { return };
         let mut wahl = 0;
         egui::Modal::new(egui::Id::unique("symbol_frage")).show(ctx, |ui| {
             ui.set_width(360.0);
-            ui.label(format!("Änderung auf alle {n} Symbole dieses Typs übernehmen?"));
+            ui.strong(crate::meldungen::T_FRAGE_SYMBOL);
+            ui.label(format!("{}{name}{}", crate::meldungen::SE_AENDERUNG_1, crate::meldungen::SE_AENDERUNG_2));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Alle").clicked() {
-                    wahl = 1;
-                }
-                if ui.button("Nur dieses").clicked() {
+                if ui.button("Ja").clicked() {
                     wahl = 2;
+                }
+                if ui.button("Nein").clicked() {
+                    wahl = 1;
                 }
                 if ui.button("Abbrechen").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                     wahl = 3;

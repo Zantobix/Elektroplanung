@@ -160,8 +160,12 @@ impl App {
         let Some(def) = symbols::find(&self.lib, key) else { return };
         let rows = if mode == 2 { param_rows(def, &ext.params) } else { text_rows(def, &ext.texts) };
         if rows.is_empty() {
-            let m = if mode == 2 { "Keine Parameter vorhanden!" } else { "Das Symbol hat keine Textfelder." };
-            self.dialog = Some(Dialog::Message(m.into()));
+            if mode == 2 {
+                self.dialog = Some(Dialog::Message("Keine Parameter vorhanden!".into()));
+            } else {
+                // Original (Alternativtext1Click)
+                crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::KEINE_ALTERNATIVTEXTE);
+            }
             return;
         }
         self.zusatz.param = Some(ParamDlg { r, id, mode, rows });

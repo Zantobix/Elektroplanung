@@ -1020,6 +1020,10 @@ impl App {
 
     pub fn new_sheet(&mut self) {
         let a = self.cur().map(|r| r.anlage).unwrap_or(0);
+        if self.project.anlagen.get(a).is_none() {
+            crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::KEINE_ANLAGE_FUER_BLATT);
+            return;
+        }
         self.checkpoint();
         let Some(anl) = self.project.anlagen.get_mut(a) else { return };
         let n = anl.sheets.iter().map(|s| s.number).max().unwrap_or(0) + 1;
@@ -1129,6 +1133,10 @@ impl App {
 
     /// Aktion ausführen; bei ungespeicherten Änderungen zuerst fragen wie das Original ("Geänderte Daten Speichern?").
     pub fn guarded(&mut self, p: Pending) {
+        // Neu: offene Editoren zuerst abschließen wie das Original (meldungen.rs)
+        if matches!(p, Pending::New | Pending::Quit) && !self.editoren_abschliessen() {
+            return;
+        }
         if self.dirty {
             self.ask_save = Some(p);
         } else {
@@ -1238,8 +1246,10 @@ impl App {
         let res = if is_epr {
             // Vor dem ersten Überschreiben einer Originaldatei eine Sicherung anlegen
             let bak = p.with_extension("epr.bak");
-            if self.opt.backup && p.exists() && !bak.exists() {
-                let _ = std::fs::copy(&p, &bak);
+            if self.opt.backup && p.exists() && !bak.exists() && std::fs::copy(&p, &bak).is_err() {
+                // wie das Original: ohne Sicherung wird nicht gespeichert
+                crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, crate::meldungen::S_KEIN_BACKUP);
+                return;
             }
             skipped = crate::epr_write::unsupported(&self.project);
             // Projekt-/Anlagenangaben, deren Ablage im Originalformat unbekannt ist
@@ -1260,7 +1270,9 @@ impl App {
                     )));
                 }
             }
-            Err(e) => self.dialog = Some(Dialog::Message(format!("Fehler beim abspeichern der Projektdatei!\n{e}"))),
+            Err(_) => {
+                crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, crate::meldungen::speicherfehler(&p));
+            }
         }
     }
 
@@ -1273,6 +1285,14 @@ impl App {
     /// Projekt laden: .epr (Originalformat, wird übernommen) oder .epj (eigenes Format).
     pub fn open_path(&mut self, p: PathBuf, add: bool) {
         let is_epr = crate::vorlage::is_epr_format(&p);
+        // Prüfungen des Originals vor dem Einlesen: Datei lesbar, Kennung und Version (meldungen.rs)
+        let bytes = if is_epr { Some(std::fs::read(&p)) } else { None };
+        if let Some((titel, text)) = bytes.as_ref().and_then(|b| crate::meldungen::ladefehler_vorab(b, add)) {
+            crate::meldungen::warnung(titel, &text);
+            return;
+        }
+        // Statuszeile des Originals während des Lesens (bleibt bei einem Fehler stehen)
+        self.info = "Projekt wird gelesen".into();
         let res = if is_epr {
             crate::epr::import(&p)
         } else {
@@ -1302,8 +1322,9 @@ impl App {
                     }
                     self.active = 0;
                     self.right_tab = RightTab::Projekt;
-                    // Fehler in den Daten (TErrliste): Blöcke ohne Darstellung melden
-                    let lines = crate::epr::load_warnings(&self.project);
+                    // Fehler in den Daten (TErrliste): Prüfsummen/Struktur wie das Original, Blöcke ohne Darstellung
+                    let mut lines = bytes.as_ref().and_then(|b| b.as_ref().ok()).map(|b| crate::meldungen::ladefehler_liste(b)).unwrap_or_default();
+                    lines.extend(crate::epr::load_warnings(&self.project));
                     if !lines.is_empty() {
                         self.dlg3 = Some(crate::dialoge3::Dlg3::Errliste { lines });
                     }
@@ -1311,7 +1332,7 @@ impl App {
                     self.tree_open.retain(|k| !k.starts_with("prj/"));
                 }
             }
-            Err(e) => self.dialog = Some(Dialog::Message(format!("Projekt wird gelesen – Fehler:\n{e}"))),
+            Err(e) => crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, &format!("{}\n{e}", crate::meldungen::L_FEHLER)),
         }
     }
 
@@ -1352,7 +1373,12 @@ impl App {
         } else {
             "Neues Projekt".into()
         };
-        format!("Elektroplanung {name}{}", if self.dirty { " *" } else { "" })
+        // im Symboleditor: „Bibliothekssymbol '…' bearbeiten“ usw. wie der Reiter des Originals
+        if let Some(e) = &self.sym_edit {
+            return format!("Elektroplanung {}", e.sheet.name);
+        }
+        let kennung = self.project.raw.as_ref().map(|f| f.magic).filter(|_| self.path.as_deref().is_some_and(crate::vorlage::is_epr_format));
+        format!("{}{}", crate::meldungen::fenstertitel(&name, self.path.as_deref(), kennung, false), if self.dirty { " *" } else { "" })
     }
 
     pub fn not_yet(&mut self, what: &str) {
@@ -1549,7 +1575,7 @@ impl App {
                 self.info = format!("DXF Import: {} Elemente", ids.len());
                 self.selection = ids;
             }
-            Err(e) => self.dialog = Some(Dialog::Message(format!("DXF Import – Fehler:\n{e}"))),
+            Err(e) => crate::meldungen::warnung(crate::meldungen::T_FEHLER_X, &format!("{}\n{e}", crate::meldungen::DXF_FEHLER)),
         }
     }
 
@@ -1597,7 +1623,7 @@ impl App {
     pub fn selection_to_symbol(&mut self) {
         let objs = self.selected_objs();
         if objs.is_empty() {
-            self.dialog = Some(Dialog::Message("Bitte zuerst Zeichenelemente markieren.".into()));
+            crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::MARKIERUNG_LEER);
             return;
         }
         let pts: Vec<P> = objs.iter().flat_map(|o| { let (a, b) = canvas::obj_bounds(o, &self.lib); [a, b] }).collect();
@@ -1627,6 +1653,10 @@ impl App {
                 Kind::Terminal { pos, .. } => pins.push(l(*pos)),
                 _ => {}
             }
+        }
+        if prims.is_empty() && pins.is_empty() {
+            crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::MARKIERUNG_LEER);
+            return;
         }
         let n = self.project.symdefs.iter().filter(|d| d.haupt == 0).count() + 1;
         let key = format!("proj:{}", self.project.alloc_id());
@@ -1659,6 +1689,11 @@ impl App {
         self.checkpoint();
         self.project.symdefs.push(def.clone());
         self.lib.push(def.clone());
+        // wie das Original: erst fragen, ob das neue Symbol die markierten Objekte ersetzen soll (Nein = nur anlegen)
+        if !crate::meldungen::frage(crate::meldungen::T_SOLL_ICH, crate::meldungen::MARKIERUNG_FRAGE) {
+            self.info = format!("{} im Projekt angelegt (Benutzerbauteile › Projekt)", def.name);
+            return;
+        }
         let sel = self.selection.clone();
         self.with_sheet(|s, _| s.objects.retain(|o| !sel.contains(&o.id)));
         let bmk = self.new_bmk(&def);

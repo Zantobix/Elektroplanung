@@ -159,6 +159,7 @@ impl App {
             return;
         }
         let def = key.as_ref().and_then(|k| symbols::find(&self.lib, k).cloned());
+        let titel = crate::meldungen::editor_titel(def.as_ref().map(|d| (d.key.as_str(), d.name.as_str())));
         let def = def.unwrap_or_else(|| {
             let n = self.project.symdefs.iter().filter(|d| d.haupt == 0).count() + 1;
             SymDef {
@@ -189,7 +190,8 @@ impl App {
             }
         });
         let mut sheet = Sheet::new(0);
-        sheet.name = format!("Symbol: {}", def.name);
+        // Reiterbeschriftung des Originals (0x477cb0), im Nachbau im Fenstertitel
+        sheet.name = titel;
         let mut vis = HashMap::new();
         let mut flags: HashMap<u64, u32> = HashMap::new();
         let mut text_idx: HashMap<u64, u32> = HashMap::new();
@@ -571,11 +573,12 @@ impl App {
                 }
             }
             crate::view::sep(ui, 4.0);
-            if gbtn(ui, I::EditSymbol, "Symboleigenschaften", true, false).clicked() {
+            // Hinweise wie im Original (0x47689c: Button7/Button8 im Symbolmodus)
+            if gbtn(ui, I::EditSymbol, crate::meldungen::SE_EINSTELLUNGEN, true, false).clicked() {
                 self.open_sym_eigenschaften();
             }
             crate::view::sep(ui, 4.0);
-            if gbtn(ui, I::Apply, "Übernehmen", true, false).clicked() {
+            if gbtn(ui, I::Apply, crate::meldungen::SE_SYMBOL_UEBERNEHMEN, true, false).clicked() {
                 self.symbol_editor_uebernehmen();
                 return;
             }
@@ -1014,7 +1017,7 @@ impl App {
         match a {
             0 if !new.trim().is_empty() => {
                 if !crate::bib_gruppen::hinzufuegen(&mut self.lib_gruppen, &self.lib, new) {
-                    self.info = format!("Gruppe „{}“ gibt es schon", new.trim());
+                    crate::meldungen::hinweis(crate::meldungen::T_DOPPELT, crate::meldungen::GRUPPE_DOPPELT);
                     return;
                 }
                 crate::bib_gruppen::speichern(&appdir(), &self.lib_gruppen);
@@ -1037,6 +1040,10 @@ impl App {
                     }
                 }
             }
+            10 if self.project.bauteile.iter().any(|b| b.gruppe == new.trim()) => {
+                crate::meldungen::hinweis(crate::meldungen::T_DOPPELT, crate::meldungen::GRUPPE_DOPPELT);
+                return;
+            }
             10 if !new.trim().is_empty() => self.project.bauteile.push(Bauteil { gruppe: new.trim().into(), name: "Neues Bauteil".into(), ..Default::default() }),
             11 | 12 => {
                 for b in self.project.bauteile.iter_mut().filter(|b| b.gruppe == old) {
@@ -1053,10 +1060,17 @@ impl App {
     /// Neue Symbole kommen in den gewählten Bereich; vorhandene mit anderer Zeichnung werden ersetzt, außer
     /// "Frage bei neuerer Symbolversion" ist gesetzt (dann nur gezählt).
     pub fn library_sync(&mut self) -> String {
+        if self.lib_sync.0.trim().is_empty() {
+            crate::meldungen::warnung(crate::meldungen::T_ACHTUNG, crate::meldungen::SYNC_KEINE_BIBLIOTHEK);
+            return String::new();
+        }
         let dir = std::path::PathBuf::from(self.lib_sync.0.trim());
         let other = match symbols::load_db(&dir) {
             Ok(v) => v,
-            Err(e) => return format!("Bibliothek nicht lesbar: {e}"),
+            Err(e) => {
+                crate::meldungen::warnung(crate::meldungen::T_GEHT_NICHT, crate::meldungen::SYNC_DATENFORMAT);
+                return format!("Bibliothek nicht lesbar: {e}");
+            }
         };
         let haupt = if self.lib_sync.3 == 1 { 300 } else { 200 };
         let (mut neu, mut ersetzt, mut offen) = (0, 0, 0);
@@ -1082,6 +1096,7 @@ impl App {
             }
         }
         self.save_user_library();
+        crate::meldungen::hinweis("Summe", &crate::meldungen::sync_summe(0, ersetzt, neu, 0));
         format!("{neu} neue Symbole, {ersetzt} ersetzt, {offen} neuere Versionen nicht übernommen (Frage)")
     }
 
@@ -1317,7 +1332,11 @@ impl App {
                     self.show_library = false;
                     self.open_symbol_editor(Some(k));
                 }
-                2 => self.delete_library_symbol(&k),
+                2 => {
+                    if self.loeschen_bestaetigt(Some(&k)) {
+                        self.delete_library_symbol(&k)
+                    }
+                }
                 _ => self.to_library(&k, true),
             }
         }
@@ -1326,6 +1345,10 @@ impl App {
     // ------------------------------------------------------------------ Kontextmenü Projektexplorer (PopupMenu2)
 
     pub fn tree_context(&mut self, node: &TNode, action: &str) {
+        // Original (Lschen1Click): jedes Löschen im Explorer erst nach Rückfrage
+        if action == "Löschen" && !self.loeschen_bestaetigt(if let TAction::Symbol(k) = &node.action { Some(k.as_str()) } else { None }) {
+            return;
+        }
         match (action, &node.action) {
             ("Eigenschaften", TAction::Sheet(r)) => self.open_sheet_props(*r),
             ("Eigenschaften", TAction::Schiene(a, i)) => {
@@ -1801,11 +1824,11 @@ impl App {
                 let (y, dy, x0, x1) = (num(&y, 40.0), num(&dy, 10.0), num(&x0, 25.0), num(&x1, 282.0));
                 // wie im Original (TS_Assi): nur auf Schaltplänen, mindestens eine Schiene gewählt
                 if self.sheet().map(|s| !matches!(s.art, 0 | 3)).unwrap_or(true) {
-                    self.info = "Sammelschienen können hier nicht eingefügt werden".into();
+                    crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, "Sammelschienen können hier nicht eingefügt werden");
                     return;
                 }
                 if !pots.iter().any(|(_, on)| *on) {
-                    self.info = "Keine Sammelschiene zum Erzeugen ausgewählt!".into();
+                    crate::meldungen::hinweis("Auswahl", crate::meldungen::KEINE_SAMMELSCHIENE);
                     return;
                 }
                 self.checkpoint();

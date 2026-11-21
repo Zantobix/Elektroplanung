@@ -505,8 +505,21 @@ impl App {
     /// `Some(id)` = angeklicktes Symbol, `None` = Abbruch. Danach erscheint der Dialog wieder.
     pub fn spiegel_pick_ende(&mut self, id: Option<u64>) {
         let art = id.and_then(|i| self.project.find_obj(i)).and_then(|(_, o)| if let Kind::Symbol { key, .. } = &o.kind { Some(art_aus(symbols::find(&self.lib, key))) } else { None }).unwrap_or(0);
+        let eig = id.and_then(|i| self.project.find_obj(i)).and_then(|(_, o)| if let Kind::Symbol { ext, .. } = &o.kind { Some(ext.eigentuemer) } else { None });
         let Some(d) = self.zusatz.spiegel.as_mut() else { return };
         let Some(zeile) = d.pick else { return };
+        // Original (0x4b6674): hat das Referenz-Symbol keinen bzw. einen anderen Eigentümer, erst bestätigen
+        // (OK = der Eigentümer des Kontaktspiegels wird übernommen, Abbrechen = keine Referenz)
+        if let (Some(i), Some(e)) = (id, eig) {
+            if i != d.owner && e != d.owner {
+                let text = if e == 0 { crate::meldungen::KS_OHNE_EIGENTUEMER } else { crate::meldungen::KS_ANDERER_EIGENTUEMER };
+                if !crate::meldungen::frage_ok(crate::meldungen::T_ACHTUNG_X, text) {
+                    d.pick = None;
+                    self.info = "Referenz setzen abgebrochen".into();
+                    return;
+                }
+            }
+        }
         match id {
             Some(i) if referenz_setzen(d, zeile, i, art) => self.info = format!("Referenz für Zeile {} gesetzt: {}", zeile + 1, lage(&self.project, i).unwrap_or_default()),
             Some(_) => self.info = "Referenz setzen: bitte einen Kontakt anklicken, nicht die Spule (Esc = Abbruch)".into(),

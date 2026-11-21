@@ -218,6 +218,15 @@ impl App {
             Dlg2::Drucken { anlage, drucker, drucker_liste, art, von, bis, datum, .. } => {
                 // Blattauswahl wie im Original; "Änderung seit …" nach den Blattdaten (druck.rs)
                 let gedruckt = self.project.gedruckt.clone();
+                // Meldungen des Originals (Drucken1Click)
+                if art == 5 && gedruckt.trim().is_empty() {
+                    crate::meldungen::hinweis(crate::meldungen::T_HINWEIS, crate::meldungen::DRUCK_NIE_GEDRUCKT);
+                    return;
+                }
+                if art == 1 && self.cur().is_none() {
+                    crate::meldungen::hinweis(crate::meldungen::T_HINWEIS, crate::meldungen::DRUCK_KEIN_BLATT);
+                    return;
+                }
                 let mut sel: Vec<SheetRef> = vec![];
                 if let Some(a) = self.project.anlagen.get(anlage) {
                     let (v, b): (u32, u32) = (von.trim().parse().unwrap_or(1), bis.trim().parse().unwrap_or(u32::MAX));
@@ -237,7 +246,7 @@ impl App {
                     }
                 }
                 if sel.is_empty() {
-                    self.dialog = Some(crate::app::Dialog::Message("Keine Blätter zum Drucken ausgewählt.".into()));
+                    crate::meldungen::hinweis(crate::meldungen::T_HINWEIS, crate::meldungen::DRUCK_NICHTS);
                     return;
                 }
                 self.print_sel = Some(sel);
