@@ -1689,7 +1689,8 @@ impl App {
             Tool::Circle => Kind::Circle { a, b },
             // wie im Original ein Text mit Box (ZCN 11): Rahmen an, Umbruch aus, 8 pt – Dialog TTextbox
             Tool::TextBox => crate::textbox::neu(a, b, "Text"),
-            Tool::Table => Kind::Table { a, b, rows: 3, cols: 3, cells: vec![String::new(); 9], header: true, fixed_w: false, art: 0, ab: 0 },
+            // wie im Original 2 × 2, ohne Überschrift, Autobreite – Dialog TSTab (tabelle.rs)
+            Tool::Table => crate::tabelle::neu(a, b),
             Tool::Image => Kind::Image { a, b, path: String::new(), mode: 0, frame: true },
             _ => return None,
         })

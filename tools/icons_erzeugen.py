@@ -148,6 +148,26 @@ ICONS = {
                   f'<rect x="8" y="17.5" width="8" height="4" fill="{LB}" {st()}/><path d="M19.5 6.5V10M19.5 14v3.5" {st(R, 1.5)}/>'),
     'part_list': (f'<rect x="3" y="4" width="18" height="16" rx="1.5" fill="{W}" {st()}/>'
                   f'<path d="M6.5 9h2M11 9h6.5M6.5 13h2M11 13h6.5M6.5 17h2M11 17h4" {st(D, 1.6)}/>'),
+    # Listen (Tabellendialog TSTab): Liste laden, Liste speichern, Alles löschen, Zeile löschen
+    'list_load': (f'<path d="M2.5 7V19.5h15" {st()}/>'
+                  f'<path d="M2.5 7V4.5a1 1 0 0 1 1-1h4.5l2 2.5h6a1 1 0 0 1 1 1V9" fill="{LY}" {st()}/>'
+                  f'<rect x="6" y="7.5" width="12" height="9" fill="{W}" {st(D, 1.3)}/>'
+                  f'<path d="M8.5 10.5h7M8.5 13.5h7" {st(B, 1.4)}/>'
+                  f'<path d="M5 12.5h16.5l-3 8H2.5z" fill="{Y}" {st()}/>'),
+    'list_save': (f'<path d="M3 3h13.5l4.5 4.5V21H3z" fill="{LB}" {st()}/>'
+                  f'<path d="M7 3v5h8.5V3" fill="{W}" {st()}/>'
+                  f'<rect x="6.5" y="12" width="11" height="9" fill="{W}" {st()}/>'
+                  f'<path d="M9 15h6M9 18h6" {st(B, 1.4)}/>'),
+    'clear_all': (f'<rect x="3" y="4" width="15" height="14" rx="1" fill="{W}" {st()}/>'
+                  f'<path d="M3 8.7h15M3 13.3h15M8 4v14M13 4v14" {st(G, 1.2)}/>'
+                  f'<circle cx="17.5" cy="17.5" r="4.8" fill="{R}"/>'
+                  f'<path d="M15.3 15.3l4.4 4.4M19.7 15.3l-4.4 4.4" {st(W, 1.8)}/>'),
+    'delete_row': (f'<rect x="3" y="3.5" width="15" height="15" rx="1" fill="{W}" {st()}/>'
+                   f'<rect x="3" y="8.5" width="15" height="5" fill="#f8d0d0"/>'
+                   f'<path d="M3 8.5h15M3 13.5h15M8.5 3.5v15" {st(G, 1.2)}/>'
+                   f'<rect x="3" y="3.5" width="15" height="15" rx="1" {st()}/>'
+                   f'<circle cx="17.5" cy="17.5" r="4.8" fill="{R}"/>'
+                   f'<path d="M14.7 17.5h5.6" {st(W, 2)}/>'),
 }
 
 

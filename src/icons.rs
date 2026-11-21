@@ -56,6 +56,10 @@ pub enum Icon {
     SpaceHor,
     SpaceVer,
     PartList,
+    ListLoad,
+    ListSave,
+    ClearAll,
+    DeleteRow,
 }
 
 /// SVG-Quelle eines Icons (im Programm eingebettet).
@@ -112,6 +116,10 @@ pub fn source(icon: Icon) -> egui::ImageSource<'static> {
         Icon::SpaceHor => egui::include_image!("../resources/icons/space_hor.svg"),
         Icon::SpaceVer => egui::include_image!("../resources/icons/space_ver.svg"),
         Icon::PartList => egui::include_image!("../resources/icons/part_list.svg"),
+        Icon::ListLoad => egui::include_image!("../resources/icons/list_load.svg"),
+        Icon::ListSave => egui::include_image!("../resources/icons/list_save.svg"),
+        Icon::ClearAll => egui::include_image!("../resources/icons/clear_all.svg"),
+        Icon::DeleteRow => egui::include_image!("../resources/icons/delete_row.svg"),
     }
 }
 

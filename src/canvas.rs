@@ -667,31 +667,14 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
         Kind::Spiegel { pos, rows, .. } => crate::kontaktspiegel::draw(dc, *pos, rows, stroke),
         Kind::Table { a, b, rows, cols, cells, header, fixed_w, art, ab } => {
             let (mn, mx) = norm_rect(*a, *b);
-            let rows = (*rows).max(1);
-            // Daten „Inhaltsverzeichnis“/„Querverweise“: Inhalt bei jedem Zeichnen aus dem Projekt (berechnet.rs)
-            let berechnet = dc.anlage.and_then(|an| crate::berechnet::tabelle(dc.project, an, *art, *ab, *header, rows));
-            let (cols, cells) = match &berechnet {
-                Some((c, z)) => (*c, z),
-                None => (*cols, cells),
+            // Daten „Inhaltsverzeichnis“/„Querverweise“: Inhalt bei jedem Zeichnen aus dem Projekt (berechnet.rs), dort
+            // wie im Original stets mit Kopfzeile und Autobreite; „Ab“ wertet berechnet.rs aus
+            let berechnet = dc.anlage.and_then(|an| crate::berechnet::tabelle(dc.project, an, *art, *ab, true, (*rows).max(1)));
+            let (cols, cells, kopf, auto, ab) = match &berechnet {
+                Some((c, z)) => (*c, z, true, true, 0),
+                None => (*cols, cells, *header, !*fixed_w, *ab as usize),
             };
-            let cols = cols.max(1);
-            let rh = (mx.y - mn.y) / rows as f32;
-            // Schrift wie im Original-Ausdruck (Seite 35: Zeilen 8,1 mm, Schrift ≈ 5 mm), Spalten nach dem längsten Text,
-            // die letzte Spalte füllt den Rest
-            let em = (rh * 0.62).min(5.0);
-            let widths = if *fixed_w { vec![(mx.x - mn.x) / cols as f32; cols] } else { table_widths(p, cells, cols, mx.x - mn.x, em) };
-            draw_grid(p, xf, mn, mx, &widths, &vec![rh; rows], stroke);
-            let mut x = mn.x;
-            for (c, w) in widths.iter().enumerate() {
-                for r in 0..rows {
-                    if let Some(t) = cells.get(r * cols + c).filter(|t| !t.is_empty()) {
-                        let cr = Rect::from_min_max(xf.s(P::new(x, mn.y + r as f32 * rh)), xf.s(P::new(x + w, mn.y + (r + 1) as f32 * rh)));
-                        let font = if *header && r == 0 { times_styled(em * z, true, false) } else { times(em * z) };
-                        p.with_clip_rect(cr).text(Pos2::new(cr.left() + 0.8 * z, cr.center().y), Align2::LEFT_CENTER, t, font, tc);
-                    }
-                }
-                x += w;
-            }
+            crate::tabelle::zeichnen(p, xf, mn, mx, cells, cols, *rows, kopf, auto, ab, &dc.project.schrift, stroke, tc);
         }
         Kind::Busbar { a, x2, name, label, style: bs, xin, xout, .. } => {
             let b = P::new(*x2, a.y);
@@ -883,20 +866,6 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             }
         }
     }
-}
-
-/// Spaltenbreiten einer Tabelle: alle außer der letzten nach dem längsten Text (+ 2 mm), die letzte füllt den Rest.
-pub fn table_widths(p: &egui::Painter, cells: &[String], cols: usize, total: f32, em: f32) -> Vec<f32> {
-    let measure = |t: &str| p.layout_no_wrap(t.to_string(), times(em * 10.0), Color32::BLACK).size().x / 10.0;
-    let mut w: Vec<f32> = (0..cols)
-        .map(|c| cells.iter().skip(c).step_by(cols.max(1)).map(|t| measure(t)).fold(0.0, f32::max) + 2.0)
-        .collect();
-    let used: f32 = w[..cols - 1].iter().sum();
-    if used > total * 0.9 || cols == 1 {
-        return vec![total / cols as f32; cols];
-    }
-    w[cols - 1] = total - used;
-    w
 }
 
 /// Tabellengitter mit den angegebenen Spaltenbreiten und Zeilenhöhen.

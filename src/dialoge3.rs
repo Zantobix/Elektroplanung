@@ -17,7 +17,8 @@ pub enum Dlg3 {
     BusbarObj { id: u64, sliste: Vec<String>, sel: usize, einsp: bool, auto: bool, unten: bool, offset: String, tx: String, ty: String, px: String, py: String, laenge: String },
     Schiene { anlage: usize, orig: String, name: String, set: SchieneSet, pots: Vec<String>, stifte: Vec<String> },
     Verbindung { id: u64, art: usize, leitung: usize, leitungen: Vec<String>, opts: u8, text: String },
-    Tab { id: u64, art: usize, spalten: String, zeilen: String, header: bool, auto: bool, fixiert: bool, ab: String, cells: Vec<Vec<String>>, sel_row: usize },
+    /// Tabelle (TSTab), Zustand und Bedienung in tabelle.rs
+    Tab(crate::tabelle::TabDlg),
     Klemme { id: u64, leisten: Vec<String>, leiste: usize, titel: String, gr_auto: bool, align: usize, tx: String, ty: String, nummer: String, auto: bool, korr: bool, position: String, posk: bool, ebene: usize, funktion: String, ziel_wechsel: bool },
     Verweis { id: u64, anlagen: Vec<String>, anlage: usize, blatt: usize, link: usize, zu: bool, titel: String },
     Bild { id: u64, grafiken: Vec<String>, grafik: usize, art: usize, oben: String, links: String, hoehe: String, breite: String, rahmen: bool, fixiert: bool },
@@ -38,7 +39,6 @@ pub enum Dlg3 {
 }
 
 const DIRS: &[&str] = &["Links nach Rechts", "Rechts nach Links", "Oben nach Unten", "Unten nach Oben"];
-const TAB_ARTEN: &[&str] = &["Benutzerdaten", "Inhaltsverzeichnis", "Querverweise"];
 const BILD_ARTEN: &[&str] = &["Zentriert", "Eingepasst", "Gestreckt"];
 const KL_ALIGN: &[&str] = &["Links", "Mittig", "Rechts"];
 const EBENEN: &[&str] = &["1", "2", "3", "4"];
@@ -162,11 +162,7 @@ impl App {
                 opts: *opts,
                 text: bez.first().map(|b| b.1.clone()).unwrap_or_default(),
             },
-            Kind::Table { rows, cols, cells, header, fixed_w, art, ab, .. } => {
-                let grid: Vec<Vec<String>> = (0..*rows).map(|r| (0..*cols).map(|c| cells.get(r * cols + c).cloned().unwrap_or_default()).collect()).collect();
-                let ab = if *art == 0 && *ab == 0 { 1 } else { *ab };
-                Dlg3::Tab { id, art: (*art as usize).min(TAB_ARTEN.len() - 1), spalten: cols.to_string(), zeilen: rows.to_string(), header: *header, auto: !*fixed_w, fixiert: o.fixed, ab: ab.to_string(), cells: grid, sel_row: 0 }
-            }
+            Kind::Table { rows, cols, cells, header, fixed_w, art, ab, .. } => Dlg3::Tab(crate::tabelle::TabDlg::neu(id, *rows, *cols, cells, *header, *fixed_w, o.fixed, *art, *ab)),
             Kind::Terminal { leiste, nr, level, text_off, tpl, opt, .. } => {
                 let mut leisten = anl.klemmleisten.clone();
                 for k in &anl.klemmen {
@@ -345,7 +341,7 @@ impl App {
         let mut done: Option<bool> = None;
         let (title, size): (&str, [f32; 2]) = match &d {
             Dlg3::BusbarObj { .. } | Dlg3::Verbindung { .. } | Dlg3::Klemme { .. } | Dlg3::Verweis { .. } | Dlg3::Bild { .. } => ("Eigenschaften", [300.0, 400.0]),
-            Dlg3::Tab { .. } => ("Eigenschaften", [420.0, 420.0]),
+            Dlg3::Tab(_) => ("Eigenschaften", [420.0, 420.0]),
             Dlg3::Schiene { .. } => ("Sammelschiene", [289.0, 300.0]),
             Dlg3::KLeiste { .. } => ("Klemmleiste", [300.0, 420.0]),
             Dlg3::Pfad { .. } => ("Pfadbeschreibungen", [354.0, 376.0]),
@@ -365,10 +361,6 @@ impl App {
         let mut rail_edit: Option<String> = None;
         // Klemme › Bauteil "Bearbeiten": Bauteilzuordnung öffnen (Objekt-Id)
         let mut part_edit: Option<u64> = None;
-        // Tabelle › Daten „Inhaltsverzeichnis“: Blätter der aktuellen Anlage (inhalt.rs)
-        let toc = if matches!(d, Dlg3::Tab { art: 1, .. }) { crate::inhalt::blaetter(&self.project, self.cur().map(|r| r.anlage).unwrap_or(0)) } else { vec![] };
-        // … bzw. „Querverweise“ (berechnet.rs); auf dem Blatt wird beides bei jedem Zeichnen neu berechnet
-        let qv = if matches!(d, Dlg3::Tab { art: 2, .. }) { self.cur().and_then(|r| self.project.anlagen.get(r.anlage)).map(|a| crate::berechnet::querverweise(&self.project, a)).unwrap_or_default() } else { vec![] };
         let closed = tool_window(ctx, "dlg3", title, size, egui::Order::Middle, |ui| {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 5.0);
             match &mut d {
@@ -479,80 +471,7 @@ impl App {
                         *opts |= WIRE_BRUECKE;
                     }
                 }
-                Dlg3::Tab { art, spalten, zeilen, header, auto, fixiert, ab, cells, sel_row, .. } => {
-                    let mut act = 0u8;
-                    ui.horizontal(|ui| {
-                        lbl(ui, 50.0, "Daten");
-                        combo(ui, "tart", &strs(TAB_ARTEN), art, 130.0);
-                        if ui.small_button("📂").on_hover_text("Liste laden").clicked() {
-                            act = 1;
-                        }
-                        if ui.small_button("💾").on_hover_text("Liste speichern").clicked() {
-                            act = 2;
-                        }
-                        if ui.small_button("🗑").on_hover_text("Alles löschen").clicked() {
-                            act = 3;
-                        }
-                        if ui.small_button("➖").on_hover_text("Zeile löschen").clicked() {
-                            act = 4;
-                        }
-                    });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(header, "Überschrift");
-                        lbl(ui, 70.0, "Spalten");
-                        ui.add(egui::TextEdit::singleline(spalten).desired_width(40.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(auto, "Autobreite");
-                        lbl(ui, 70.0, "Zeilen");
-                        ui.add(egui::TextEdit::singleline(zeilen).desired_width(40.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(fixiert, "Fixiert");
-                        lbl(ui, 92.0, "Ab");
-                        ui.add(egui::TextEdit::singleline(ab).desired_width(40.0));
-                    });
-                    if *art == 1 {
-                        *cells = crate::inhalt::tabelle(&toc, ab.trim().parse().unwrap_or(0), *header);
-                        *spalten = crate::inhalt::KOPF.len().to_string();
-                        *zeilen = cells.len().to_string();
-                    } else if *art == 2 {
-                        *cells = crate::berechnet::quer_zellen(&qv, ab.trim().parse().unwrap_or(1), *header);
-                        *spalten = crate::berechnet::KOPF_QUER.len().to_string();
-                        *zeilen = cells.len().to_string();
-                    }
-                    // Spalten/Zeilen sofort übernehmen
-                    let nc = spalten.trim().parse::<usize>().unwrap_or(1).clamp(1, 50);
-                    let nr = zeilen.trim().parse::<usize>().unwrap_or(1).clamp(1, 500);
-                    cells.resize(nr, vec![String::new(); nc]);
-                    for r in cells.iter_mut() {
-                        r.resize(nc, String::new());
-                    }
-                    let head: Vec<String> = (1..=nc).map(|c| c.to_string()).collect();
-                    let hr: Vec<&str> = head.iter().map(|s| s.as_str()).collect();
-                    icon_tab(ui, "tabliste", &hr, cells, sel_row, 220.0);
-                    match act {
-                        1 => {
-                            if let Some(p) = rfd::FileDialog::new().add_filter("Liste", &["txt", "csv"]).pick_file() {
-                                if let Ok(s) = std::fs::read_to_string(&p) {
-                                    *cells = list_from_text(&s, nc);
-                                    *zeilen = cells.len().max(1).to_string();
-                                }
-                            }
-                        }
-                        2 => {
-                            if let Some(p) = rfd::FileDialog::new().add_filter("Liste", &["txt", "csv"]).set_file_name("Tabelle.txt").save_file() {
-                                let _ = std::fs::write(p, list_to_text(cells));
-                            }
-                        }
-                        3 => cells.iter_mut().for_each(|r| r.iter_mut().for_each(|c| c.clear())),
-                        4 if cells.len() > 1 => {
-                            cells.remove((*sel_row).min(cells.len() - 1));
-                            *zeilen = cells.len().to_string();
-                        }
-                        _ => {}
-                    }
-                }
+                Dlg3::Tab(t) => crate::tabelle::dialog_ui(ui, t),
                 Dlg3::Klemme { id, leisten, leiste, titel, gr_auto, align, tx, ty, nummer, auto, korr, position, posk, ebene, funktion, ziel_wechsel } => {
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Klemmleiste");
@@ -1065,19 +984,15 @@ impl App {
                     }
                 });
             }
-            Dlg3::Tab { id, cells, header, auto, fixiert, art, ab, .. } => {
+            Dlg3::Tab(t) => {
+                // Zeilen, Spalten, Zellen, Überschrift, Autobreite, Daten (ZCN Feld 9 Byte 0–2) und „Ab“ (Feld 6)
+                let (nr, nc, zellen, kopf, fest, daten, ab_wert) = t.werte();
+                let fixiert = t.fixiert;
                 self.with_sheet(|s, _| {
-                    if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
+                    if let Some(o) = s.objects.iter_mut().find(|o| o.id == t.id) {
                         o.fixed = fixiert;
-                        if let Kind::Table { rows, cols, cells: c, header: h, fixed_w, art: ta, ab: tb, .. } = &mut o.kind {
-                            // Daten und „Ab“ (ZCN Feld 9 Byte 2, Feld 6)
-                            *ta = art as u8;
-                            *tb = ab.trim().parse().unwrap_or(0);
-                            *rows = cells.len().max(1);
-                            *cols = cells.first().map(|r| r.len()).unwrap_or(1).max(1);
-                            *c = cells.iter().flatten().cloned().collect();
-                            *h = header;
-                            *fixed_w = !auto;
+                        if let Kind::Table { rows, cols, cells, header, fixed_w, art, ab, .. } = &mut o.kind {
+                            (*rows, *cols, *cells, *header, *fixed_w, *art, *ab) = (nr, nc, zellen, kopf, fest, daten, ab_wert);
                         }
                     }
                 });

@@ -52,6 +52,7 @@ pub mod symbol_freigaben;
 pub mod symbol_kopie;
 pub mod symbol_stifte;
 pub mod symbols;
+pub mod tabelle;
 pub mod textbox;
 pub mod textmass;
 pub mod titleblock;
