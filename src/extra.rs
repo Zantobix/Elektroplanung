@@ -1489,6 +1489,10 @@ impl App {
             _ => ("Keins".to_string(), "Standard".to_string()),
         };
         let mut new_pen_ltg = false;
+        let sf_mass = {
+            let (x0, _, x1, _) = self.sheet().map(|s| s.frame()).unwrap_or((10.0, 10.0, 287.0, 200.0));
+            (x1 - x0, self.project.title_h())
+        };
         egui::Modal::new(egui::Id::unique("xdlg")).show(ctx, |ui| {
             ui.style_mut().override_font_id = Some(FontId::proportional(13.0));
             ui.set_min_width(320.0);
@@ -1589,37 +1593,8 @@ impl App {
                     ui.radio_value(scope_project, true, "Ganzes Projekt");
                 }
                 XDialog::Title { elems } => {
-                    ui.strong("Schriftfeld bearbeiten");
-                    ui.label("Texte und Textmakros (%Projekt, %Name, %Seite, %Anzahl, %Datum, %Erstellt, %Geändert, %Von, %Status, %Ort, %ZNR, %Kunde, %Owner …):");
-                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                        egui::Grid::new("tbg").num_columns(3).striped(true).show(ui, |ui| {
-                            for (i, e) in elems.iter_mut().enumerate() {
-                                if let TbOwned::Text(_, _, _, _, t, al, _) = e {
-                                    ui.label(format!("{}", i + 1));
-                                    ui.add(egui::TextEdit::singleline(t).desired_width(260.0));
-                                    let names = ["Links", "Mittig", "Rechts"];
-                                    let cur = match al {
-                                        Align::Left => 0,
-                                        Align::Center => 1,
-                                        Align::Right => 2,
-                                    };
-                                    let mut c = cur;
-                                    egui::ComboBox::from_id_salt(("tbal", i)).width(80.0).selected_text(names[c]).show_ui(ui, |ui| {
-                                        for (k, n) in names.iter().enumerate() {
-                                            ui.selectable_value(&mut c, k, *n);
-                                        }
-                                    });
-                                    if c != cur {
-                                        *al = [Align::Left, Align::Center, Align::Right][c];
-                                    }
-                                    ui.end_row();
-                                }
-                            }
-                        });
-                    });
-                    if ui.button("Standard-Schriftfeld wiederherstellen").clicked() {
-                        *elems = titleblock::default_owned();
-                    }
+                    // grafisch wie im Symboleditor (schriftfeld_editor.rs), Maße vom aktuellen Blatt
+                    crate::schriftfeld_editor::ui(ui, elems, sf_mass.0, sf_mass.1);
                 }
                 XDialog::Bauteil { b, .. } => {
                     ui.strong("Bauteil");

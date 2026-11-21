@@ -37,6 +37,7 @@ pub mod pdf;
 pub mod props;
 pub mod pruefen;
 pub mod schriften;
+pub mod schriftfeld_editor;
 pub mod suche;
 pub mod symbol_kopie;
 pub mod symbol_stifte;
