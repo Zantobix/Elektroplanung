@@ -389,6 +389,8 @@ pub fn nachfuehren(project: &Project, o: &Obj, b: &mut Block) {
             b.set_i32(38, ext.counter);
             // ALT/SPA neu aufbauen (ersetzt vorhandene, z. B. schon vom Patch geschriebene – nie doppelt)
             crate::parameter::sync_vsy_kids(b, &ext.params, &ext.texts);
+            // Eigentümer (OWR) neu, auch ein OWR der Vorlage entfernen
+            crate::eigentuemer::owr_schreiben(project, b, ext.eigentuemer);
         }
     }
 }
@@ -452,13 +454,15 @@ fn bezeichnungen(b: &mut Block, bez: &[(P, String)]) {
 /// Kontaktspiegel (OBJ Art 5 mit STB-Zeilen, siehe `kontaktspiegel`): Kennungen von Spiegel, Spule und Kontakten,
 /// Blatt (BLT Byte 72) und Anlage (ANL Byte 0x88) der Kontakte.
 pub fn spiegel_block(project: &Project, o: &Obj) -> Option<Block> {
-    let orte = |r: SheetRef| -> (u64, u64) {
-        let Some(a) = project.anlagen.get(r.anlage) else { return (0, 0) };
-        let anlage = a.raw.as_deref().map(|(b, _)| id_at(b, crate::epr::ANL_ID_AT)).unwrap_or_else(|| anlage_kennung(project, a));
-        let blatt = a.sheets.get(r.sheet).map(|s| s.raw.as_deref().map(|x| id_at(&x.block, crate::epr::BLT_ID_AT)).unwrap_or_else(|| crate::epr_write::new_sheet_id(s).to_bits())).unwrap_or(0);
-        (blatt, anlage)
-    };
-    crate::kontaktspiegel::block(project, o, kennung(o), &kennung, &orte)
+    crate::kontaktspiegel::block(project, o, kennung(o), &kennung, &|r| orte(project, r))
+}
+
+/// Kennungen von Blatt (BLT Byte 72) und Anlage (ANL Byte 0x88) eines Blattes – für STB und OWR.
+pub fn orte(project: &Project, r: SheetRef) -> (u64, u64) {
+    let Some(a) = project.anlagen.get(r.anlage) else { return (0, 0) };
+    let anlage = a.raw.as_deref().map(|(b, _)| id_at(b, crate::epr::ANL_ID_AT)).unwrap_or_else(|| anlage_kennung(project, a));
+    let blatt = a.sheets.get(r.sheet).map(|s| s.raw.as_deref().map(|x| id_at(&x.block, crate::epr::BLT_ID_AT)).unwrap_or_else(|| crate::epr_write::new_sheet_id(s).to_bits())).unwrap_or(0);
+    (blatt, anlage)
 }
 
 /// Zusatz der Blattarten Deckblatt, Querverweise und Stückliste (BLT Feld 32 Byte 1; beim Klemmplan steht dort
@@ -502,6 +506,12 @@ pub fn patch_more(project: &Project, o: &Obj, old: &Kind, b: &mut Block) {
             if (pts.first(), pts.last()) != (op.first(), op.last()) {
                 verweis_enden(project, o, b);
             }
+        }
+    }
+    // Eigentümer (OWR) nur bei Änderung, damit ein OWR auf ein nicht gefundenes Symbol erhalten bleibt
+    if let (Kind::Symbol { ext, .. }, Kind::Symbol { ext: alt, .. }) = (&o.kind, old) {
+        if b.is("VSY") && ext.eigentuemer != alt.eigentuemer {
+            crate::eigentuemer::owr_schreiben(project, b, ext.eigentuemer);
         }
     }
 }

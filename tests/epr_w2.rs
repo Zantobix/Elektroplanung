@@ -119,7 +119,9 @@ fn new_project_saves_as_valid_epr() {
     assert_eq!(back.name, "Testprojekt");
     assert_eq!(back.total_sheets(), 1);
     assert!(!back.anlagen[0].sheets[0].portrait, "neues Blatt muss Querformat bleiben");
-    assert_eq!(back.anlagen[0].sheets[0].frame().1, 20.0, "Rahmen oben wie ein neues Blatt im Original");
+    // oberer Rand der Anlage (ANL +0xa8 = 10 mm), unabhängig von BLT Feld 24 – wie die neuen Listenblätter der
+    // Gegenprobe im Original
+    assert_eq!(back.anlagen[0].sheets[0].frame().1, 10.0, "Rahmen oben wie ein neues Blatt im Original");
     let o = &back.anlagen[0].sheets[0].objects;
     assert!(o.iter().any(|o| matches!(o.kind, Kind::Rect { a, b } if (a.x - 30.0).abs() < 0.11 && (b.y - 70.0).abs() < 0.11) && o.pen == 1), "{o:?}");
     assert_eq!(back.potentiale, p.potentiale);

@@ -23,8 +23,8 @@ impl App {
         self.grafik_dialog_ui(ctx);
         self.template_loaded();
         self.spiegel_ui(ctx);
-        // Kontaktspiegel folgen ihren Kontakten (Lage, neue/gelöschte Kontakte); die X-Lage bleibt wie im Original
-        // stehen, wenn die Spule verschoben wird (kontaktspiegel.rs)
+        // Kontaktspiegel folgen ihren Kontakten (Lage, neue/gelöschte Kontakte) und wie im Original der X-Lage der
+        // Spule; Y = über dem Schriftfeld (kontaktspiegel.rs)
         if self.sym_edit.is_none() {
             if crate::kontaktspiegel::nachfuehren(&mut self.project, &self.lib) {
                 self.dirty = true;

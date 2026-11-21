@@ -131,8 +131,8 @@ Quelle: Elektroplanung.exe über REA (`execute_rizin_command`), Kennungstabelle 
   Folgeteile sind weitere JPG-Köpfe mit Teilkopf; danach END (JPG schließt wie jeder Block mit END).
 - Ergebnis: `eprfile.rs` liest und schreibt W2.epr **byteidentisch** (815 515 Byte); `epr_write.rs` schreibt geänderte Projekte zurück.
   Gegenprobe: Das Original öffnet eine vom Nachbau geänderte Datei fehlerfrei und zeigt die Änderungen.
-- BLT Feld 24 = Rahmenhöhe in 0,1 mm (hoch 2770, quer 1800…1900); Feld 32 = 7 hoch / 6 quer.
-  Quer: Rahmen oben = 205 − Höhe − 5 mm (Altbau EG: 1900 → 10 mm, wie im Original-Ausdruck).
+- BLT Feld 24 = Unterkante der Zeichenfläche in 0,1 mm (hoch 2770, quer 1900; das Original berechnet es beim
+  Zeichnen neu, siehe Kontaktspiegel unten); Feld 32 = 7 hoch / 6 quer. Rahmen quer oben 10 mm (ANL-Rand).
 - VSY Feld 23 = Zusatzoptionen (Bitmaske) des Symbols; Symbolelemente mit Feld 0x48 = n sind nur sichtbar, wenn Bit n−1 gesetzt ist.
   Namen in GRD › OPT (Feld 1 = Nummer, STR = Name), z. B. Steckdose: 1 = "Ports" (hochgestellte Anzahl), 2 = "SPD".
 - OBJ (Verweis): Feld 6/7 Lage, 2/3 Versatz zur **Mitte der Textoberkante** (0,1 mm), 14 Richtung in 0,1° (0 ►, 900 ▲,
@@ -246,11 +246,20 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   Bit 0 = Zeilen vorhanden; je Zeile STB (0x1c Byte: Kennung Kontakt, Blatt (BLT Byte 72), Anlage (ANL Byte 0x88),
   Byte 0x18 Art 0 Schließer/1 Öffner/2 Wechsler) mit je Anschlussnummer einem ALT (Feld 0 = Nummer 1–3), darin
   STR ohne abschließende 0 (STR neben dem ALT meldet das Original als Fehler).
-  Y = Rahmenhöhe des Blattes, Zeilen 3 mm (Wechsler +2 mm davor, +0,5 mm danach). ALT Feld 0 = Spalte 1–3, Feld 1 = 0
+  Zeilen 3 mm (Wechsler +2 mm davor, +0,5 mm danach). ALT Feld 0 = Spalte 1–3, Feld 1 = 0
   (Übernehmen hört bei der ersten leeren Spalte auf); Feld 14 = Höhe in 0,1 mm (30 je Zeile, +25 vor einem Wechsler
-  außer in Zeile 1, mindestens 30). Der Spiegel folgt der Spule nicht und wird mit ihr nicht gelöscht (keine Stelle im
-  Dekompilat; W2 hat einen Spiegel ohne Spule), „Alles markieren“ und Kopieren lassen ihn aus.
-  Details in `src/kontaktspiegel.rs`.
+  außer in Zeile 1, mindestens 30). Lage (Zeichenroutine 0x438b94): BLT Feld 24 := Blatthöhe − unterer Rand
+  (ANL +0xac, hoch +0xa4) − Schriftfeldhöhe − größtes Feld 14 der Spiegel des Blattes (W2: 1900, hoch 2770, mit dem
+  leeren Spiegel 1870); die erste Zeile steht bei Feld 24, also direkt über dem Schriftfeld. X := X der Spule
+  (VSY Feld 16) bei jedem Zeichnen. Jede Zeile = Bibliothekssymbol in Maßstab 1, Drehung 3; Lage daneben über die
+  Textroutine 0x46e9f4 Art 0x18 („/Pfad“ auf demselben Blatt). Mit der Spule gelöscht wird der Spiegel nicht
+  (W2 hat einen Spiegel ohne Spule), „Alles markieren“ und Kopieren lassen ihn aus. Details in `src/kontaktspiegel.rs`.
+- BLT Feld 24 ist damit keine Rahmenhöhe: der Rahmen kommt aus den Rändern der Anlage (ANL +0x98 Höhe 2100,
+  +0x9c Breite 2970, +0xa0…+0xac Ränder 50/50/100/50 – quer oben 10 mm, sonst 5 mm; hoch links 10 mm).
+- VSY › OWR (24 Byte, letzter Unterblock): Kennung des Eigentümers (VSY Byte 96), seines Blattes (BLT Byte 72),
+  seiner Anlage (ANL Byte 0x88). Beim Zeichnen (Textroutine 0x46e9f4 Art 1, Laufzeit +0xb4) zeigt das Symbol die
+  Kennzeichnung des Eigentümers und darunter dessen Lage (Ausdruck Seite 10/18/29: „-K1“ mit „/5“, „/4“, „/5“;
+  Schrift etwa 1,5 mm, Grundlinie 2 mm unter der Kennzeichnung, mittig). `src/eigentuemer.rs`.
 - Klemmplan-Brücken: je Brückenverbindung ein Paar Klemme/Gegenklemme (0x4830a8), geordnet zu Ketten (0x49a86c);
   gezeichnet in Spuren: erste Spur, deren letzte Kette eine der Klemmen enthält oder darüber endet (aus den
   Ausdrucken Seite 12 und 39, `klemmplan::ketten`).

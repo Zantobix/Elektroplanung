@@ -8,7 +8,7 @@
 //! %TEMP%\ep_orig_test\gegenprobe_plaene_quelle.epr kopiert, gearbeitet wird mit der Kopie. Ist Gruppen.tfi der
 //! Datenbank gesperrt, wird die Datenbank nach %TEMP%\ep_orig_test\Datenbank kopiert und EP_DATENBANK dorthin gesetzt.
 use elektroplanung::schriftfeld_editor::{ziehen, Griff};
-use elektroplanung::{berechnet, epr, epr_projekt, epr_write, kontaktspiegel, model::*, symbol_stifte, symbols, titleblock::TbOwned};
+use elektroplanung::{berechnet, eigentuemer, epr, epr_projekt, epr_write, kontaktspiegel, model::*, symbol_stifte, symbols, titleblock::TbOwned};
 use std::path::{Path, PathBuf};
 
 /// Ordner rekursiv kopieren.
@@ -64,7 +64,10 @@ fn bmk_lage(p: &Project, id: u64) -> String {
     let Kind::Symbol { bmk, ext, pos, .. } = &o.kind else { return String::new() };
     let a = &p.anlagen[r.anlage];
     let s = &a.sheets[r.sheet];
-    format!("{} ({}, Blatt {}/{})", symbols::display_bmk(bmk, ext.counter, &elektroplanung::canvas::bmk_ctx(a, s)), sym_name(p, o), s.number, berechnet::blatt_pfad(s, pos.x).rsplit('/').next().unwrap_or(""))
+    let eigen = symbols::display_bmk(bmk, ext.counter, &elektroplanung::canvas::bmk_ctx(a, s));
+    let gezeigt = eigentuemer::anzeige_bmk(p, o, &elektroplanung::canvas::bmk_ctx(a, s));
+    let zusatz = if gezeigt != eigen { format!(" = Eigentümer, eigene Vorlage {eigen}") } else { String::new() };
+    format!("{gezeigt} ({}{zusatz}, Blatt {}/{})", sym_name(p, o), s.number, berechnet::blatt_pfad(s, pos.x).rsplit('/').next().unwrap_or(""))
 }
 
 fn main() {
@@ -120,18 +123,21 @@ fn main() {
         Kind::Symbol { pos, .. } => *pos,
         _ => unreachable!(),
     };
-    let y = kontaktspiegel::start_y(p.sheet(sr).unwrap());
     let id = p.alloc_id();
-    p.sheet_mut(sr).unwrap().objects.push(Obj { id, kind: Kind::Spiegel { pos: P::new(spule_pos.x, y), owner: spule, rows: rows.clone(), auto: false }, pen: 0, fixed: false, group: None, raw: None });
+    p.sheet_mut(sr).unwrap().objects.push(Obj { id, kind: Kind::Spiegel { pos: P::new(spule_pos.x, 0.0), owner: spule, rows: rows.clone(), auto: false }, pen: 0, fixed: false, group: None, raw: None });
+    // Y wie im Original: über dem Schriftfeld (Unterkante der Zeichenfläche − Höhe des Spiegels)
+    kontaktspiegel::nachfuehren(&mut p, &lib);
     {
         let s = p.sheet(sr).unwrap();
+        let y = kontaktspiegel::start_y(&p, s);
         let mut t = format!(
-            "{anl} / Blatt {} \u{201e}{}\u{201c}: Kontaktspiegel unter der Spule {} bei X = {:.1} mm (unter dem Rahmen, Y = Rahmenhöhe {:.1} mm), Höhe Feld 14 = {}; Zeilen:",
+            "{anl} / Blatt {} \u{201e}{}\u{201c}: Kontaktspiegel unter der Spule {} bei X = {:.1} mm, erste Zeile Y = {:.1} mm (Unterkante der Zeichenfläche {:.1} mm − Höhe), Höhe Feld 14 = {}; Zeilen:",
             s.number,
             s.name,
             bmk_lage(&p, spule),
             spule_pos.x,
             y,
+            kontaktspiegel::zeichen_unterkante(&p, s),
             kontaktspiegel::hoehe(&rows)
         );
         for (i, z) in rows.iter().enumerate() {
@@ -144,6 +150,20 @@ fn main() {
             );
         }
         wo.push(t);
+    }
+    // Übernehmen im Dialog: die Spule wird Eigentümer der Kontakte (VSY › OWR); neu ist das beim Wechsler
+    let neu_owr: Vec<u64> = rows.iter().map(|z| z.referenz).filter(|i| p.find_obj(*i).is_some_and(|(_, o)| matches!(&o.kind, Kind::Symbol { ext, .. } if ext.eigentuemer != spule))).collect();
+    let vorher_owr: Vec<String> = neu_owr.iter().map(|i| bmk_lage(&p, *i)).collect();
+    kontaktspiegel::eigentuemer_setzen(&mut p, spule, &neu_owr);
+    for (i, v) in neu_owr.iter().zip(&vorher_owr) {
+        let (r, o) = p.find_obj(*i).unwrap();
+        let qv = eigentuemer::querverweis(&p, o, Some(r)).unwrap_or_default();
+        wo.push(format!("    neuer Eigentümer (OWR) = Spule: {v} zeigt jetzt {} und darunter klein \u{201e}{qv}\u{201c} (Lage der Spule)", bmk_lage(&p, *i)));
+    }
+    // vorhandene OWR aus W2 (Schließer neben -X2.9): Anzeige wie im Original „-K1“ mit „/Pfad“
+    for o in p.anlagen[ai].sheets[sr.sheet].objects.iter().filter(|o| matches!(&o.kind, Kind::Symbol { ext, .. } if ext.eigentuemer == spule) && !neu_owr.contains(&o.id)) {
+        let qv = eigentuemer::querverweis(&p, o, Some(sr)).unwrap_or_default();
+        wo.push(format!("    Eigentümer schon in W2: {} mit \u{201e}{qv}\u{201c} darunter", bmk_lage(&p, o.id)));
     }
 
     // 2.–4. neue Listenblätter in Unterverteilung 1, abwechselnd, damit keine Folgeblätter entstehen
@@ -252,6 +272,9 @@ fn main() {
         for (x, y) in rows.iter().zip(r2) {
             assert_eq!((x.art, &x.felder), (y.art, &y.felder));
             assert_eq!(bmk_lage(&back, y.referenz), bmk_lage(&p, x.referenz));
+            // OWR geschrieben: Eigentümer jedes Kontakts ist die Spule
+            let e = back.find_obj(y.referenz).and_then(|(_, o)| if let Kind::Symbol { ext, .. } = &o.kind { Some(ext.eigentuemer) } else { None });
+            assert_eq!(e, Some(*owner), "Eigentümer von {}", bmk_lage(&back, y.referenz));
         }
     }
     let d = |q: &Project, n: &str| q.symdefs.iter().find(|d| d.name == n && benutzt(q, &d.key) > 0).cloned().unwrap();

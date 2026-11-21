@@ -17,8 +17,7 @@
 //!   Inhaltsverzeichnis nicht, stehen zwei Tabellen nebeneinander. „Zusammenhängende Blätter ergeben eine
 //!   zusammenhängende Liste“ (Anleitung 4.2); fehlende Folgeblätter legt `folgeblaetter_anlegen` an.
 //! Spaltenbreiten, Ränder und Zeilenhöhe (5 mm) vermessen an Bildschirmaufnahmen des Originals (21.11.2026).
-//! Offen: Das Original zeichnet den Rahmen der Listenblätter 10 mm unter der Blattkante, der Nachbau wie bei
-//! Schaltplänen nach BLT Feld 24 (bei 1800 also 20 mm).
+//! Der Rahmen beginnt wie bei allen Querblättern 10 mm unter der Blattkante (oberer Rand der Anlage, `Sheet::frame`).
 
 use crate::canvas::{bmk_ctx, draw_grid, natural_key, times, DrawCtx};
 use crate::model::*;
