@@ -349,7 +349,8 @@ pub fn bmk_ctx(anlage: &Anlage, sheet: &Sheet) -> symbols::BmkCtx {
     symbols::BmkCtx { sheet: sheet.number, ort: sheet.ort.clone(), anlage: if anlage.set.kurz.is_empty() { anlage.name.clone() } else { anlage.set.kurz.clone() } }
 }
 
-pub fn draw_sheet_base(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, colors: &SheetColors, raster: f32, grid_on: bool) {
+/// `gitter` = Rastergitter (Weite mm, Ursprung, „Rand ist Ursprung“), `None` = ohne Gitter (Druck, Export).
+pub fn draw_sheet_base(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, colors: &SheetColors, gitter: Option<(f32, P, bool)>) {
     let p = dc.painter;
     let xf = dc.xf;
     let z = xf.z;
@@ -357,24 +358,16 @@ pub fn draw_sheet_base(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, colors: &Sh
     let sheet_rect = Rect::from_min_max(xf.s(P::new(0.0, 0.0)), xf.s(P::new(sw, sh)));
     p.rect_filled(sheet_rect, 0.0, colors.sheet);
 
-    // Raster
-    if grid_on && raster > 0.0 {
-        let mut step = raster;
-        while step * z < 6.0 {
-            step *= 2.0;
-        }
+    // Raster wie im Original: Linien ab dem Ursprung, nur ab 5 Pixel Abstand (siehe `raster.rs`)
+    if let Some((weite, o, rand)) = gitter {
         let gs = Stroke::new(1.0, colors.grid);
-        let mut x = GRID_ORIGIN;
-        while x <= sw {
+        for x in crate::raster::gitter_linien(o.x, weite, z, sw, rand) {
             let sx = xf.s(P::new(x, 0.0)).x.round() + 0.5;
             p.line_segment([Pos2::new(sx, sheet_rect.top()), Pos2::new(sx, sheet_rect.bottom())], gs);
-            x += step;
         }
-        let mut y = GRID_ORIGIN;
-        while y <= sh {
+        for y in crate::raster::gitter_linien(o.y, weite, z, sh, rand) {
             let sy = xf.s(P::new(0.0, y)).y.round() + 0.5;
             p.line_segment([Pos2::new(sheet_rect.left(), sy), Pos2::new(sheet_rect.right(), sy)], gs);
-            y += step;
         }
     }
 

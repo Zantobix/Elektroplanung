@@ -642,7 +642,8 @@ impl App {
         if r <= 0.0 || self.no_snap {
             return P::new((p.x * 10.0).round() / 10.0, (p.y * 10.0).round() / 10.0);
         }
-        P::new(GRID_ORIGIN + ((p.x - GRID_ORIGIN) / r).round() * r, GRID_ORIGIN + ((p.y - GRID_ORIGIN) / r).round() * r)
+        // absolute Rasterpunkte ab dem Ursprung des Blattes (Rand oder Blattecke) wie im Original
+        crate::raster::fang(p, r, self.raster_ursprung())
     }
 
     /// Nächster Anschlusspunkt (Symbol, Klemme, Leitungsende) in Reichweite.
@@ -1245,6 +1246,7 @@ impl App {
         match res {
             Ok(()) => {
                 self.dirty = false;
+                self.raster_merken();
                 self.info = format!("Gespeichert: {}", p.display());
                 if !skipped.is_empty() {
                     self.dialog = Some(Dialog::Message(format!(
@@ -1284,6 +1286,7 @@ impl App {
                     let extra: Vec<SymDef> = self.project.symdefs.iter().filter(|d| symbols::find(&self.lib, &d.key).is_none()).cloned().collect();
                     self.lib.extend(extra);
                     self.path = Some(p);
+                    self.raster_laden();
                     self.fix_tabs();
                     // Wie das Original: alle Blätter als Reiter öffnen, erstes aktiv, Explorer auf "Projekt"
                     self.tabs.clear();

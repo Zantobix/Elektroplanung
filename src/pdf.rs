@@ -73,7 +73,7 @@ pub fn render_sheets(
             let xf = Xf { origin, z };
             let dc = DrawCtx { painter: &painter, xf, lib, project, images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage) };
             let colors = SheetColors { sheet: Color32::WHITE, grid: Color32::WHITE, print: true };
-            canvas::draw_sheet_base(&dc, sheet, anlage, &colors, 0.0, false);
+            canvas::draw_sheet_base(&dc, sheet, anlage, &colors, None);
             for o in &sheet.objects {
                 canvas::draw_object(&dc, o, None);
             }

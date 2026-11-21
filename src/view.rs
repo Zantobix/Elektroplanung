@@ -140,6 +140,7 @@ impl App {
             rr.response.on_hover_text("Rasterauswahl");
             if rr.inner {
                 self.raster_idx = ri;
+                self.raster_merken();
             }
             if tool_button(ui, Icon::Grid, "Rasterfanggitter anzeigen – Rasterfang ein/aus", true, self.grid).clicked() {
                 self.grid = !self.grid;
@@ -1012,7 +1013,7 @@ impl App {
         let Some(sheet) = anlage.sheets.get(r.sheet) else { return };
         let dc = DrawCtx { painter: &clip, xf, lib: &self.lib, project: &self.project, images: &self.images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage) };
         let colors = SheetColors { sheet: self.sheet_color, grid: self.grid_color, print: false };
-        canvas::draw_sheet_base(&dc, sheet, anlage, &colors, self.raster(), self.grid);
+        canvas::draw_sheet_base(&dc, sheet, anlage, &colors, self.grid.then(|| (self.raster(), self.raster_ursprung(), self.opt.rand_ursprung)));
         // Markierung wie im Original: Symbole mit lila Feld um ihren Umriss (6 px links/oben, 8 px rechts/unten),
         // Texte mit lila Feld und rot gestricheltem Rahmen um die Textbox
         for o in sheet.objects.iter().filter(|o| self.selection.contains(&o.id)) {
@@ -1966,7 +1967,7 @@ impl App {
             self.paste();
         }
         if arrows.iter().any(|b| *b) && !self.selection.is_empty() {
-            let st = if shift || self.fang() <= 0.0 { 1.0 } else { self.fang() };
+            let st = self.pfeil_schritt(shift);
             let d = if arrows[0] {
                 P::new(-st, 0.0)
             } else if arrows[1] {
