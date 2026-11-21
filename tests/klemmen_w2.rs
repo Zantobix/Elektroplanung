@@ -238,3 +238,23 @@ fn new_strip_terminals_and_plan_sheet_are_written() {
     let diff = bytes.iter().zip(&again).position(|(a, b)| a != b);
     assert_eq!((again.len(), diff), (bytes.len(), None), "{:?}", diff.map(|d| (&bytes[d.saturating_sub(40)..d + 40], &again[d.saturating_sub(40)..d + 40])));
 }
+
+/// Gelöschte Klemmstelle: ihr KFO-Eintrag entfällt, die übrigen bleiben unverändert in ihrer Reihenfolge.
+#[test]
+fn deleted_terminal_leaves_strip() {
+    let Some(path) = sample() else { return };
+    let mut p = epr::import(&path).unwrap();
+    let (ai, _) = anlage(&p, "Unterverteilung 1");
+    for s in &mut p.anlagen[ai].sheets {
+        s.objects.retain(|o| !matches!(&o.kind, Kind::Terminal { leiste, nr, .. } if leiste == "-X1" && *nr == 19));
+    }
+    let f = EprFile::parse(&epr_write::to_bytes(&p).unwrap()).unwrap();
+    let orig = EprFile::read(&path).unwrap();
+    let kfo = |f: &EprFile| -> Vec<Vec<u8>> {
+        let anl = f.root("PRJ").unwrap().kids_of("ANL").find(|b| b.data.starts_with(b"Unterverteilung 1")).unwrap();
+        anl.kids_of("KLM").find(|k| k.i32(13) == 0x1c).unwrap().kids_of("KFO").map(|k| k.data.clone()).collect()
+    };
+    let (a, b) = (kfo(&orig), kfo(&f));
+    assert_eq!(b.len() + 1, a.len());
+    assert_eq!(a.into_iter().filter(|k| i32::from_le_bytes(k[16..20].try_into().unwrap()) != 19).collect::<Vec<_>>(), b);
+}

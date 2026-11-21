@@ -377,11 +377,7 @@ pub fn sync_klm(a: &Anlage, blk: &mut Block) {
                     kids.push(k);
                 }
                 // Klemme ohne Klemmstelle (aus der Indexübersicht) bleibt, gelöschte Klemmstelle entfällt
-                None if !orig_terms.contains(&t) || t == 0 => {
-                    if info.nrs.contains(&(k.i32(4).max(0) as u32)) || raw.is_some() {
-                        kids.push(k.clone());
-                    }
-                }
+                None if !orig_terms.contains(&t) => kids.push(k.clone()),
                 None => {}
             }
         }
