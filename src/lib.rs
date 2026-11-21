@@ -4,6 +4,8 @@ pub mod app;
 pub mod baum;
 pub mod baum_klappen;
 pub mod bauteil_darstellung;
+pub mod bauteilliste;
+pub mod bezeichner;
 pub mod berechnet;
 pub mod bib_gruppen;
 pub mod bildexport;

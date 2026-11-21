@@ -61,6 +61,12 @@ pub struct SymEdit {
     pub frage: Option<usize>,
     /// eigene Stifte des Symbols (SIT, Nummer ab 4); Objekte im Editor tragen die Stiftnummer in `pen`
     pub pens: Vec<(u32, Stift)>,
+    /// per „Bezeichner setzen“ geänderte Anschlussbezeichnung: Anschluss-Objekt → Textnummer (bezeichner.rs)
+    pub pin_text: HashMap<u64, u32>,
+    /// „Bezeichner setzen“ wartet auf den Klick auf einen Text: Anschluss-Objekt
+    pub bezeichner_pick: Option<u64>,
+    /// Stiftauswahl des Hauptfensters beim Öffnen (der Editor benutzt `App::pen` für die Symbolstifte)
+    pub haupt_pen: usize,
 }
 
 impl SymEdit {
@@ -304,6 +310,9 @@ impl App {
             instanz: None,
             frage: None,
             pens: def.pens.clone(),
+            pin_text: HashMap::new(),
+            bezeichner_pick: None,
+            haupt_pen: self.pen,
         });
         self.selection.clear();
         self.tool = Tool::Select;
@@ -335,7 +344,7 @@ impl App {
     pub fn symbol_editor_commit(&mut self) {
         let Some(e) = self.sym_edit.take() else { return };
         self.raster_idx = e.prev_raster;
-        self.pen = 0;
+        self.pen = e.haupt_pen;
         let b = |p: P| P::new(((p.x - EDIT_C.x) / EDIT_K * 10.0).round() / 10.0, ((p.y - EDIT_C.y) / EDIT_K * 10.0).round() / 10.0);
         let mut prims = vec![];
         let mut pvis = vec![];
@@ -400,8 +409,10 @@ impl App {
                 Kind::Terminal { pos, nr, .. } => {
                     pins.push(b(*pos));
                     pin_vis.push(v);
-                    // Anschlussbezeichnung (Textnummer) des bisherigen Anschlusses beibehalten
-                    pin_info.push(symbols::find(&self.lib, &e.key).and_then(|d| d.pin_info.get((*nr as usize).wrapping_sub(1))).copied().unwrap_or((0, 0)));
+                    // Anschlussbezeichnung (Textnummer) des bisherigen Anschlusses beibehalten bzw. die per
+                    // „Bezeichner setzen“ gewählte
+                    let alt = symbols::find(&self.lib, &e.key).and_then(|d| d.pin_info.get((*nr as usize).wrapping_sub(1))).copied().unwrap_or((0, 0));
+                    pin_info.push((e.pin_text.get(&o.id).copied().unwrap_or(alt.0), alt.1));
                     None
                 }
                 _ => None,
@@ -475,7 +486,7 @@ impl App {
     pub fn symbol_editor_cancel(&mut self) {
         if let Some(e) = self.sym_edit.take() {
             self.raster_idx = e.prev_raster;
-            self.pen = 0;
+            self.pen = e.haupt_pen;
         }
         self.selection.clear();
         self.restore_view();

@@ -104,8 +104,11 @@ impl App {
                     }
                 }
                 Eintrag::BezeichnerSetzen => {
+                    // wie im Original: danach den Text anklicken, der den Anschluss bezeichnet (bezeichner.rs)
                     if ui.button("Bezeichner setzen").clicked() {
-                        self.open_textchange();
+                        if let MenueZiel::Anschluss(id) = ziel {
+                            self.bezeichner_start(id);
+                        }
                         ui.close();
                     }
                 }
@@ -120,6 +123,7 @@ impl App {
                         }
                     });
                 }
+                Eintrag::Bauteilliste => self.menu_bauteilliste(ui, ziel),
                 Eintrag::Pfadbezeichnung => {
                     if ui.button("Pfadbezeichnung").clicked() {
                         self.open_columns_dialog();
@@ -161,8 +165,35 @@ impl App {
         });
     }
 
+    /// Bauteilliste › Bearbeiten / Loeschen an Symbol oder Klemmstelle. „Loeschen“ entfernt wie im Original
+    /// (Loeschen1Click 0x49d81c) die Zuordnung aller markierten Symbole und Klemmstellen (ohne Markierung die des
+    /// angeklickten Objekts).
+    fn menu_bauteilliste(&mut self, ui: &mut egui::Ui, ziel: MenueZiel) {
+        let Some(id) = ziel.id() else { return };
+        ui.menu_button("Bauteilliste", |ui| {
+            if ui.button("Bearbeiten").clicked() {
+                self.bauteilliste_oeffnen(id);
+                ui.close();
+            }
+            if ui.button("Loeschen").clicked() {
+                let mut ids: Vec<u64> = self.selected_objs().iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })).map(|o| o.id).collect();
+                if ids.is_empty() {
+                    ids.push(id);
+                }
+                if ids.iter().any(|i| self.project.part_of.contains_key(i)) {
+                    self.checkpoint();
+                    ids.iter().for_each(|i| {
+                        self.project.part_of.remove(i);
+                    });
+                    self.dirty = true;
+                }
+                ui.close();
+            }
+        });
+    }
+
     /// Einträge für Symbole: Bildindex, Optionen, Parameter, Alternativtext, Eigentümer, Kontaktspiegel,
-    /// Bauteilliste, Symbol bearbeiten.
+    /// Symbol bearbeiten.
     fn menu_symbol(&mut self, ui: &mut egui::Ui, e: Eintrag, obj: Option<&Obj>) {
         let Some(so) = obj else { return };
         let Kind::Symbol { key, option, flags, ext, .. } = &so.kind else { return };
@@ -254,7 +285,7 @@ impl App {
                         ui.close();
                     }
                     if ui.add_enabled(hat, egui::Button::new("Suchen")).clicked() {
-                        self.find_same_bmk(id);
+                        self.eigentuemer_suchen(id);
                         ui.close();
                     }
                 });
@@ -264,20 +295,6 @@ impl App {
                     self.open_spiegel();
                     ui.close();
                 }
-            }
-            Eintrag::Bauteilliste => {
-                ui.menu_button("Bauteilliste", |ui| {
-                    if ui.button("Bearbeiten").clicked() {
-                        let idx = self.project.part_of.get(&id).copied().unwrap_or(0);
-                        self.xdlg = Some(crate::extra::XDialog::PartAssign { obj: id, idx });
-                        ui.close();
-                    }
-                    if ui.button("Loeschen").clicked() {
-                        self.checkpoint();
-                        self.project.part_of.remove(&id);
-                        ui.close();
-                    }
-                });
             }
             Eintrag::SymbolBearbeiten => {
                 if ui.button("Symbol bearbeiten").clicked() {

@@ -465,6 +465,10 @@ impl App {
         if resp.drag_started() && matches!(node.action, TAction::Symbol(_)) {
             ev.sym_drag = true;
         }
+        // Bauteil in die Bauteilliste eines Symbols ziehen (bauteilliste.rs)
+        if let TAction::Bauteil(i) = &node.action {
+            resp.dnd_set_drag_payload(crate::bauteilliste::BauteilZug(*i));
+        }
         // Blätter per Ziehen umsortieren (innerhalb der Anlage)
         if let TAction::Sheet(r) = &node.action {
             if resp.drag_started() {
@@ -1234,7 +1238,7 @@ impl App {
             }
         }
         // Vormarkierung des Auswahlwerkzeugs und Mauszeiger mit Zusatz wie im Original (hover.rs, zeiger.rs)
-        let frei = self.tool == Tool::Select && matches!(self.drag, Drag::None) && self.placing.is_none() && self.ring.is_none() && !self.zoom_tool && self.owner_pick.is_none() && !self.spiegel_pick_aktiv();
+        let frei = self.tool == Tool::Select && matches!(self.drag, Drag::None) && self.placing.is_none() && self.ring.is_none() && !self.zoom_tool && self.owner_pick.is_none() && !self.spiegel_pick_aktiv() && !self.bezeichner_pick_aktiv();
         let vormarkierung = hover.filter(|_| inside && frei).and_then(|h| self.vormarkierung(xf.m(h), tol, xf.z));
         let wahl = hover.filter(|_| inside).map(|h| crate::zeiger::waehlen(&self.zeiger_zustand(xf.m(h), tol, xf.z, vormarkierung, ctrl)));
         crate::zeiger::setzen(ui.ctx(), wahl);
@@ -1357,6 +1361,18 @@ impl App {
             }
         }
 
+        // Symboleditor › Bezeichner setzen: der nächste Klick wählt den Text des Anschlusses (bezeichner.rs)
+        if self.bezeichner_pick_aktiv() {
+            if inside && pressed_l {
+                let text = self.sheet().and_then(|s| s.objects.iter().rev().find(|o| matches!(o.kind, Kind::Text { .. }) && canvas::hit(o, m, tol, &self.lib)).map(|o| o.id));
+                self.bezeichner_klick(text);
+                self.drag = Drag::None;
+            }
+            if inside && pressed_r {
+                self.bezeichner_abbruch();
+            }
+            return;
+        }
         // Kontaktspiegel › Set Referenz: das angeklickte Symbol wird Referenz der gemerkten Zeile
         if self.spiegel_pick_aktiv() {
             if inside && pressed_l {
@@ -2072,6 +2088,9 @@ impl App {
         }
         if self.spiegel_pick_aktiv() && ctx.input(|i| i.key_pressed(Key::Escape)) {
             self.spiegel_pick_ende(None);
+        }
+        if self.bezeichner_pick_aktiv() && ctx.input(|i| i.key_pressed(Key::Escape)) {
+            self.bezeichner_abbruch();
         }
         // Esc bricht eine angefangene Kurve bzw. eine Leitung im Klickbetrieb ab
         if matches!(&self.drag, Drag::Kurve(_) | Drag::Wire { .. }) && ctx.input(|i| i.key_pressed(Key::Escape)) {

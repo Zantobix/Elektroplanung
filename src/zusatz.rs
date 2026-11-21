@@ -14,6 +14,8 @@ pub struct Zusatz {
     pub template: Option<std::path::PathBuf>,
     /// Kontaktspiegel (TSSpiegel, kontaktspiegel.rs)
     pub spiegel: Option<crate::kontaktspiegel::SpiegelDlg>,
+    /// Bauteilliste › Bearbeiten (TSSpiegel Betriebsart 1, bauteilliste.rs)
+    pub bauteilliste: Option<crate::bauteilliste::BauteilListeDlg>,
 }
 
 impl App {
@@ -23,6 +25,7 @@ impl App {
         self.grafik_dialog_ui(ctx);
         self.template_loaded();
         self.spiegel_ui(ctx);
+        self.bauteilliste_ui(ctx);
         // Kontaktspiegel folgen ihren Kontakten (Lage, neue/gelöschte Kontakte) und wie im Original der X-Lage der
         // Spule; Y = über dem Schriftfeld (kontaktspiegel.rs)
         if self.sym_edit.is_none() {
