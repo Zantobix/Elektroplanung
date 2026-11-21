@@ -1014,20 +1014,28 @@ impl App {
 
     /// Gruppen der Bibliothek bzw. Bauteilgruppen bearbeiten (TBiblio): 0/10 Hinzufügen, 1/11 Löschen, 2/12 Umbenennen.
     /// Symbolgruppen gibt es nur über ihre Symbole: Umbenennen/Löschen betrifft Benutzer- und Projektsymbole
-    /// (gelöschte Gruppen wandern nach "Sonstiges"); Hinzufügen legt ein leeres Benutzersymbol als Platzhalter an.
+    /// (gelöschte Gruppen wandern nach "Sonstiges"); Hinzufügen merkt die neue Gruppe ohne Symbol (bib_gruppen.rs).
     pub fn library_group_action(&mut self, a: u8, old: &str, new: &str) {
         let split = |g: &str| -> Vec<String> { g.split(" / ").map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect() };
         match a {
             0 if !new.trim().is_empty() => {
-                let mut d = SymDef::empty(&format!("user:200:{}", new.trim()), new.trim(), "-A%C");
-                d.haupt = 200;
-                d.group = split(new);
-                self.lib.push(d);
+                if !crate::bib_gruppen::hinzufuegen(&mut self.lib_gruppen, &self.lib, new) {
+                    self.info = format!("Gruppe „{}“ gibt es schon", new.trim());
+                    return;
+                }
+                crate::bib_gruppen::speichern(&appdir(), &self.lib_gruppen);
+                self.lib_filter = split(new).join(" / ");
+                self.info = format!("Gruppe „{}“ angelegt", self.lib_filter);
+                return;
             }
             1 | 2 => {
                 let target = if a == 1 { vec!["Sonstiges".to_string()] } else { split(new) };
                 if target.is_empty() || old.is_empty() {
                     return;
+                }
+                // gemerkte leere Gruppen folgen (Löschen entfernt sie)
+                if crate::bib_gruppen::aendern(&mut self.lib_gruppen, old, if a == 1 { None } else { Some(new) }) {
+                    crate::bib_gruppen::speichern(&appdir(), &self.lib_gruppen);
                 }
                 for d in self.lib.iter_mut().chain(self.project.symdefs.iter_mut()) {
                     if d.group.join(" / ") == old && (d.key.starts_with("user:") || d.key.starts_with("proj:") || d.key.starts_with("epr:")) {
@@ -1108,6 +1116,7 @@ impl App {
     }
 
     pub fn load_user_library(&mut self) {
+        self.lib_gruppen = crate::bib_gruppen::laden(&appdir());
         if let Ok(s) = std::fs::read_to_string(appdir().join("benutzer_symbole.json")) {
             if let Ok(v) = serde_json::from_str::<Vec<SymDef>>(&s) {
                 for d in v {
@@ -1153,6 +1162,7 @@ impl App {
             match self.lib_tab {
                 1 => {
                     let mut groups: Vec<String> = self.lib.iter().map(|d| d.group.join(" / ")).collect();
+                    groups.extend(crate::bib_gruppen::leere(&self.lib_gruppen, &self.lib));
                     groups.sort();
                     groups.dedup();
                     egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {

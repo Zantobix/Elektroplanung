@@ -49,8 +49,18 @@ Neu:
 - Titel und Wert eines Symbols lassen sich direkt (ohne vorheriges Markieren) gegenüber dem Symbol verschieben
 - Leitungen lassen sich an die Pfeilspitze eines Verweises anschließen; im .epr verweist die Verbindung auf den
   Verweis (VBG Feld 2/3 bzw. 6/7), Leitungen ziehen beim Verschieben des Verweises mit
+- Projektbaum: Plus/Minus-Kästchen vor Knoten mit Kindern wie im Windows-Baum des Originals; Pfeil rechts/links
+  klappt auf bzw. zu (und springt zum ersten Kind bzw. zum übergeordneten Knoten)
+- Kontaktspiegel: Knopf „Set Referenz“ und Kontextmenü „Setze Referenz“ – der Dialog verschwindet, das danach
+  angeklickte Symbol wird Referenz der markierten Zeile; beim Übernehmen wird die Spule sein Eigentümer
+- Textbox-Dialog: Schalter „Umbruch“ ist frei; umbrochene Texte werden an Leerzeichen auf die Boxbreite verteilt
+  (Zeichenfläche, Bild, PDF) und der Umbruch im `.epr` gespeichert
+- Bibliotheksverwaltung › Symbolgruppen › Hinzufügen legt eine leere Gruppe ohne Platzhalter-Symbol an (gemerkt in
+  `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
 Behoben:
+- Projektbaum: Ein einfacher Klick auf eine Gruppe klappte sie schon um, ein Doppelklick daher auf und gleich
+  wieder zu. Jetzt markiert ein Klick nur, Doppelklick und Kästchen klappen um
 - Elemente mit eigenem Symbolstift (Nummer ab 4) wurden gepunktet gezeichnet und als Stift 3 gespeichert
 - Schriftfeld bearbeiten: Elemente lassen sich nicht mehr über den Rand schieben; Zeilenzahl wie im Original
   höchstens 8

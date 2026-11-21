@@ -49,7 +49,16 @@ pub fn draw_text_box(p: &egui::Painter, xf: Xf, pos: P, text: &str, size_mm: f32
         let r = Rect::from_min_max(xf.s(mn), xf.s(mx));
         p.rect_stroke(r, 0.0, frame_stroke, egui::StrokeKind::Middle);
     }
-    let lines: Vec<&str> = if text.is_empty() { vec![""] } else { text.split('\n').collect() };
+    let lines: Vec<String> = if st.wrap {
+        // Umbruch: Zeilen an Leerzeichen auf die Boxbreite (hochkant: Boxhöhe) verteilen, 0,5 mm Rand je Seite
+        let breite = (if vertical { mx.y - mn.y } else { mx.x - mn.x } - 1.0).max(0.5) * z;
+        let mass = |s: &str| p.layout_no_wrap(s.to_string(), font.clone(), color).size().x;
+        crate::umbruch::text_umbrechen(text, breite, &mass)
+    } else if text.is_empty() {
+        vec![String::new()]
+    } else {
+        text.split('\n').map(String::from).collect()
+    };
     let gal: Vec<_> = lines.iter().map(|l| p.layout_no_wrap(l.to_string(), font.clone(), color)).collect();
     let lh = gal.first().map(|g| g.size().y).unwrap_or(size_mm * z);
     let total = lh * gal.len() as f32;

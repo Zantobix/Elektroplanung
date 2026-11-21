@@ -48,6 +48,8 @@ pub struct TextProps {
     pub hoehe: String,
     pub breite: String,
     pub rahmen: bool,
+    /// Zeilenumbruch an der Boxbreite (ZCN Byte 0x19)
+    pub umbruch: bool,
     pub fixiert: bool,
     pub align: Align,
     pub drehung: String,
@@ -281,6 +283,7 @@ impl App {
                     hoehe: d01(mx.y - mn.y),
                     breite: d01(mx.x - mn.x),
                     rahmen: style.frame,
+                    umbruch: style.wrap,
                     fixiert: o.fixed,
                     align: *align,
                     drehung: if style.rotation != 0 { style.rotation.to_string() } else if *vertical { "90".into() } else { String::new() },
@@ -506,6 +509,7 @@ impl App {
                             *align = t.align;
                             *v = vertical;
                             style.frame = t.rahmen;
+                            style.wrap = t.umbruch;
                             style.bold = t.bold;
                             style.italic = t.italic;
                             style.underline = t.underline;
@@ -744,11 +748,8 @@ fn text_ui(ui: &mut egui::Ui, t: &mut TextProps) {
         ui.label(bt("Rahmen"));
         ui.checkbox(&mut t.rahmen, "");
         ui.add_space(8.0);
-        ui.add_enabled_ui(false, |ui| {
-            let mut u = false;
-            ui.label(bt("Umbruch"));
-            ui.checkbox(&mut u, "");
-        });
+        ui.label(bt("Umbruch"));
+        ui.checkbox(&mut t.umbruch, "");
         ui.add_space(8.0);
         ui.label(bt("Fixiert"));
         ui.checkbox(&mut t.fixiert, "");
