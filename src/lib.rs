@@ -55,6 +55,7 @@ pub mod sammelschiene_lage;
 pub mod schriften;
 pub mod schriftmass;
 pub mod schriftfeld_editor;
+pub mod stift_neu;
 pub mod suche;
 pub mod symbol_freigaben;
 pub mod symbol_kopie;

@@ -386,7 +386,9 @@ fn bzd(b: &Block) -> Option<(P, String)> {
 }
 
 /// Sammelschiene (OBJ, Feld 4 = 0xFFFF): Feld 6/7 Anfang, 10 Ende x, 2/3 Lage des Namens relativ zum Anfang,
-/// 8/9 Kennung der Schiene (SMS), 15 Byte 0 = 1 Schutzleiter (Strich/Punkt wie im Original-Ausdruck).
+/// 8/9 Kennung der Schiene (SMS), 15 Byte 0 = Lage (Bit 0 unten gestapelt, Bit 1 fest; `sammelschiene_lage.rs`),
+/// 11 Wort 0 = Y-Versatz. Die Strichart kommt aus dem Stift der Schiene (SMS, PE = Strich/Punkt), nicht aus Feld 15:
+/// unten liegen in W2 auch N-Schienen, die das Original durchgezogen zeichnet.
 fn busbar(k: &Block, names: &std::collections::HashMap<u64, String>) -> Option<Kind> {
     let a = P::new(mm(k.i32(6)), mm(k.i32(7)));
     let x2 = mm(k.i32(10));
@@ -399,7 +401,7 @@ fn busbar(k: &Block, names: &std::collections::HashMap<u64, String>) -> Option<K
         x2,
         name: names.get(&sms).cloned().unwrap_or_default(),
         label: P::new(mm(k.i32(2)), mm(k.i32(3))),
-        style: if k.i32(15) & 0xff == 1 { 2 } else { 0 },
+        style: 0,
         sms,
         xin: String::new(),
         xout: String::new(),

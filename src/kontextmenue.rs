@@ -181,6 +181,14 @@ pub fn eigenschaften_aktiv(l: &Lage) -> bool {
     !(l.ziel == MenueZiel::Leer && l.symboleditor)
 }
 
+/// Blattreiter-Menü (PopupMenu3) wie PopupMenu3Popup 0x480fbc: aktiv sind [Blatt schliessen, Alle Blätter
+/// schließen, Alle Blätter dieser Anlage schließen, Eigenschaften]. Das Original prüft den **aktiven** Reiter
+/// (TabIndex), nicht den angeklickten: „Blatt schliessen“ nur, wenn einer aktiv ist und kein Symbolblatt
+/// (Blattart < 'a'); „… dieser Anlage …“ nur mit aktueller Anlage (Projekt +0xbc, deren Liste +0xec).
+pub fn blattreiter_aktiv(aktiv: bool, symbolblatt: bool, anlage: bool) -> [bool; 4] {
+    [aktiv && !symbolblatt, true, anlage, true]
+}
+
 fn speicher_id() -> egui::Id {
     egui::Id::unique("ep_menueziel")
 }
@@ -331,6 +339,13 @@ mod tests {
         let mut l = lage(MenueZiel::Leer);
         l.markiert = true;
         assert_eq!(eintraege(&l)[..2], [Loeschen, Trenner]);
+    }
+
+    #[test]
+    fn blattreiter() {
+        assert_eq!(blattreiter_aktiv(true, false, true), [true; 4]);
+        assert_eq!(blattreiter_aktiv(true, true, true), [false, true, true, true]);
+        assert_eq!(blattreiter_aktiv(false, false, false), [false, true, false, true]);
     }
 
     #[test]

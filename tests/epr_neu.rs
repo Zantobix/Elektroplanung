@@ -51,7 +51,7 @@ fn kinds() -> Vec<(&'static str, Kind, usize, bool)> {
         ("Verbindung", Kind::Wire { pts: vec![P::new(150.0, 100.0), P::new(150.0, 140.0), P::new(200.0, 140.0)], leitung: 0, bez: vec![(P::new(150.0, 120.0), "sw".into())], opts: 0 }, 0, false),
         ("Verweis", Kind::Verweis { pos: P::new(250.0, 100.0), text_pos: P::new(257.0, 99.0), text: "=Neu".into(), dir: 0, vertical: false, spitze: false, ziel: None }, 0, false),
         ("Verweis hochkant", Kind::Verweis { pos: P::new(250.0, 120.0), text_pos: P::new(252.0, 110.0), text: "nach oben".into(), dir: 90, vertical: true, spitze: false, ziel: None }, 0, false),
-        ("Sammelschiene", Kind::Busbar { a: P::new(30.0, 150.0), x2: 200.0, name: "Neue Schiene".into(), label: P::new(0.0, -4.0), style: 2, sms: 0, xin: String::new(), xout: String::new(), lage: 0, versatz: 0.0 }, 0, false),
+        ("Sammelschiene", Kind::Busbar { a: P::new(30.0, 150.0), x2: 200.0, name: "Neue Schiene".into(), label: P::new(0.0, -4.0), style: 0, sms: 0, xin: String::new(), xout: String::new(), lage: 1, versatz: 2.5 }, 0, false),
     ]
 }
 

@@ -323,17 +323,6 @@ impl App {
         self.dlg3 = Some(Dlg3::UserDat { anlage, breite: f1(f.0 as f32 / 10.0), hoehe: f1(f.1 as f32 / 10.0) });
     }
 
-    /// Texteigenschaft: einen Text für alle markierten Texte bzw. als BMK aller markierten Symbole setzen.
-    pub fn open_textchange(&mut self) {
-        let objs = self.selected_objs();
-        let first = objs.iter().find_map(|o| match &o.kind {
-            Kind::Text { text, .. } => Some(text.clone()),
-            Kind::Symbol { bmk, .. } => Some(bmk.clone()),
-            _ => None,
-        });
-        self.dlg3 = Some(Dlg3::TextChange { ids: objs.iter().map(|o| o.id).collect(), text: first.unwrap_or_default(), wert: None });
-    }
-
     /// Kontaktspiegel (TSSpiegel): verknüpftes Objekt unter der Spule, siehe kontaktspiegel.rs.
     pub fn open_spiegel(&mut self) {
         self.spiegel_oeffnen();

@@ -123,6 +123,7 @@ fn tfi_id(art: u8, name: &str) -> Option<u64> {
 }
 /// Anzeige des Originals für Gruppe/Hersteller 0.
 const KEINE: &str = "Keine Zuordnung";
+pub const KEINE_GRUPPE: &str = KEINE;
 
 fn gruppe_id(name: &str) -> Option<u64> {
     let n = name.trim();

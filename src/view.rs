@@ -115,8 +115,13 @@ impl App {
             sep(ui, 5.0);
             static_text(ui, "Stift", 33.0);
             let pens: Vec<String> = self.project.stifte.iter().map(|s| s.name.clone()).collect();
-            let mut pen = self.pen;
-            if auswahl(ui, "stift", 100.0, &pens, &mut pen) {
+            // im Symboleditor gehört `self.pen` den Symbolstiften: hier die gemerkte Auswahl des Hauptfensters
+            let mut pen = self.sym_edit.as_ref().map(|e| e.haupt_pen).unwrap_or(self.pen);
+            let sr = ui.scope(|ui| auswahl(ui, "stift", 100.0, &pens, &mut pen));
+            sr.response.on_hover_text("Stiftliste");
+            if let (true, Some(e)) = (sr.inner, self.sym_edit.as_mut()) {
+                e.haupt_pen = pen;
+            } else if sr.inner {
                 self.pen = pen;
                 if !self.selection.is_empty() {
                     self.checkpoint();
@@ -125,8 +130,7 @@ impl App {
                 }
             }
             if tool_button(ui, Icon::NewPen, "Neuer Stift", true, false).clicked() {
-                self.new_pen();
-                self.open_pen_dialog(self.pen);
+                self.neuer_stift(false);
             }
             sep(ui, 5.0);
             if tool_button(ui, Icon::Zoom, "Vergrößern/Verkleinern", true, self.zoom_tool).clicked() {
@@ -283,7 +287,8 @@ impl App {
         let mut user = mk("bt/user", "Benutzerbauteile", true, 1);
         let mut groups: std::collections::BTreeMap<String, Vec<TNode>> = std::collections::BTreeMap::new();
         for (i, b) in self.project.bauteile.iter().enumerate() {
-            let g = if b.gruppe.is_empty() { "Projekt".to_string() } else { b.gruppe.clone() };
+            // Gruppe 0 („Keine Zuordnung“) führt der Nachbau im Baum unter „Projekt“
+            let g = if b.gruppe.is_empty() || b.gruppe == crate::epr_zusatz::KEINE_GRUPPE { "Projekt".to_string() } else { b.gruppe.clone() };
             groups.entry(g).or_default().push(TNode { id: format!("bt/p/{i}"), label: format!("{} {}", b.name, b.typ).trim().to_string(), bold: false, icon: 0, action: TAction::Bauteil(i), children: vec![] });
         }
         for (g, ch) in groups {
@@ -693,17 +698,14 @@ impl App {
                 }
             }
             resp.context_menu(|ui| {
-                if ui.button("Blatt schliessen").clicked() {
-                    action = Some((i, 0));
-                }
-                if ui.button("Alle Blätter schließen").clicked() {
-                    action = Some((i, 1));
-                }
-                if ui.button("Alle Blätter dieser Anlage schließen").clicked() {
-                    action = Some((i, 2));
-                }
-                if ui.button("Eigenschaften").clicked() {
-                    action = Some((i, 3));
+                // Sperren wie im Original nach dem aktiven Reiter (kontextmenue::blattreiter_aktiv)
+                let akt = self.tabs.get(self.active).copied();
+                let blatt = akt.and_then(|r| self.project.sheet(r));
+                let an = crate::kontextmenue::blattreiter_aktiv(blatt.is_some(), blatt.is_some_and(|s| s.art >= 0x61), akt.is_some_and(|r| r.anlage < self.project.anlagen.len()));
+                for (k, n) in ["Blatt schliessen", "Alle Blätter schließen", "Alle Blätter dieser Anlage schließen", "Eigenschaften"].iter().enumerate() {
+                    if ui.add_enabled(an[k], egui::Button::new(*n)).clicked() {
+                        action = Some((i, k as u8));
+                    }
                 }
             });
             x += w + 1.0;
@@ -1209,7 +1211,7 @@ impl App {
     }
 
     fn handle_canvas_input(&mut self, ui: &mut egui::Ui, resp: &egui::Response, area: Rect, xf: Xf) {
-        let (hover, pressed_l, released_l, pressed_r, pressed_m, down_m, scroll, dbl, shift, ctrl, dragging) = ui.input(|i| {
+        let (hover, pressed_l, released_l, pressed_r, pressed_m, down_m, scroll, dbl, ctrl, dragging) = ui.input(|i| {
             (
                 i.pointer.hover_pos(),
                 i.pointer.button_pressed(PointerButton::Primary),
@@ -1219,7 +1221,6 @@ impl App {
                 i.pointer.button_down(PointerButton::Middle),
                 i.smooth_scroll_delta.y,
                 i.pointer.button_double_clicked(PointerButton::Primary),
-                i.modifiers.shift,
                 i.modifiers.command,
                 i.pointer.is_decidedly_dragging(),
             )
@@ -1422,8 +1423,9 @@ impl App {
         if inside && pressed_l {
             match self.tool {
                 Tool::Select => {
-                    // Griffe markierter Kurven (Endpunkte, Kontrollpunkte) vor dem Rahmen zur Größenänderung
-                    if !shift && !ctrl {
+                    // Griffe markierter Kurven (Endpunkte, Kontrollpunkte) vor dem Rahmen zur Größenänderung.
+                    // Umschalt wirkt beim Klicken wie im Original nicht (MouseDown prüft nur ssCtrl).
+                    if !ctrl {
                         if let Some((id, griff)) = self.kurven_griff_bei(m, tol) {
                             self.checkpoint();
                             self.drag = Drag::KurvenGriff { id, griff };
@@ -1455,7 +1457,7 @@ impl App {
                         }
                     }
                     // Titel/Wert eines Symbols gegenüber dem Symbol verschieben (wie im Original ohne Markieren)
-                    if !shift && !ctrl && self.beschriftung_greifen(m, tol) {
+                    if !ctrl && self.beschriftung_greifen(m, tol) {
                         return;
                     }
                     // mit Strg zählt ein Anschluss nicht (wie im Original): Klick markiert bzw. verschiebt das Symbol
@@ -1467,7 +1469,7 @@ impl App {
                         }
                     }
                     if let Some(id) = self.hit_top(m, tol) {
-                        if shift || ctrl {
+                        if ctrl {
                             if let Some(i) = self.selection.iter().position(|s| *s == id) {
                                 self.selection.remove(i);
                             } else {
@@ -1479,7 +1481,7 @@ impl App {
                         self.expand_groups();
                         self.drag = Drag::Move { start: self.snap(m), applied: P::default(), moved: false };
                     } else {
-                        if !shift && !ctrl {
+                        if !ctrl {
                             self.selection.clear();
                         }
                         self.drag = Drag::Rubber { start: m };
