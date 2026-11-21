@@ -16,11 +16,8 @@ und die Original-Icons aus [BYTE-RANGER-Software/Elektroplanung](https://github.
 ## Lizenz und Herkunft
 
 - Quelltext: **GPL-3.0** (siehe [LICENSE](LICENSE)).
-- Icons in `resources/` (`Icons.*`, `ImageList*.*`, `Button5/10.Glyph.Data.png`, `1.ico`): unverändert aus
-  [BYTE-RANGER-Software/Elektroplanung](https://github.com/BYTE-RANGER-Software/Elektroplanung),
-  Copyright (c) 2025 Daniel Metz / md-evolution, GPL-3.0.
-- Weitere Knopf-Glyphen des Originals sind nicht enthalten; liegen sie lokal vor (Ordner über die
-  Umgebungsvariable `EP_GLYPHEN`), bettet `build.rs` sie ein, sonst zeigen diese Knöpfe Text.
+- Icons (`resources/icons/*.svg`) und Programmsymbol sind eigene Vektorgrafiken dieses Projekts, erzeugt mit
+  `tools/icons_erzeugen.py` bzw. `tools/symbol_erzeugen.py`; es werden keine Grafiken des Originals verwendet.
 - `resources/template.epr`: leeres Projekt im Originalformat als Vorlage für neue Projekte (ohne persönliche Daten).
 
 ## Herunterladen

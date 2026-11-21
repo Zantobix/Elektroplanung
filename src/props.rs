@@ -284,7 +284,7 @@ impl App {
         }
     }
 
-    /// Dialog "Symboleigenschaften" des Symboleditors öffnen (Knopf mit Werkzeug-Glyphe).
+    /// Dialog "Symboleigenschaften" des Symboleditors öffnen (Knopf mit Werkzeug-Icon).
     pub fn open_sym_eigenschaften(&mut self) {
         let Some(e) = &self.sym_edit else { return };
         let mut groups: Vec<String> = self.lib.iter().map(|d| d.group.join(" / ")).collect();
@@ -649,11 +649,8 @@ fn symbol_ui(ui: &mut egui::Ui, s: &mut SymProps) {
         label(ui, 98.0, "Bauteil", true);
         ui.horizontal(|ui| {
             ui.add_enabled(false, egui::TextEdit::singleline(&mut s.bauteil).desired_width(126.0).background_color(Color32::from_rgb(255, 255, 225)));
-            // Knopf "Bearbeiten" (TSpeedButton LO_Liste mit Original-Glyphe): Bauteilzuordnung
-            let btn = match crate::icons::png_texture(ui.ctx(), "lo_liste", crate::glyph!("TSYMBOL_LO_Liste.png")) {
-                Some(tex) => egui::Button::image(egui::Image::new((tex.id(), Vec2::splat(20.0)))),
-                None => egui::Button::new("…"),
-            };
+            // Knopf "Bearbeiten" (TSpeedButton LO_Liste): Bauteilzuordnung
+            let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::PartList, 20.0));
             if ui.add(btn.min_size(Vec2::new(31.0, 24.0))).on_hover_text("Bearbeiten").clicked() {
                 s.edit_part = true;
             }

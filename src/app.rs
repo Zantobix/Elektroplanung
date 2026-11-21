@@ -202,6 +202,8 @@ pub struct App {
     pub pdf_req: Option<(PathBuf, bool)>,
     pub sym_edit: Option<crate::extra::SymEdit>,
     pub xdlg: Option<crate::extra::XDialog>,
+    /// Bauteil wird aus „Bauteil zuordnen“ heraus angelegt → danach diesem Symbol zuordnen
+    pub part_assign_after: Option<u64>,
     pub fav_overrides: std::collections::BTreeMap<String, bool>,
     pub recent: Vec<String>,
     pub show_library: bool,
@@ -219,6 +221,8 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, shot: Option<PathBuf>) -> Self {
         crate::setup_style(&cc.egui_ctx);
+        // SVG-Icons der Werkzeugleisten
+        egui_extras::install_image_loaders(&cc.egui_ctx);
         let mut tree_open = HashSet::new();
         for k in [
             "sym/fav",
@@ -297,6 +301,7 @@ impl App {
             pdf_req: None,
             sym_edit: None,
             xdlg: None,
+            part_assign_after: None,
             fav_overrides: Default::default(),
             recent: vec![],
             show_library: false,

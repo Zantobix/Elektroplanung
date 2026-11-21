@@ -275,21 +275,18 @@ impl App {
                 });
                 ui.add_space(6.0);
                 let enabled = objs.len() >= 2;
-                // Original-Glyphen der vier Knöpfe (Glyph.Data aus TAusrichtung)
-                let glyphs: [(u8, &str, &str, &[u8]); 4] = [
-                    (0, "Horizontal", "aus_hor", crate::glyph!("TAUSRICHTUNG_Hor.png")),
-                    (2, "Abstand Horizontal", "aus_sp1", crate::glyph!("TAUSRICHTUNG_SpeedButton1.png")),
-                    (1, "Vertikal", "aus_ver", crate::glyph!("TAUSRICHTUNG_Ver.png")),
-                    (3, "Abstand Vertikal", "aus_sp2", crate::glyph!("TAUSRICHTUNG_SpeedButton2.png")),
+                // vier Knöpfe wie im Original (TAusrichtung), mit eigenen Vektor-Icons
+                use crate::icons::Icon;
+                let glyphs: [(u8, &str, Icon); 4] = [
+                    (0, "Horizontal", Icon::AlignHor),
+                    (2, "Abstand Horizontal", Icon::SpaceHor),
+                    (1, "Vertikal", Icon::AlignVer),
+                    (3, "Abstand Vertikal", Icon::SpaceVer),
                 ];
                 for row in glyphs.chunks(2) {
                     ui.horizontal(|ui| {
-                        for (code, hint, name, bytes) in row {
-                            let btn = match crate::icons::png_texture(ui.ctx(), name, bytes) {
-                                Some(tex) => egui::Button::image(egui::Image::new((tex.id(), egui::Vec2::splat(29.0)))),
-                                // ohne Original-Glyphen: Text
-                                None => egui::Button::new(*hint),
-                            };
+                        for (code, hint, icon) in row {
+                            let btn = egui::Button::image(crate::icons::image(*icon, 29.0));
                             if ui.add_enabled(enabled, btn.min_size(egui::Vec2::splat(37.0))).on_hover_text(*hint).clicked() {
                                 action = Some(*code);
                             }

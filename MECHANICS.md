@@ -137,7 +137,7 @@ Quelle: Elektroplanung.exe über REA (`execute_rizin_command`), Kennungstabelle 
 - OBJ (Verweis): Feld 6/7 Pfeilspitze, 2/3 Versatz zur **Textmitte** (0,1 mm), 14 Richtung in 0,1° (0 ►, 900 ▲, 1800 ◄, 2700 ▼),
   15 Bit 0 hochkant. Feld 4 = 0x0101FFFF (Querverweis auf andere Anlage): Richtung um 270° versetzt, bei 180° hochkant
   (nur zwei Beispiele: "=S1+W2", "=UV3+W2" – geschätzt).
-- Werkzeugleisten-Bilder: ImageList1 (20 × 20) des Originals; Zuordnung aus ImageIndex der ToolButtons/Actions in TFORM1
+- Werkzeugleisten-Bilder: eigene Vektor-Icons (resources/icons, erzeugt mit tools/icons_erzeugen.py); Reihenfolge der Knöpfe wie in TFORM1
   (z. B. 0 Auswahl, 14 Neues Projekt, 15 Laden, 38 Gitter, 42/43 Gruppieren/Auflösen).
 - Menü Datei des Originals: … Schriftfeld speichern | Export › PDF (Beta), Bitmapexport, DXF Import | Beenden (Menü-IDs über Win32 ausgelesen).
 - Startparameter: Das Original öffnet keine Datei aus der Kommandozeile (immer "Neues Projekt").
@@ -164,7 +164,7 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   Alternativtext ▸ (Standard, Sätze als 'a';'b';'c', Benutzerdefiniert), Eigentümer ▸, Kontaktspiegel hinzufügen, Bauteilliste ▸ |
   Symbol bearbeiten | Eigenschaften. Text: Löschen | Ausrichtung ▸, Eigenschaften, Fixieren ▸. Fläche: Objekt einfügen ▸
   (Projektsymbole), Verweis einfügen ▸ | Eigenschaften, Pfadbezeichnung.
-- Tools › Ausrichtung: Werkzeugfenster (TAusrichtung) mit Referenzpunkt und vier Knöpfen (Original-Glyphen, sofern lokal vorhanden).
+- Tools › Ausrichtung: Werkzeugfenster (TAusrichtung) mit Referenzpunkt und vier Knöpfen (eigene Vektor-Icons).
 
 ## Nachtrag 20.11.2026 – vollständiger Import, Symboltexte (geprüft gegen "Elektroplanung Wohnung 2.pdf")
 - OBJ Feld 4 unterscheidet: 0x1FFFF Verweis (ohne TIT = nur Pfeil, z. B. im Schriftfeld; Feld 14 = 900 → ▼,

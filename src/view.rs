@@ -25,7 +25,7 @@ pub fn tool_button(ui: &mut egui::Ui, icon: Icon, hint: &str, enabled: bool, dow
         p.rect_filled(rect.shrink(1.0), 0.0, Color32::from_rgb(229, 243, 255));
         p.rect_stroke(rect.shrink(1.0), 0.0, Stroke::new(1.0, Color32::from_rgb(204, 232, 255)), StrokeKind::Inside);
     }
-    icons::draw(p, Rect::from_center_size(rect.center(), Vec2::splat(20.0)), icon, enabled);
+    icons::draw(ui, Rect::from_center_size(rect.center(), Vec2::splat(20.0)), icon, enabled);
     if hint.is_empty() {
         resp
     } else {
@@ -754,7 +754,7 @@ impl App {
         let b2 = Rect::from_min_size(Pos2::new(sx + 132.0, full.top() + 1.0), Vec2::new(22.0, 21.0));
         for (r, ic) in [(b1, Icon::CaseSensitive), (b2, Icon::Find)] {
             p.rect_stroke(r, 0.0, Stroke::new(1.0, Color32::from_gray(173)), StrokeKind::Inside);
-            icons::draw(p, r.shrink(2.0), ic, true);
+            icons::draw(ui, r.shrink(2.0), ic, true);
         }
         if ui.interact(b2, ui.scope_id().with("find"), Sense::click()).clicked() {
             self.right_tab = RightTab::Symbole;

@@ -473,26 +473,12 @@ impl App {
         }
     }
 
-    /// Leiste der Symbolbearbeitung wie "BLeiste" im Original (Reihenfolge und Glyphen aus der Formularressource):
+    /// Leiste der Symbolbearbeitung wie "BLeiste" im Original (Reihenfolge aus der Formularressource, eigene Icons):
     /// Drehen, Vertikal/Horizontal Spiegeln | Gruppieren, Auflösen | Name | Stiftliste | Neuer Stift, Neue Seite,
     /// Neue Option | Symboleigenschaften | Übernehmen, Abbruch | Option + Optionsliste, Option ein/aus.
     pub fn bleiste(&mut self, ui: &mut egui::Ui) {
-        const G: &[(&str, &[u8])] = &[
-            ("b1", crate::glyph!("TFORM1_Button1.png")),
-            ("b2", crate::glyph!("TFORM1_Button2.png")),
-            ("b3", crate::glyph!("TFORM1_Button3.png")),
-            ("b4", crate::glyph!("TFORM1_Button4.png")),
-            ("b5", crate::glyph!("TFORM1_Button5.png")),
-            ("b6", crate::glyph!("TFORM1_Button6.png")),
-            ("b7", crate::glyph!("TFORM1_Button7.png")),
-            ("b8", crate::glyph!("TFORM1_Button8.png")),
-            ("b9", crate::glyph!("TFORM1_Button9.png")),
-            ("b10", crate::glyph!("TFORM1_Button10.png")),
-            ("s1", crate::glyph!("TFORM1_SpeedButton1.png")),
-            ("s2", crate::glyph!("TFORM1_SpeedButton2.png")),
-        ];
-        // Knopf mit Original-Glyphe; `part` = Ausschnitt (Index, Anzahl) bei Glyphen mit mehreren Zuständen
-        fn gbtn(ui: &mut egui::Ui, name: &str, bytes: &[u8], part: (usize, usize), hint: &str, enabled: bool, down: bool) -> egui::Response {
+        // Knopf mit Vektor-Icon
+        fn gbtn(ui: &mut egui::Ui, icon: crate::icons::Icon, hint: &str, enabled: bool, down: bool) -> egui::Response {
             let (rect, resp) = ui.allocate_exact_size(Vec2::new(27.0, 26.0), if enabled { Sense::click() } else { Sense::hover() });
             let p = ui.painter();
             if down {
@@ -501,39 +487,28 @@ impl App {
             } else if enabled && resp.hovered() {
                 p.rect_filled(rect.shrink(1.0), 0.0, Color32::from_rgb(229, 243, 255));
             }
-            if let Some(t) = crate::icons::png_texture(ui.ctx(), name, bytes) {
-                let [w, h] = t.size();
-                let pw = w as f32 / part.1 as f32;
-                let uv = Rect::from_min_max(Pos2::new(part.0 as f32 / part.1 as f32, 0.0), Pos2::new((part.0 + 1) as f32 / part.1 as f32, 1.0));
-                let r = Rect::from_center_size(rect.center(), Vec2::new(pw.min(22.0), (h as f32).min(22.0)));
-                p.image(t.id(), r, uv, if enabled { Color32::WHITE } else { Color32::from_white_alpha(90) });
-            } else {
-                // ohne Original-Glyphen: Kurztext
-                let short: String = hint.chars().take(3).collect();
-                let col = if enabled { Color32::BLACK } else { Color32::GRAY };
-                p.text(rect.center(), egui::Align2::CENTER_CENTER, short, egui::FontId::proportional(10.0), col);
-            }
+            crate::icons::draw(ui, Rect::from_center_size(rect.center(), Vec2::splat(20.0)), icon, enabled);
             resp.on_hover_text(hint)
         }
-        let g = |n: &str| G.iter().find(|x| x.0 == n).map(|x| x.1).unwrap_or(&[]);
+        use crate::icons::Icon as I;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             ui.add_space(29.0);
             let has = !self.selection.is_empty();
-            if gbtn(ui, "b1", g("b1"), (0, 1), "Drehen", has, false).clicked() {
+            if gbtn(ui, I::Rotate, "Drehen", has, false).clicked() {
                 self.transform_selection(1);
             }
-            if gbtn(ui, "b2", g("b2"), (0, 1), "Vertikal Spiegeln", has, false).clicked() {
+            if gbtn(ui, I::MirrorV, "Vertikal Spiegeln", has, false).clicked() {
                 self.transform_selection(2);
             }
-            if gbtn(ui, "b3", g("b3"), (0, 1), "Horizontal Spiegeln", has, false).clicked() {
+            if gbtn(ui, I::MirrorH, "Horizontal Spiegeln", has, false).clicked() {
                 self.transform_selection(4);
             }
             crate::view::sep(ui, 2.0);
-            if gbtn(ui, "s1", g("s1"), (0, 2), "Markierte Zeichenobjekte gruppieren", self.selection.len() > 1, false).clicked() {
+            if gbtn(ui, I::Group, "Markierte Zeichenobjekte gruppieren", self.selection.len() > 1, false).clicked() {
                 self.group_selection(true);
             }
-            if gbtn(ui, "s2", g("s2"), (0, 2), "Markierte Gruppe auflösen", has, false).clicked() {
+            if gbtn(ui, I::Ungroup, "Markierte Gruppe auflösen", has, false).clicked() {
                 self.group_selection(false);
             }
             crate::view::sep(ui, 4.0);
@@ -557,31 +532,31 @@ impl App {
                 }
             }
             crate::view::sep(ui, 4.0);
-            if gbtn(ui, "b4", g("b4"), (0, 1), "Neuer Stift", true, false).clicked() {
+            if gbtn(ui, I::NewPen, "Neuer Stift", true, false).clicked() {
                 self.new_pen();
                 self.open_pen_dialog(self.pen);
             }
             ui.add_space(6.0);
-            if gbtn(ui, "b5", g("b5"), (0, 1), "Neue Seite", true, false).clicked() {
+            if gbtn(ui, I::NewPage, "Neue Seite", true, false).clicked() {
                 if let Some(e) = &mut self.sym_edit {
                     e.query = Some((0, format!("Seite {}", e.options.len() + 1)));
                 }
             }
-            if gbtn(ui, "b6", g("b6"), (0, 1), "Neue Option", true, false).clicked() {
+            if gbtn(ui, I::NewOption, "Neue Option", true, false).clicked() {
                 if let Some(e) = &mut self.sym_edit {
                     e.query = Some((1, format!("Option {}", e.flag_names.len() + 1)));
                 }
             }
             crate::view::sep(ui, 4.0);
-            if gbtn(ui, "b7", g("b7"), (0, 1), "Symboleigenschaften", true, false).clicked() {
+            if gbtn(ui, I::Properties, "Symboleigenschaften", true, false).clicked() {
                 self.open_sym_eigenschaften();
             }
             crate::view::sep(ui, 4.0);
-            if gbtn(ui, "b8", g("b8"), (0, 1), "Übernehmen", true, false).clicked() {
+            if gbtn(ui, I::Apply, "Übernehmen", true, false).clicked() {
                 self.symbol_editor_commit();
                 return;
             }
-            if gbtn(ui, "b9", g("b9"), (0, 1), "Abbruch", true, false).clicked() {
+            if gbtn(ui, I::Cancel, "Abbruch", true, false).clicked() {
                 self.symbol_editor_cancel();
                 return;
             }
@@ -602,7 +577,7 @@ impl App {
             }
             // Option ein/aus: markierte Elemente gehören zur gewählten Seite bzw. Zusatzoption (oder wieder zu allen)
             let sel = self.selection.clone();
-            if gbtn(ui, "b10", g("b10"), (0, 4), "Option Ein und Ausschalten", has, false).clicked() {
+            if gbtn(ui, I::OptionToggle, "Option Ein und Ausschalten", has, false).clicked() {
                 if let Some(e) = &mut self.sym_edit {
                     for id in sel {
                         if e.cur_flag > 0 {
@@ -1437,6 +1412,8 @@ impl App {
         let Some(mut d) = self.xdlg.take() else { return };
         let mut ok = false;
         let mut close = false;
+        // Bauteilliste: neues Bauteil anlegen und danach gleich dem Symbol zuordnen
+        let mut new_part_for: Option<u64> = None;
         let pots_names = self.project.potentiale.clone();
         let parts: Vec<String> = self.project.bauteile.iter().map(|b| format!("{} {}", b.name, b.typ)).collect();
         egui::Modal::new(egui::Id::unique("xdlg")).show(ctx, |ui| {
@@ -1607,16 +1584,20 @@ impl App {
                         });
                     });
                 }
-                XDialog::PartAssign { idx, .. } => {
-                    ui.strong("Bauteilliste");
+                XDialog::PartAssign { obj, idx } => {
+                    ui.strong("Bauteil zuordnen");
+                    ui.small("Ein Bauteil beschreibt das reale Gerät (Typ, Hersteller, Artikelnummer, Maße); das Symbol ist seine Darstellung im Plan.");
                     if parts.is_empty() {
-                        ui.label("Noch keine Bauteile im Projekt – bitte zuerst „Neues Bauteil“ anlegen.");
+                        ui.label("Im Projekt gibt es noch keine Bauteile.");
                     } else {
                         egui::ComboBox::from_id_salt("partsel").selected_text(parts.get(*idx).cloned().unwrap_or_default()).show_ui(ui, |ui| {
                             for (i, p) in parts.iter().enumerate() {
                                 ui.selectable_value(idx, i, p);
                             }
                         });
+                    }
+                    if ui.button("Neues Bauteil anlegen …").clicked() {
+                        new_part_for = Some(*obj);
                     }
                 }
                 XDialog::Platz { name, text, .. } => {
@@ -1683,10 +1664,15 @@ impl App {
                 close = true;
             }
         });
-        if ok {
+        if let Some(obj) = new_part_for {
+            self.new_bauteil_dialog();
+            self.part_assign_after = Some(obj);
+        } else if ok {
             self.apply_xdialog(d);
         } else if !close {
             self.xdlg = Some(d);
+        } else {
+            self.part_assign_after = None;
         }
     }
 
@@ -1766,7 +1752,14 @@ impl App {
                             *x = b;
                         }
                     }
-                    None => self.project.bauteile.push(b),
+                    None => {
+                        self.project.bauteile.push(b);
+                        // aus „Bauteil zuordnen“ heraus angelegt: gleich dem Symbol zuordnen
+                        if let Some(obj) = self.part_assign_after.take() {
+                            self.project.part_of.insert(obj, self.project.bauteile.len() - 1);
+                            self.dirty = true;
+                        }
+                    }
                 }
                 self.tree_open.insert("bt/user".into());
                 self.tree_open.insert("bt/user/Projekt".into());
