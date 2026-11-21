@@ -457,10 +457,12 @@ pub fn fuse_rows(anlage: &Anlage) -> Vec<[String; 3]> {
     for s in &anlage.sheets {
         let ctx = bmk_ctx(anlage, s);
         for o in &s.objects {
-            if let Kind::Symbol { bmk, value, ext, .. } = &o.kind {
+            if let Kind::Symbol { bmk, value, ext, pos, .. } = &o.kind {
                 let bmk = symbols::display_bmk(bmk, ext.counter, &ctx);
                 if ext.sicherung && !bmk.is_empty() && !rows.iter().any(|r| r[0] == bmk) {
-                    rows.push([bmk, value.clone(), ext.funktion.clone()]);
+                    // Funktion des Symbols, sonst die Pfadbeschreibung seines Strompfades (Anleitung 4.2.5)
+                    let f = if ext.funktion.trim().is_empty() { crate::klemmplan::pfad_text(s, pos.x) } else { ext.funktion.clone() };
+                    rows.push([bmk, value.clone(), f]);
                 }
             }
         }
@@ -488,8 +490,9 @@ pub fn draw_generated(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage) {
         let n = ((y1 - y0) / rh).floor().max(2.0) as usize;
         let widths = [24.5, 14.5, (x1 - x0 - 39.0).max(10.0)];
         draw_grid(p, xf, P::new(x0, y0), P::new(x0 + widths.iter().sum::<f32>(), y0 + n as f32 * rh), &widths, &vec![rh; n], stroke);
+        // Folgeblätter (direkt folgende Sicherungsübersichten) setzen die Liste fort, Kopfzeile auf jedem Blatt
         let mut rows = vec![["Sicherung".to_string(), "Wert".to_string(), "Funktion".to_string()]];
-        rows.extend(fuse_rows(anlage));
+        rows.extend(fuse_rows(anlage).into_iter().skip(crate::klemmplan::folge_index(anlage, sheet) * n.saturating_sub(1)));
         for (r, row) in rows.iter().take(n).enumerate() {
             let mut x = x0;
             for (c, w) in widths.iter().enumerate() {

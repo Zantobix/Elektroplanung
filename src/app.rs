@@ -1339,24 +1339,9 @@ impl App {
     }
 
     /// Listenexport: Betriebsmittelliste als CSV (Semikolon getrennt).
+    /// Tools › Listen Export: Dialog wie im Original (Liste wählen, Vorschau, Export), siehe `crate::listen`.
     pub fn list_export(&mut self) {
-        let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("Liste.csv").save_file() else { return };
-        let mut out = String::from("Anlage;Blatt;BMK;Symbol;Wert;Bauteil;Typ;Firma;Artikel\n");
-        for a in &self.project.anlagen {
-            for s in &a.sheets {
-                for o in &s.objects {
-                    if let Kind::Symbol { key, bmk, value, .. } = &o.kind {
-                        let name = symbols::find(&self.lib, key).map(|d| d.name.clone()).unwrap_or_default();
-                        let b = self.project.part_of.get(&o.id).and_then(|i| self.project.bauteile.get(*i)).cloned().unwrap_or_default();
-                        out.push_str(&format!("{};{};{};{};{};{};{};{};{}\n", a.name, s.number, bmk, name, value, b.name, b.typ, b.firma, b.artikel));
-                    }
-                }
-            }
-        }
-        match std::fs::write(&p, out) {
-            Err(e) => self.dialog = Some(Dialog::Message(format!("Fehler beim Schreiben: {e}"))),
-            Ok(()) => self.info = format!("Liste exportiert: {}", p.display()),
-        }
+        self.dlg3 = Some(crate::dialoge3::Dlg3::ListExport { art: 0, format: 0, msg: String::new() });
     }
 
     pub fn hit_top(&self, m: P, tol: f32) -> Option<u64> {

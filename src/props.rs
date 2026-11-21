@@ -74,6 +74,11 @@ pub struct SheetProps {
     pub subindex: String,
     pub strompfade: String,
     pub portrait: bool,
+    /// Blattart (Index in ARTEN = BLT Feld 22 Byte 0) und Zusatz (Klemmplan: 0 = Keine Zuordnung, sonst Leiste)
+    pub art: usize,
+    pub zusatz: usize,
+    /// Klemmleisten der Anlage (Kennung, Titel) für den Zusatz beim Klemmplan
+    pub leisten: Vec<(i32, String)>,
 }
 
 pub struct AnlProps {
@@ -335,6 +340,9 @@ impl App {
     }
 
     pub fn open_sheet_props_dialog(&mut self, r: SheetRef) {
+        // Klemmleisten mit Kennung, damit ein Klemmplan seine Leiste im .epr findet
+        crate::klemmen::ensure_ids(&mut self.project);
+        let leisten: Vec<(i32, String)> = self.project.anlagen.get(r.anlage).map(|a| a.klemmen.iter().map(|k| (k.id, k.name.clone())).collect()).unwrap_or_default();
         if let Some(s) = self.project.sheet(r) {
             self.props = Some(Props::Sheet(SheetProps {
                 r,
@@ -344,6 +352,10 @@ impl App {
                 subindex: s.subindex.to_string(),
                 strompfade: if s.col_auto || s.columns == 0 { "-1".into() } else { s.columns.to_string() },
                 portrait: s.portrait,
+                // 0 heißt bei neuen Blättern „noch nicht festgelegt“ (Schaltplan), bei gelesenen Blättern Deckblatt
+                art: if (s.art == 0 && s.raw.is_none()) || s.art as usize >= ARTEN.len() { 3 } else { s.art as usize },
+                zusatz: if s.art == 4 { leisten.iter().position(|l| l.0 == s.klm).map(|i| i + 1).unwrap_or(0) } else { 0 },
+                leisten,
             }));
         }
     }
@@ -554,6 +566,9 @@ impl App {
                         sh.col_auto = true;
                     }
                     sh.portrait = s.portrait;
+                    // Blattart; beim Klemmplan die gewählte Klemmleiste (BLT Feld 32 ab Bit 8)
+                    sh.art = s.art as u8;
+                    sh.klm = if s.art == 4 { s.zusatz.checked_sub(1).and_then(|i| s.leisten.get(i)).map(|l| l.0).unwrap_or(0) } else { 0 };
                 }
             }
         }
@@ -929,13 +944,26 @@ fn sheet_ui(ui: &mut egui::Ui, s: &mut SheetProps, anlagen: &[String]) {
         });
         ui.end_row();
         label(ui, 90.0, "Art", true);
-        ui.add_enabled_ui(false, |ui| {
-            egui::ComboBox::from_id_salt("art").width(145.0).selected_text(ARTEN[3]).show_ui(ui, |_| {});
+        egui::ComboBox::from_id_salt("art").width(145.0).selected_text(ARTEN.get(s.art).copied().unwrap_or(ARTEN[3])).show_ui(ui, |ui| {
+            for (i, a) in ARTEN.iter().enumerate() {
+                if ui.selectable_value(&mut s.art, i, *a).changed() {
+                    s.zusatz = 0;
+                }
+            }
         });
         ui.end_row();
-        label(ui, 90.0, "Zusatz", false);
-        ui.add_enabled_ui(false, |ui| {
-            egui::ComboBox::from_id_salt("zus").width(145.0).selected_text("").show_ui(ui, |_| {});
+        // Zusatz: beim Klemmenplan die Klemmleiste („Keine Zuordnung“ wie im Original)
+        let klemmplan = s.art == 4;
+        label(ui, 90.0, "Zusatz", klemmplan);
+        ui.add_enabled_ui(klemmplan, |ui| {
+            let mut items: Vec<String> = vec!["Keine Zuordnung".into()];
+            items.extend(s.leisten.iter().map(|l| l.1.clone()));
+            let text = if klemmplan { items.get(s.zusatz).cloned().unwrap_or_default() } else { String::new() };
+            egui::ComboBox::from_id_salt("zus").width(145.0).selected_text(text).show_ui(ui, |ui| {
+                for (i, t) in items.iter().enumerate() {
+                    ui.selectable_value(&mut s.zusatz, i, t);
+                }
+            });
         });
         ui.end_row();
         label(ui, 90.0, "Auto+", false);

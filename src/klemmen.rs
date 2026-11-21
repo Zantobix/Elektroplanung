@@ -420,13 +420,15 @@ pub fn sync_klm(a: &Anlage, blk: &mut Block) {
 
 /// Blattart (BLT Feld 22 Byte 0) und Klemmleiste des Klemmplans (Feld 32 ab Bit 8) schreiben.
 pub fn patch_blt(blk: &mut Block, s: &Sheet) {
-    if s.art != 0 && (blk.i32(22) & 0xff) as u8 != s.art {
+    if (s.art != 0 || s.raw.is_some()) && (blk.i32(22) & 0xff) as u8 != s.art {
         let v = blk.i32(22);
         blk.set_i32(22, (v & !0xff) | s.art as i32);
     }
+    // Feld 32: Byte 0 Format, ab Bit 8 die Leiste – nur bei Klemmplänen (bzw. nach einem Wechsel weg vom Klemmplan) ändern
     let f = blk.i32(32);
-    let want = if s.art == 4 { (s.klm << 8) | (f & 0xff) } else if s.art != 0 && f >> 8 != 0 && (blk.i32(22) & 0xff) != 4 { f } else { f & 0xff };
-    if want != f && (s.art == 4 || s.raw.as_ref().map(|r| (r.block.i32(22) & 0xff) == 4).unwrap_or(false)) {
+    let was_plan = s.raw.as_ref().map(|r| (r.block.i32(22) & 0xff) == 4).unwrap_or(false);
+    let want = if s.art == 4 { (s.klm << 8) | (f & 0xff) } else if was_plan { f & 0xff } else { f };
+    if want != f {
         blk.set_i32(32, want);
     }
 }

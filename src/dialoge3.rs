@@ -34,6 +34,8 @@ pub enum Dlg3 {
     TextChange { ids: Vec<u64>, text: String },
     Spiegel { id: u64, rows: Vec<(String, bool)>, sel: Option<usize> },
     Errliste { lines: Vec<String> },
+    /// Listen Export (TListExport): Liste, Dateiformat, Meldung
+    ListExport { art: usize, format: usize, msg: String },
 }
 
 const DIRS: &[&str] = &["Links nach Rechts", "Rechts nach Links", "Oben nach Unten", "Unten nach Oben"];
@@ -373,6 +375,7 @@ impl App {
             Dlg3::TextChange { .. } => ("Texteigenschaft", [285.0, 63.0]),
             Dlg3::Spiegel { .. } => ("Kontaktspiegel", [260.0, 277.0]),
             Dlg3::Errliste { .. } => ("Fehler in den Daten", [620.0, 264.0]),
+            Dlg3::ListExport { .. } => ("Listen Export", [420.0, 566.0]),
         };
         let leitungen_n = self.project.leitungen.len();
         let closed = tool_window(ctx, "dlg3", title, size, egui::Order::Middle, |ui| {
@@ -908,11 +911,19 @@ impl App {
                         }
                     });
                 }
+                Dlg3::ListExport { art, format, msg } => {
+                    if let Some(m) = crate::listen::ui(ui, &self.project, art, format) {
+                        *msg = m;
+                    }
+                    if !msg.is_empty() {
+                        ui.small(msg.as_str());
+                    }
+                }
             }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let is_titel = matches!(d, Dlg3::Titel { .. });
-                let only_ok = matches!(d, Dlg3::Errliste { .. } | Dlg3::PExport { .. });
+                let only_ok = matches!(d, Dlg3::Errliste { .. } | Dlg3::PExport { .. } | Dlg3::ListExport { .. });
                 if !only_ok && ui.add_sized([90.0, 24.0], egui::Button::new(if is_titel { "Schließen" } else { "Abbruch" })).clicked() {
                     done = Some(false);
                 }
@@ -925,7 +936,7 @@ impl App {
                     if ui.add_sized([90.0, 24.0], egui::Button::new("Übernehmen")).clicked() {
                         done = Some(true);
                     }
-                } else if ui.add_sized([90.0, 24.0], egui::Button::new(if only_ok { "Schließen" } else { "OK" })).clicked() {
+                } else if ui.add_sized([90.0, 24.0], egui::Button::new(if matches!(d, Dlg3::ListExport { .. }) { "Beenden" } else if only_ok { "Schließen" } else { "OK" })).clicked() {
                     done = Some(!only_ok);
                 }
             });
@@ -1201,7 +1212,7 @@ impl App {
                     self.project.titleblock = tb;
                 }
             }
-            Dlg3::PExport { .. } | Dlg3::Errliste { .. } => {}
+            Dlg3::PExport { .. } | Dlg3::Errliste { .. } | Dlg3::ListExport { .. } => {}
             Dlg3::BlattIndex { anlage, von, bis, ab, plus } => {
                 let (v, b) = (von.trim().parse::<usize>().unwrap_or(1).max(1), bis.trim().parse::<usize>().unwrap_or(usize::MAX));
                 let (start, step) = (ab.trim().parse::<u32>().unwrap_or(1).max(1), plus.trim().parse::<u32>().unwrap_or(1).max(1));
