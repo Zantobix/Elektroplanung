@@ -10,6 +10,12 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 ## [Unveröffentlicht]
 
 Neu:
+- PDF: Texte mit eigener Schrift betten die installierte TrueType-Schrift als Teilmenge ein (statt Helvetica/
+  Courier/Times); Rückfall auf die Standardschriften wie bisher
+- Umriss, Treffertest, Markierung und Griffe von Texten passen zur gezeichneten Schrift (Metrik der
+  installierten Schrift, Times als Rückfall)
+- Symbolbibliothek: Freigaben (Querverweise, Sicherungsübersicht) werden aus Symbole.tfi gelesen und beim
+  Setzen übernommen
 - Texte werden in ihrem eigenen Schriftnamen (sonst der Standardschrift des Projekts) gezeichnet – auf der
   Zeichenfläche, im Bildexport und im PDF (dort als Times/Helvetica/Courier); der Schriftdialog listet die
   installierten Schriften

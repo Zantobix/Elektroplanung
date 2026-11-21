@@ -1,5 +1,5 @@
 //! Schrift je Text: Texte mit eigenem Schriftnamen werden in dieser Schrift gezeichnet (Bild) bzw. als passende
-//! PDF-Standardschrift ausgegeben.
+//! PDF-Schrift ausgegeben (eingebettet, sonst Standardschrift).
 
 use elektroplanung::model::*;
 use elektroplanung::{bildexport, pdf};
@@ -21,12 +21,37 @@ fn projekt(font: &str, text: &str) -> Project {
 #[test]
 fn pdf_waehlt_standardschrift_nach_namen() {
     let inhalt = |font: &str| String::from_utf8_lossy(&pdf::render_headless(&projekt(font, "Schrifttest"), &[]).0).to_string();
-    // Fett: Times-Bold = F2, Helvetica-Bold = F6, Courier-Bold = F10
+    // Fett: Times-Bold = F2, Helvetica-Bold = F6, Courier-Bold = F10 (installierte Schriften werden eingebettet)
     let zeile = |s: &str| s.lines().find(|l| l.contains("(Schrifttest) Tj")).map(|l| l.to_string()).unwrap_or_default();
     assert!(zeile(&inhalt("")).starts_with("BT /F2 "), "{}", zeile(&inhalt("")));
-    assert!(zeile(&inhalt("Arial")).starts_with("BT /F6 "), "{}", zeile(&inhalt("Arial")));
-    assert!(zeile(&inhalt("Courier New")).starts_with("BT /F10 "));
-    assert!(inhalt("Arial").contains("/BaseFont /Helvetica-Bold"));
+    assert!(!inhalt("").contains("/FontFile2"), "Times bleibt Standardschrift");
+    if elektroplanung::schriften::finden("Arial", true, false).is_none() {
+        assert!(zeile(&inhalt("Arial")).starts_with("BT /F6 "), "{}", zeile(&inhalt("Arial")));
+        assert!(inhalt("Arial").contains("/BaseFont /Helvetica-Bold"));
+    }
+    if elektroplanung::schriften::finden("Courier New", true, false).is_none() {
+        assert!(zeile(&inhalt("Courier New")).starts_with("BT /F10 "));
+    }
+    // nicht installiert: Times wie bisher
+    assert!(zeile(&inhalt("Gibt es nicht 123")).starts_with("BT /F2 "));
+}
+
+/// Mit installierter Arial: Teilmenge eingebettet (Type0/CIDFontType2, FontFile2, ToUnicode), der Text steht als
+/// Glyphennummern im Inhalt; Zeichen, die der Schrift fehlen, kommen in der Standardschrift.
+#[test]
+fn pdf_bettet_installierte_schrift_ein() {
+    if elektroplanung::schriften::finden("Arial", true, false).is_none() {
+        return;
+    }
+    let (bytes, _) = pdf::render_headless(&projekt("Arial", "Schrifttest \u{10FFFD}"), &[]);
+    let s = String::from_utf8_lossy(&bytes).to_string();
+    assert!(s.contains("/Subtype /Type0") && s.contains("/Subtype /CIDFontType2") && s.contains("/FontFile2") && s.contains("/ToUnicode"));
+    assert!(s.contains("/E1 "), "Schriftverzeichnis");
+    assert!(s.lines().any(|l| l.starts_with("BT /E1 ") && l.contains("] TJ ET")), "Text in der eingebetteten Schrift");
+    assert!(s.lines().any(|l| l.starts_with("BT /F6 ") && l.contains("(?) Tj")), "fehlendes Zeichen in der Standardschrift");
+    // Teilmenge: viel kleiner als die Schriftdatei
+    let datei = std::fs::metadata(elektroplanung::schriften::finden("Arial", true, false).unwrap().pfad).unwrap().len() as usize;
+    assert!(bytes.len() < datei / 4, "{} von {datei}", bytes.len());
 }
 
 /// Breite der dunklen Pixel (Spalten) einer Zeile im Bildexport.

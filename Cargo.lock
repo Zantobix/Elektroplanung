@@ -614,10 +614,12 @@ dependencies = [
  "chrono",
  "eframe",
  "egui_extras",
+ "flate2",
  "image",
  "rfd",
  "serde",
  "serde_json",
+ "skrifa",
  "winresource",
 ]
 

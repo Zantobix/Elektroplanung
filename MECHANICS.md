@@ -63,7 +63,8 @@ x=9369 (y 2000…7333). Die Textfelder sind 1:1 in `src/titleblock.rs` übernomm
   Art 3 = Symbol-Wurzeln (Favoriten 100, Benutzerbauteile 200, Standardbauteile 300), Art 4 = Bauteil-Wurzeln,
   Art 0 = Gruppen (OwnerID = übergeordnete Gruppe, z. B. Lampen → Signaleinrichtung).
 - Symbole: [u32 Länge][u32 Länge][01 ID 8 B][01 Name 40 B][01 HauptID][01 GruppeID][01 Geändert f64][01 Favorit]
-  [u32 n][01 BMK-Vorlage …][u32 n][01 "Ver1"/"Ver2" Zeichendaten].
+  [u32 n][01 BMK-Vorlage …][u32 n][01 "Ver1"/"Ver2" Zeichendaten]. Der Symbolkopf (n = 49) trägt ab Byte 45 die
+  Freigaben als u32 (Bit 0 Querverweise, Bit 1 Sicherungsübersicht, wie SYM Byte 112 im .epr); Merker 0 = leerer Kopf.
 - Zeichendaten: Kopf 0x3c Byte (Breite +0x0c, Höhe +0x10, Elementzahl +0x14), Elemente zu 0x50 Byte
   (gleicher Aufbau wie die Schriftfeld-Elemente in FUN_00401e40): Koordinaten in 0,1 mm, y nach unten;
   Typ +0x3c: 1 Linie, 2 Bézier (4 Punkte), 3 Viereck (4 Punkte), 4 Dreieck (3 Punkte), 5 Ellipse (Rechteck),

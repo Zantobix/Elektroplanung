@@ -4,7 +4,8 @@
 //! (Adobe-Metrik, für Times New Roman und Liberation Serif gleich) in 1/1000 Geviert.
 //!
 //! Umriss, Treffertest und Griffe eines Textes beruhen darauf (`text_umriss`), damit sie auch nach dem Vergrößern
-//! zur gezeichneten Schrift passen.
+//! zur gezeichneten Schrift passen. Texte mit eigener, installierter Schrift (TextStyle::font) werden mit deren
+//! Metrik gemessen (`schriftmass`), Times bleibt der Rückfall.
 
 use crate::model::{Align, TextStyle, P};
 
@@ -54,22 +55,38 @@ pub fn zeilenhoehe(size: f32) -> f32 {
 
 /// Größe (Breite der längsten Zeile, Höhe aller Zeilen) eines mehrzeiligen Textes in mm.
 pub fn groesse(text: &str, size: f32, bold: bool, italic: bool) -> (f32, f32) {
+    groesse_mit(None, text, size, bold, italic)
+}
+
+/// Größe mit der Metrik einer Schrift (`None` = Times); der Schrift fehlende Zeichen zählen mit Times-Breite.
+pub fn groesse_mit(m: Option<&crate::schriftmass::Metrik>, text: &str, size: f32, bold: bool, italic: bool) -> (f32, f32) {
     let zeilen: Vec<&str> = if text.is_empty() { vec![""] } else { text.split('\n').map(|l| l.trim_end_matches('\r')).collect() };
-    let w = zeilen.iter().map(|l| breite(l, size, bold, italic)).fold(0.0, f32::max);
-    (w, zeilen.len() as f32 * zeilenhoehe(size))
+    let Some(m) = m else {
+        let w = zeilen.iter().map(|l| breite(l, size, bold, italic)).fold(0.0, f32::max);
+        return (w, zeilen.len() as f32 * zeilenhoehe(size));
+    };
+    let zeile = |l: &str| -> f32 { l.chars().map(|c| m.zeichen(c).map(|w| w * size).unwrap_or_else(|| breite(c.encode_utf8(&mut [0; 4]), size, bold, italic))).sum() };
+    let w = zeilen.iter().map(|l| zeile(l)).fold(0.0, f32::max);
+    (w, zeilen.len() as f32 * m.zeile * size)
 }
 
 /// Umriss (links oben, rechts unten) eines Textes in mm, wie `canvas::draw_text_box` ihn zeichnet: ohne Textbox
 /// an `pos` ausgerichtet (waagerecht mittig zur Höhe, hochkant von `pos` nach oben), mit Textbox in ihr nach
 /// Ausrichtung und senkrecht mittig. Mit Textbox zählt die Box selbst mit (Rahmen, Markierung des Originals).
 pub fn text_umriss(pos: P, text: &str, size: f32, align: Align, vertical: bool, st: &TextStyle) -> (P, P) {
-    let (mut w, mut h) = groesse(text, size, st.bold, st.italic);
+    umriss_mit(crate::schriftmass::metrik(&st.font, st.bold, st.italic).as_deref(), pos, text, size, align, vertical, st)
+}
+
+/// Wie `text_umriss`, mit der Metrik einer Schrift (`None` = Times).
+pub fn umriss_mit(m: Option<&crate::schriftmass::Metrik>, pos: P, text: &str, size: f32, align: Align, vertical: bool, st: &TextStyle) -> (P, P) {
+    let (mut w, mut h) = groesse_mit(m, text, size, st.bold, st.italic);
     if let (true, Some((a, b))) = (st.wrap, st.rect) {
         // mit Umbruch: Maße der umbrochenen Zeilen (wie canvas::draw_text_box)
         let bw = if vertical { (a.y - b.y).abs() } else { (a.x - b.x).abs() };
-        let zeilen = crate::umbruch::text_umbrechen(text, (bw - 1.0).max(0.5), &|s| breite(s, size, st.bold, st.italic));
-        w = zeilen.iter().map(|l| breite(l, size, st.bold, st.italic)).fold(0.0, f32::max);
-        h = zeilen.len().max(1) as f32 * zeilenhoehe(size);
+        let br = |s: &str| groesse_mit(m, s, size, st.bold, st.italic).0;
+        let zeilen = crate::umbruch::text_umbrechen(text, (bw - 1.0).max(0.5), &br);
+        w = zeilen.iter().map(|l| br(l)).fold(0.0, f32::max);
+        h = zeilen.len().max(1) as f32 * groesse_mit(m, "", size, st.bold, st.italic).1;
     }
     let Some((a, b)) = st.rect else {
         let dx = match align {
@@ -110,6 +127,52 @@ mod tests {
         assert!(breite("Ä", 1.0, false, false) > breite("a", 1.0, false, false));
         let (w, h) = groesse("ab\ncde", 2.0, false, false);
         assert!((w - 2.0 * 1.388).abs() < 1e-3 && (h - 2.0 * 2.0 * ZEILE).abs() < 1e-4);
+    }
+
+    /// Eine breitere Schrift (synthetisch: die dicktengleiche egui-Schrift Hack) ergibt einen breiteren Umriss als
+    /// Times; Zeichen, die ihr fehlen, zählen mit Times-Breite.
+    #[test]
+    fn umriss_in_eigener_schrift() {
+        let defs = eframe::egui::FontDefinitions::default();
+        let d = defs.font_data.get("Hack").unwrap();
+        let m = crate::schriftmass::Metrik::aus_daten(std::sync::Arc::new(d.bytes().to_vec()), d.index).unwrap();
+        let st = TextStyle::default();
+        let (a, b) = umriss_mit(None, P::new(0.0, 0.0), "iiii", 10.0, Align::Left, false, &st);
+        let (c, e) = umriss_mit(Some(&m), P::new(0.0, 0.0), "iiii", 10.0, Align::Left, false, &st);
+        assert!((b.x - a.x - 4.0 * 2.78).abs() < 1e-3);
+        assert!(e.x - c.x > 1.8 * (b.x - a.x), "{a:?} {b:?} / {c:?} {e:?}");
+        assert!((e.y - c.y - m.zeile * 10.0).abs() < 1e-4);
+        // fehlendes Zeichen: Times-Breite
+        let (w, _) = groesse_mit(Some(&m), "\u{10FFFD}", 10.0, false, false);
+        assert!((w - breite("\u{10FFFD}", 10.0, false, false)).abs() < 1e-4);
+        // nicht installierte Schrift: Times
+        let st = TextStyle { font: "Gibt Es Nicht 4711".into(), ..Default::default() };
+        assert_eq!(text_umriss(P::new(0.0, 0.0), "iiii", 10.0, Align::Left, false, &st), (a, b));
+    }
+
+    /// Mit installierter Arial (Windows): Umriss nach Arial-Maßen, passend zur von egui gezeichneten Breite.
+    #[test]
+    fn umriss_in_arial_wie_gezeichnet() {
+        use eframe::egui;
+        if crate::schriftmass::metrik("Arial", false, false).is_none() {
+            return;
+        }
+        let text = "Wiiiiide Unterverteilung 230V";
+        let st = TextStyle { font: "Arial".into(), ..Default::default() };
+        let (a, b) = text_umriss(P::new(0.0, 0.0), text, 10.0, Align::Left, false, &st);
+        let (ta, tb) = text_umriss(P::new(0.0, 0.0), text, 10.0, Align::Left, false, &TextStyle::default());
+        assert!(((b.x - a.x) - (tb.x - ta.x)).abs() > 1.0, "anderer Umriss als Times");
+        // gezeichnet bei 10 px je mm
+        let ctx = egui::Context::default();
+        crate::setup_style(&ctx);
+        let input = || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::splat(2000.0))), ..Default::default() };
+        let _ = ctx.run_ui(input(), |_| {});
+        let mut g = egui::Vec2::ZERO;
+        let _ = ctx.run_ui(input(), |ui| {
+            g = ui.painter().layout_no_wrap(text.into(), crate::schriften::font_id("Arial", 100.0, false, false), egui::Color32::BLACK).size() / 10.0;
+        });
+        assert!(((b.x - a.x) - g.x).abs() < 0.02 * g.x, "Breite {} gezeichnet {}", b.x - a.x, g.x);
+        assert!(((b.y - a.y) - g.y).abs() < 0.03 * g.y, "Höhe {} gezeichnet {}", b.y - a.y, g.y);
     }
 
     #[test]
