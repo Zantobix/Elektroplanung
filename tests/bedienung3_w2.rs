@@ -51,10 +51,11 @@ fn text_vergroessern_umriss_passt() {
     let (ai, si, id) = alle(&p).find(|(_, _, o)| matches!(&o.kind, Kind::Text { text, .. } if text == "Raum 2")).map(|(a, s, o)| (a, s, o.id)).expect("Text Raum 2");
     let o = p.anlagen[ai].sheets[si].objects.iter_mut().find(|o| o.id == id).unwrap();
     let Kind::Text { pos, size: s0, .. } = o.kind.clone() else { unreachable!() };
-    // dreimal so groß ziehen (Festpunkt = Bezugspunkt des Textes)
+    // Box dreimal so groß ziehen (Festpunkt = Bezugspunkt des Textes)
     groesse::skaliere(&mut o.kind, pos, 3.0, 3.0);
     let Kind::Text { size, style, text, .. } = &o.kind else { unreachable!() };
-    assert!((size - 3.0 * s0).abs() < 1e-4);
+    // wie im Original (Gegenprobe 21.11.2026): nur die Box wächst, die Schrift bleibt
+    assert!((size - s0).abs() < 1e-4);
     let (rmn, rmx) = style.rect.expect("Textbox aus W2");
     // Umriss (Markierung, Treffer, Rahmen mit Griffen) umfasst Textbox und gezeichnete Schrift
     let (mn, mx) = canvas::obj_bounds(o, &[]);

@@ -21,15 +21,29 @@ pub const MAX_SCALE: f32 = 20.0;
 pub const TITEL_H: f32 = 2.5;
 pub const WERT_H: f32 = 2.2;
 
-/// Wird die Markierung proportional skaliert (ein einzelnes Symbol bzw. ein einzelner Text)?
+/// Wird die Markierung proportional skaliert (ein einzelnes Symbol bzw. ein einzelner Text ohne Box)?
 pub fn proportional(objs: &[Obj]) -> bool {
-    objs.len() == 1 && matches!(objs[0].kind, Kind::Symbol { .. } | Kind::Text { .. })
+    objs.len() == 1 && (matches!(objs[0].kind, Kind::Symbol { .. }) || (matches!(objs[0].kind, Kind::Text { .. }) && !ist_textbox(&objs[0].kind)))
+}
+
+/// Text mit Box (ZCN 11 mit Rechteck, z. B. Raumnamen und neue Textboxen). Wie im Original (Gegenprobe 21.11.2026
+/// an „Raum 2“ aus W2 und an einer neuen Textbox) ändert der Eckgriff Breite und Höhe der Box unabhängig
+/// voneinander; die Schriftgröße bleibt, der Text steht weiter oben links in der Box.
+pub fn ist_textbox(k: &Kind) -> bool {
+    matches!(k, Kind::Text { style, .. } if style.rect.is_some())
 }
 
 /// Rahmen zur Größenänderung (min, max) für die markierten Objekte: einzelnes Symbol/Text mit `RAND`, sonst ab zwei
 /// Objekten, sofern nicht nur Klemmstellen und Verweise markiert sind; None = kein Rahmen.
 pub fn rahmen(objs: &[Obj], lib: &[SymDef]) -> Option<(P, P)> {
     let skalierbar = |o: &Obj| !matches!(o.kind, Kind::Terminal { .. } | Kind::Verweis { .. });
+    if objs.len() == 1 {
+        if let Kind::Text { style, .. } = &objs[0].kind {
+            if let Some((a, b)) = style.rect {
+                return Some(canvas::norm_rect(a, b));
+            }
+        }
+    }
     if proportional(objs) {
         let (a, b) = canvas::obj_bounds(&objs[0], lib);
         return Some((P::new(a.x - RAND, a.y - RAND), P::new(b.x + RAND, b.y + RAND)));
@@ -67,6 +81,17 @@ pub fn skaliere(k: &mut Kind, anchor: P, sx: f32, sy: f32) {
         Kind::Symbol { pos, .. } | Kind::Text { pos, .. } => *pos,
         _ => P::default(),
     };
+    // Textbox: nur die Box ändert sich (je Achse eigener Faktor), Schrift und Lage des Texts in der Box bleiben
+    if let Kind::Text { pos, style, .. } = k {
+        if let Some((a, b)) = style.rect {
+            let (mn, mx) = canvas::norm_rect(a, b);
+            let f = |q: P| P::new(anchor.x + (q.x - anchor.x) * sx, anchor.y + (q.y - anchor.y) * sy);
+            let (nmn, nmx) = canvas::norm_rect(f(mn), f(mx));
+            *pos = nmn.add(pos.sub(mn));
+            style.rect = Some((nmn, nmx));
+            return;
+        }
+    }
     k.scale_about(anchor, sx, sy);
     let f = sx.min(sy);
     match k {
@@ -266,19 +291,16 @@ mod tests {
         assert_eq!((*pos, *scale), (P::new(20.0, 40.0), 2.0));
         assert_eq!(pos.add(title.unwrap().0), P::new(4.0, 18.0));
         assert_eq!(beschriftungen(&k), vorher);
-        // Text mit Textbox: Schrift und Box wachsen gemeinsam, der Umriss deckt den gezeichneten Text
+        // Text mit Textbox (wie im Original): nur die Box ändert sich, je Achse frei; Schrift und Lage im Kasten bleiben
         let st = TextStyle { rect: Some((P::new(10.0, 18.0), P::new(20.0, 22.0))), ..Default::default() };
-        let mut t = Kind::Text { pos: P::new(10.0, 20.0), text: "Raum 2".into(), size: 3.5, align: Align::Left, vertical: false, style: st };
-        skaliere(&mut t, P::new(10.0, 20.0), 3.0, 3.0);
+        let mut t = Kind::Text { pos: P::new(10.5, 19.0), text: "Raum 2".into(), size: 3.5, align: Align::Left, vertical: false, style: st };
+        assert!(!proportional(&[obj(t.clone())]));
+        skaliere(&mut t, P::new(10.0, 18.0), 3.0, 2.0);
         let Kind::Text { pos, size, style, .. } = &t else { unreachable!() };
-        assert_eq!((*pos, *size), (P::new(10.0, 20.0), 10.5));
-        assert_eq!(style.rect, Some((P::new(10.0, 14.0), P::new(40.0, 26.0))));
-        let (a, b) = canvas::obj_bounds(&obj(t.clone()), &[]);
-        let w = crate::textmass::breite("Raum 2", 10.5, false, false);
-        assert!(a.x <= 10.0 && b.x >= 10.0 + w - 1e-3 && a.y <= 20.0 - 10.5 * 1.15 / 2.0 + 1e-3 && b.y >= 20.0 + 10.5 * 1.15 / 2.0 - 1e-3);
-        // Rahmen und Griffe (sel_frame) beruhen auf demselben Umriss
-        let (ra, rb) = rahmen(&[obj(t)], &[]).unwrap();
-        assert_eq!((ra, rb), (P::new(a.x - RAND, a.y - RAND), P::new(b.x + RAND, b.y + RAND)));
+        assert_eq!((*pos, *size), (P::new(10.5, 19.0), 3.5));
+        assert_eq!(style.rect, Some((P::new(10.0, 18.0), P::new(40.0, 26.0))));
+        // Rahmen und Griffe (sel_frame) liegen auf der Box
+        assert_eq!(rahmen(&[obj(t)], &[]), Some((P::new(10.0, 18.0), P::new(40.0, 26.0))));
         // ungleiche Achsen (Mehrfachmarkierung): kleinerer Faktor für Maßstab und Schrift
         let mut t = Kind::Text { pos: P::new(10.0, 10.0), text: "x".into(), size: 3.0, align: Align::Left, vertical: false, style: Default::default() };
         skaliere(&mut t, P::new(0.0, 0.0), 3.0, 0.5);

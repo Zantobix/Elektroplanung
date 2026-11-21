@@ -67,6 +67,9 @@ Neu:
   `benutzer_gruppen.json`, Symbole.tfi bleibt unverändert); sie erscheint im Symbolbaum unter Benutzerbauteile
 
 Behoben:
+- Textboxen und Raumnamen: der Eckgriff ändert wie im Original Breite und Höhe der Box frei, die Schrift bleibt
+  gleich; neue Textboxen beginnen wie im Original ohne Text
+- Schriftfeld bearbeiten: das Fenster wuchs über den Bildschirm hinaus und die Elementliste lag übereinander
 - Neue Textbox wie im Original: Doppelklick und Eigenschaften öffnen den Textbox-Dialog (Abmessung, Rahmen,
   Umbruch, Fixiert, Ausrichtung, Drehung, Schrift, Text) statt nur „Text bearbeiten“; Vorgaben des Originals
   (Rahmen an, Umbruch aus, 8 pt); alle Einstellungen werden im `.epr` gespeichert.
