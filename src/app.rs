@@ -228,7 +228,8 @@ pub struct App {
     /// Taste S/A gedrückt und noch nicht losgelassen: (Taste, während des Haltens benutzt)
     pub hold_press: [Option<bool>; 2],
     /// Eigentümer › Setzen: diese Symbole übernehmen die Kennzeichnung des als Nächstes angeklickten Symbols
-    pub owner_pick: Option<Vec<u64>>,
+    /// (Blatt der Ziele, Ziel-Ids) – der Eigentümer darf auf einem anderen Blatt liegen (z. B. Spule zum Kontakt)
+    pub owner_pick: Option<(SheetRef, Vec<u64>)>,
 }
 
 impl App {

@@ -1109,8 +1109,14 @@ impl App {
         // Eigentümer › Setzen: das angeklickte Symbol gibt seine Kennzeichnung an die gemerkten Symbole
         if self.owner_pick.is_some() {
             if inside && pressed_l {
-                if let Some(id) = self.hit_top(m, tol) {
+                // bevorzugt ein Symbol unter der Maus (Texte/Leitungen darüber zählen nicht)
+                let sym = self.sheet().and_then(|s| {
+                    s.objects.iter().rev().find(|o| matches!(o.kind, Kind::Symbol { .. }) && canvas::hit(o, m, tol, &self.lib)).map(|o| o.id)
+                });
+                if let Some(id) = sym {
                     self.owner_picked(id);
+                } else {
+                    self.info = "Eigentümer wählen: bitte ein Symbol anklicken (Esc = Abbruch)".into();
                 }
                 self.drag = Drag::None;
             }

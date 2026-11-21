@@ -871,20 +871,21 @@ impl App {
     /// Eigentümersymbol warten (z. B. Spule für einen Kontakt).
     pub fn start_owner_pick(&mut self) {
         let ids: Vec<u64> = self.selected_objs().iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).map(|o| o.id).collect();
-        if ids.is_empty() {
+        let Some(r) = self.cur() else { return };
+        if ids.is_empty() || self.sym_edit.is_some() {
             return;
         }
-        self.owner_pick = Some(ids);
+        self.owner_pick = Some((r, ids));
         self.placing = None;
         self.drag = Drag::None;
-        self.info = "Eigentümer wählen: Symbol anklicken (Esc = Abbruch)".into();
+        self.info = "Eigentümer wählen: Symbol anklicken, auch auf einem anderen Blatt (Esc = Abbruch)".into();
     }
 
     /// Klick im Modus „Eigentümer setzen“: die gemerkten Symbole übernehmen Kennzeichnung (Vorlage) und Zähler
     /// des angeklickten Symbols – beides bestimmt die angezeigte BMK. Kein Symbol oder eines der Ziele → weiter warten.
     pub fn owner_picked(&mut self, owner_id: u64) {
-        let Some(targets) = self.owner_pick.clone() else { return };
-        if targets.contains(&owner_id) {
+        let Some((tref, targets)) = self.owner_pick.clone() else { return };
+        if self.cur() == Some(tref) && targets.contains(&owner_id) {
             return;
         }
         let owner = self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == owner_id)).cloned();
@@ -892,7 +893,8 @@ impl App {
         let counter = ext.counter;
         self.owner_pick = None;
         let changes = self
-            .sheet()
+            .project
+            .sheet(tref)
             .map(|s| s.objects.iter().filter(|o| targets.contains(&o.id)).any(|o| matches!(&o.kind, Kind::Symbol { bmk: b, ext: e, .. } if *b != bmk || e.counter != counter)))
             .unwrap_or(false);
         let shown = self.sheet().zip(self.cur()).and_then(|(s, r)| self.project.anlagen.get(r.anlage).map(|a| symbols::display_bmk(&bmk, counter, &canvas::bmk_ctx(a, s))));
@@ -902,15 +904,17 @@ impl App {
             return;
         }
         self.checkpoint();
-        self.with_sheet(|s, _| {
+        if let Some(s) = self.project.sheet_mut(tref) {
             for o in s.objects.iter_mut().filter(|o| targets.contains(&o.id)) {
                 if let Kind::Symbol { bmk: b, ext: e, .. } = &mut o.kind {
                     *b = bmk.clone();
                     e.counter = counter;
                 }
             }
-        });
-        self.selection = targets;
+        }
+        if self.cur() == Some(tref) {
+            self.selection = targets;
+        }
         self.info = format!("Eigentümer {shown} gesetzt");
     }
 
