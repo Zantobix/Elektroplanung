@@ -543,21 +543,21 @@ impl App {
                 let _ = t;
             }
             Props::Sheet(s) => {
-                let n: u32 = s.nummer.trim().parse().unwrap_or(0);
-                if n == 0 {
-                    self.dialog = Some(crate::app::Dialog::Message("Die Blattnummer darf nicht kleiner als 1 sein!".into()));
-                    return;
-                }
-                let dup = self.project.anlagen.get(s.r.anlage).map(|a| a.sheets.iter().enumerate().any(|(i, x)| i != s.r.sheet && x.number == n)).unwrap_or(false);
-                if dup {
-                    self.dialog = Some(crate::app::Dialog::Message("Ein Blatt mit dieser Blattnummer ist bei dieser Anlage schon vorhanden!".into()));
-                    return;
-                }
+                // Regeln des Originals für Nummer 0, Subindex 0 und Deckblatt (blattnummer.rs); im Nachbau
+                // angelegte Blätter ohne Art gelten als Schaltplan
+                let art = self.project.sheet(s.r).map(|x| if x.art == 0 && x.raw.is_none() { 3 } else { x.art }).unwrap_or(3);
+                let (n, sub) = match crate::blattnummer::pruefen(&self.project, s.r, &s.nummer, &s.subindex, art) {
+                    Ok(v) => v,
+                    Err(m) => {
+                        self.dialog = Some(crate::app::Dialog::Message(m));
+                        return;
+                    }
+                };
                 if let Some(sh) = self.project.sheet_mut(s.r) {
                     sh.name = s.name;
                     sh.ort = s.ort;
                     sh.number = n;
-                    sh.subindex = s.subindex.trim().parse().unwrap_or(0);
+                    sh.subindex = sub;
                     // -1 = Strompfade der Anlage übernehmen (wie im Original)
                     let c: i32 = s.strompfade.trim().parse().unwrap_or(-1);
                     if c > 0 {

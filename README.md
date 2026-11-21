@@ -164,9 +164,13 @@ nicht. Gemessen werden stattdessen:
   (Original: Zeiger in Feld 9) noch nicht; gezeichnet wird in Times wie die Projektschrift.
 - Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
   füllt das Original zur Laufzeit – der Nachbau listet die markierten Objekte.
-- Symboleditor: Parameter (PRA) werden nicht bearbeitet; Freigaben eines Symbols gelten als Vorgabe für neu
-  gesetzte Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
-- Drucken: „Änderung seit …“ druckt alle Blätter der Anlage (der Nachbau führt kein Änderungsdatum je Blatt).
+- Symboleditor: Stifte des Symbols (SIT) werden nur angezeigt und unverändert übernommen; Freigaben eines
+  Symbols gelten als Vorgabe für neu gesetzte Symbole, ihr Ablageort im SYM-Block ist noch unbekannt.
+- Symboleigenschaften: Die Rackposition wird nur im eigenen Format (`.epj`) gespeichert; ihr Ablageort im
+  VSY-Block ist unbekannt (SPA enthält die Parameterwerte).
+- Tabelle › Daten „Inhaltsverzeichnis“ füllt die Tabelle beim Bearbeiten mit den Blättern der Anlage; sie wird
+  danach nicht selbständig nachgeführt.
+- Projektgrafiken, die im Nachbau neu angelegt oder geändert werden, schreibt das `.epr`-Format noch nicht.
 - Optionen › Datenbank: Serverangaben werden nur gespeichert; der Nachbau liest die Bibliothek direkt aus Symbole.tfi.
 - Info-Dialog bewusst nicht 1:1 (Copyright, E-Mail und Registrierungsschlüssel des Original-Autors).
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
