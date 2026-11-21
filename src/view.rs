@@ -2,6 +2,7 @@
 
 use crate::app::*;
 use crate::canvas::{self, DrawCtx, SheetColors, Xf};
+use crate::baum::ico;
 use crate::icons::{self, Icon};
 use crate::model::*;
 use crate::symbols::{self, SymDef};
@@ -71,16 +72,6 @@ pub fn auswahl(ui: &mut egui::Ui, id: &str, w: f32, items: &[String], idx: &mut 
         }
     });
     *idx != before
-}
-
-fn star(p: &egui::Painter, c: Pos2, r: f32) {
-    let mut pts = vec![];
-    for i in 0..10 {
-        let a = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
-        let rr = if i % 2 == 0 { r } else { r * 0.45 };
-        pts.push(Pos2::new(c.x + rr * a.cos(), c.y + rr * a.sin()));
-    }
-    p.add(egui::Shape::closed_line(pts, Stroke::new(1.0, Color32::from_rgb(120, 90, 0))));
 }
 
 impl App {
@@ -271,10 +262,7 @@ impl App {
     // ------------------------------------------------------------------ Bäume
 
     fn symbol_tree(&self) -> Vec<TNode> {
-        let filter = self.search.to_lowercase();
-        let pick = |f: &dyn Fn(&SymDef) -> bool| -> Vec<&SymDef> {
-            self.lib.iter().filter(|d| f(d) && (filter.is_empty() || d.name.to_lowercase().contains(&filter))).collect()
-        };
+        let pick = |f: &dyn Fn(&SymDef) -> bool| -> Vec<&SymDef> { self.lib.iter().filter(|d| f(d)).collect() };
         let fav = pick(&|d| d.fav);
         let user = pick(&|d| d.haupt == 200 || d.haupt == 0);
         let std = pick(&|d| d.haupt == 300 || d.haupt == 100);
@@ -304,12 +292,12 @@ impl App {
     /// Bauteile, Platzhaltergruppen, danach die Anlagen.
     fn project_tree(&self) -> Vec<TNode> {
         let mut out = vec![];
-        let grp = |id: &str, label: &str, children: Vec<TNode>| TNode { id: id.into(), label: label.into(), bold: true, icon: 1, action: TAction::None, children };
+        let grp = |id: &str, label: &str, icon: u8, children: Vec<TNode>| TNode { id: id.into(), label: label.into(), bold: true, icon, action: TAction::None, children };
         let leaf = |id: String, label: String, action: TAction| TNode { id, label, bold: false, icon: 0, action, children: vec![] };
-        out.push(grp("prj/pot", "Potentiale", self.project.potentiale.iter().enumerate().map(|(i, l)| leaf(format!("prj/pot/{i}"), l.clone(), TAction::Potential(i))).collect()));
-        out.push(grp("prj/ltg", "Leitungen", self.project.leitungen.iter().enumerate().map(|(i, l)| leaf(format!("prj/ltg/{i}"), l.name.clone(), TAction::Leitung(i))).collect()));
-        out.push(grp("prj/sym", "Objektkatalog", self.project.symdefs.iter().map(|d| leaf(format!("prj/sym/{}", d.key), d.name.clone(), TAction::Symbol(d.key.clone()))).collect()));
-        out.push(grp("prj/stift", "Stifte", self.project.stifte.iter().enumerate().map(|(i, l)| leaf(format!("prj/stift/{i}"), l.name.clone(), TAction::Stift(i))).collect()));
+        out.push(grp("prj/pot", "Potentiale", ico::POTENTIALE, self.project.potentiale.iter().enumerate().map(|(i, l)| leaf(format!("prj/pot/{i}"), l.clone(), TAction::Potential(i))).collect()));
+        out.push(grp("prj/ltg", "Leitungen", ico::LEITUNGEN, self.project.leitungen.iter().enumerate().map(|(i, l)| leaf(format!("prj/ltg/{i}"), l.name.clone(), TAction::Leitung(i))).collect()));
+        out.push(grp("prj/sym", "Objektkatalog", ico::OBJEKTKATALOG, self.project.symdefs.iter().map(|d| leaf(format!("prj/sym/{}", d.key), d.name.clone(), TAction::Symbol(d.key.clone()))).collect()));
+        out.push(grp("prj/stift", "Stifte", ico::STIFTE, self.project.stifte.iter().enumerate().map(|(i, l)| leaf(format!("prj/stift/{i}"), l.name.clone(), TAction::Stift(i))).collect()));
         let mut bilder: Vec<String> = self.project.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects).filter_map(|o| match &o.kind {
             Kind::Image { path, .. } => Some(std::path::Path::new(path).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| path.clone())),
             _ => None,
@@ -319,9 +307,11 @@ impl App {
         // Bilder des Projekts (aus .epr: PRJ › BLD) zuerst; Doppelklick setzt das Bild auf das Blatt
         let mut nodes: Vec<TNode> = self.project.bilder.iter().enumerate().map(|(i, b)| leaf(format!("prj/bld/{i}"), b.name.clone(), TAction::Bild(i))).collect();
         nodes.extend(bilder.into_iter().enumerate().map(|(i, n)| leaf(format!("prj/img/{i}"), n, TAction::None)));
-        out.push(grp("prj/img", "Grafiken", nodes));
-        out.push(grp("prj/bt", "Bauteile", self.project.bauteile.iter().enumerate().map(|(i, b)| leaf(format!("prj/bt/{i}"), b.name.clone(), TAction::None)).collect()));
-        out.push(grp("prj/ph", "Platzhaltergruppen", self.project.platzhalter.iter().enumerate().map(|(i, g)| leaf(format!("prj/ph/{i}"), g.name.clone(), TAction::Platz(i))).collect()));
+        out.push(grp("prj/img", "Grafiken", ico::GRAFIKEN, nodes));
+        out.push(grp("prj/bt", "Bauteile", ico::BAUTEILE, self.project.bauteile.iter().enumerate().map(|(i, b)| leaf(format!("prj/bt/{i}"), b.name.clone(), TAction::None)).collect()));
+        out.push(grp("prj/ph", "Platzhaltergruppen", ico::PLATZHALTER, self.project.platzhalter.iter().enumerate().map(|(i, g)| leaf(format!("prj/ph/{i}"), g.name.clone(), TAction::Platz(i))).collect()));
+        // Installationspläne: Gruppe wie im Original (ohne Symbol); Inhalte werden noch nicht eingelesen
+        out.push(TNode { id: "prj/inst".into(), label: "Installationspläne".into(), bold: true, icon: ico::KEINS, action: TAction::None, children: vec![] });
         for (ai, a) in self.project.anlagen.iter().enumerate() {
             let leaf = |id: String, label: String| TNode { id, label, bold: false, icon: 0, action: TAction::None, children: vec![] };
             let mk = |id: String, label: String, action: TAction| TNode { id, label, bold: false, icon: 0, action, children: vec![] };
@@ -336,7 +326,7 @@ impl App {
                     id: format!("prj/a{ai}/bl/{si}"),
                     label: format!("[{}] {}", s.number, s.name),
                     bold: false,
-                    icon: 3,
+                    icon: ico::BLATT,
                     action: TAction::Sheet(SheetRef { anlage: ai, sheet: si }),
                     children: vec![],
                 })
@@ -345,12 +335,12 @@ impl App {
                 id: format!("prj/a{ai}"),
                 label: a.name.clone(),
                 bold: true,
-                icon: 4,
+                icon: ico::ANLAGE,
                 action: TAction::None,
                 children: vec![
-                    TNode { id: format!("prj/a{ai}/ss"), label: "Sammelschienen".into(), bold: true, icon: 1, action: TAction::None, children: ss },
-                    TNode { id: format!("prj/a{ai}/kl"), label: "Klemmleisten".into(), bold: true, icon: 1, action: TAction::None, children: kl },
-                    TNode { id: format!("prj/a{ai}/bl"), label: "Blätter".into(), bold: true, icon: 1, action: TAction::None, children: bl },
+                    TNode { id: format!("prj/a{ai}/ss"), label: "Sammelschienen".into(), bold: true, icon: ico::SAMMELSCHIENEN, action: TAction::None, children: ss },
+                    TNode { id: format!("prj/a{ai}/kl"), label: "Klemmleisten".into(), bold: true, icon: ico::KLEMMLEISTEN, action: TAction::None, children: kl },
+                    TNode { id: format!("prj/a{ai}/bl"), label: "Blätter".into(), bold: true, icon: ico::BLAETTER, action: TAction::None, children: bl },
                 ],
             });
         }
@@ -406,7 +396,7 @@ impl App {
     }
 
     fn draw_node(&self, ui: &mut egui::Ui, node: &TNode, depth: usize, x0: f32, y: &mut f32, last: bool, ev: &mut TreeEvents) {
-        let row_h = if node.bold { 15.0 } else { 13.0 };
+        let row_h = if crate::baum::icon_fuer(node.icon, false).0.is_some() { crate::baum::GROESSE + 1.0 } else if node.bold { 15.0 } else { 13.0 };
         let indent = 13.0;
         let lx = x0 + depth as f32 * indent;
         let lc = Stroke::new(1.0, Color32::from_gray(150));
@@ -417,33 +407,8 @@ impl App {
         p.line_segment([Pos2::new(hx, top_y), Pos2::new(hx, if last { mid } else { *y + row_h })], lc);
         p.line_segment([Pos2::new(hx, mid), Pos2::new(hx + 6.0, mid)], lc);
         let mut tx = hx + 7.0;
-        if node.icon > 0 {
-            match node.icon {
-                3 => {
-                    let ir = Rect::from_min_size(Pos2::new(tx, mid - 5.5), Vec2::new(9.0, 11.0));
-                    p.rect_filled(ir, 0.0, Color32::WHITE);
-                    p.rect_stroke(ir, 0.0, Stroke::new(1.0, Color32::from_gray(80)), StrokeKind::Inside);
-                    tx += 11.0;
-                }
-                4 => {
-                    let r2 = Rect::from_min_size(Pos2::new(tx, mid - 5.0), Vec2::new(13.0, 10.0));
-                    p.rect_filled(r2, 1.0, Color32::from_rgb(240, 200, 80));
-                    p.rect_stroke(r2, 1.0, Stroke::new(1.0, Color32::from_rgb(150, 110, 20)), StrokeKind::Inside);
-                    tx += 15.0;
-                }
-                _ => {
-                    let ir = Rect::from_min_size(Pos2::new(tx, mid - 6.0), Vec2::new(10.0, 12.0));
-                    p.rect_filled(ir, 0.0, Color32::from_rgb(0, 210, 220));
-                    p.rect_stroke(ir, 0.0, Stroke::new(1.0, Color32::from_rgb(0, 50, 110)), StrokeKind::Inside);
-                    p.line_segment([Pos2::new(ir.left() + 3.0, ir.top()), Pos2::new(ir.left() + 3.0, ir.bottom())], Stroke::new(1.0, Color32::from_rgb(0, 50, 110)));
-                    tx += 11.0;
-                    if node.icon == 2 {
-                        star(&p, Pos2::new(tx + 5.0, mid), 5.5);
-                        tx += 11.0;
-                    }
-                }
-            }
-        }
+        // Knotensymbol (baum.rs); Bibliotheksgruppen zeigen aufgeklappt einen Bücherstapel
+        tx += crate::baum::zeichne(ui, node.icon, self.tree_open.contains(&node.id), tx, mid);
         let font = if node.bold { FontId::new(12.0, egui::FontFamily::Name("bold".into())) } else { FontId::proportional(11.0) };
         let selected = self.tree_sel.as_deref() == Some(node.id.as_str());
         let galley = p.layout_no_wrap(node.label.clone(), font, Color32::BLACK);
@@ -463,6 +428,10 @@ impl App {
         }
         if resp.double_clicked() {
             ev.dbl = Some(node.clone());
+        }
+        // vom Suchfeld gefundener Knoten: sichtbar rollen
+        if self.suchfeld.scroll_to.as_deref() == Some(node.id.as_str()) {
+            ui.scroll_to_rect(resp.rect, Some(egui::Align::Center));
         }
         // Symbol auf das Blatt ziehen (Ablegen setzt es, siehe handle_canvas_input)
         if resp.drag_started() && matches!(node.action, TAction::Symbol(_)) {
@@ -552,6 +521,7 @@ impl App {
             };
             self.draw_tree(ui, &nodes);
         });
+        self.suchfeld.scroll_to = None;
     }
 
     /// Symboleditor: Reiterleiste der Seiten (Bildvarianten) wie im Original statt der Blattreiter.
@@ -757,24 +727,109 @@ impl App {
             }
             self.fix_tabs();
         }
-        // Suchfeld (unter dem Projektexplorer)
+        self.suchfeld_ui(ui, full);
+    }
+
+    /// Suchfeld unter dem Projektexplorer (Original TSuchfeld): Eingabe mit Verlaufsliste, „Aa“ = Groß-/
+    /// Kleinschreibung beachten, Fernglas = weitersuchen. Tippen springt zum ersten passenden Knoten des
+    /// aktuellen Baums, Enter/F3/Fernglas zum nächsten.
+    fn suchfeld_ui(&mut self, ui: &mut egui::Ui, full: Rect) {
         let sx = full.right() - 299.0;
-        let sr = Rect::from_min_size(Pos2::new(sx, full.top() + 1.0), Vec2::new(94.0, 21.0));
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(sr));
-        child.style_mut().visuals.extreme_bg_color = Color32::WHITE;
-        child
-            .add(egui::TextEdit::singleline(&mut self.search).desired_width(88.0).font(FontId::proportional(11.0)))
+        let top = full.top() + 1.0;
+        // Eingabe und Aufklapp-Pfeil bilden zusammen die Combobox
+        let combo = Rect::from_min_size(Pos2::new(sx, top), Vec2::new(106.0, 21.0));
+        let pfeil = Rect::from_min_max(Pos2::new(combo.right() - 15.0, top + 1.0), Pos2::new(combo.right() - 1.0, combo.bottom() - 1.0));
+        let p = ui.painter().clone();
+        let bg = if self.suchfeld.nicht_gefunden { Color32::from_rgb(255, 225, 225) } else { Color32::WHITE };
+        p.rect_filled(combo, 0.0, bg);
+        p.rect_stroke(combo, 0.0, Stroke::new(1.0, Color32::from_gray(122)), StrokeKind::Inside);
+        let feld = Rect::from_min_max(combo.min + Vec2::new(1.0, 1.0), Pos2::new(pfeil.left() - 1.0, combo.bottom() - 1.0));
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(feld));
+        child.style_mut().visuals.extreme_bg_color = bg;
+        let te = child
+            .add(egui::TextEdit::singleline(&mut self.search).frame(egui::Frame::NONE).desired_width(feld.width() - 4.0).font(FontId::proportional(11.0)))
             .on_hover_text("Suchtext für die Aktuelle Tabelle in der markierten (roter Punkt) Spalte");
-        let p = ui.painter();
-        p.text(Pos2::new(sx + 101.0, full.top() + 12.0), Align2::CENTER_CENTER, "▾", FontId::proportional(12.0), Color32::BLACK);
-        let b1 = Rect::from_min_size(Pos2::new(sx + 108.0, full.top() + 1.0), Vec2::new(22.0, 21.0));
-        let b2 = Rect::from_min_size(Pos2::new(sx + 132.0, full.top() + 1.0), Vec2::new(22.0, 21.0));
-        for (r, ic) in [(b1, Icon::CaseSensitive), (b2, Icon::Find)] {
-            p.rect_stroke(r, 0.0, Stroke::new(1.0, Color32::from_gray(173)), StrokeKind::Inside);
+        let pr = ui.interact(pfeil, ui.scope_id().with("such_verlauf"), Sense::click()).on_hover_text("Zuletzt gesuchte Begriffe");
+        p.rect_filled(pfeil, 0.0, if pr.hovered() { Color32::from_rgb(229, 241, 251) } else { Color32::from_rgb(240, 240, 240) });
+        crate::baum::pfeil_unten(&p, pfeil, if self.suchfeld.verlauf.is_empty() { Color32::from_gray(160) } else { Color32::BLACK });
+        let b1 = Rect::from_min_size(Pos2::new(sx + 108.0, top), Vec2::new(22.0, 21.0));
+        let b2 = Rect::from_min_size(Pos2::new(sx + 132.0, top), Vec2::new(22.0, 21.0));
+        let r1 = ui.interact(b1, ui.scope_id().with("such_aa"), Sense::click()).on_hover_text("Groß-/Kleinschreibung beachten");
+        let r2 = ui.interact(b2, ui.scope_id().with("find"), Sense::click()).on_hover_text("Weitersuchen (F3)");
+        for (r, ic, down, hov) in [(b1, Icon::CaseSensitive, self.suchfeld.gross_klein, r1.hovered()), (b2, Icon::Find, false, r2.hovered())] {
+            if down {
+                p.rect_filled(r, 0.0, Color32::from_rgb(204, 228, 247));
+            } else if hov {
+                p.rect_filled(r, 0.0, Color32::from_rgb(229, 241, 251));
+            }
+            p.rect_stroke(r, 0.0, Stroke::new(1.0, if down { Color32::from_rgb(0, 84, 153) } else { Color32::from_gray(173) }), StrokeKind::Inside);
             icons::draw(ui, r.shrink(2.0), ic, true);
         }
-        if ui.interact(b2, ui.scope_id().with("find"), Sense::click()).clicked() {
-            self.right_tab = RightTab::Symbole;
+        // Verlaufsliste der letzten Suchbegriffe
+        let mut gewaehlt = None;
+        egui::Popup::menu(&pr).width(combo.width()).show(|ui| {
+            ui.style_mut().override_font_id = Some(FontId::proportional(11.0));
+            if self.suchfeld.verlauf.is_empty() {
+                ui.weak("(noch keine Suchbegriffe)");
+            }
+            for v in &self.suchfeld.verlauf {
+                if ui.selectable_label(*v == self.search, v.as_str()).clicked() {
+                    gewaehlt = Some(v.clone());
+                    ui.close();
+                }
+            }
+        });
+        let mut suche: Option<bool> = None;
+        if let Some(v) = gewaehlt {
+            self.search = v;
+            suche = Some(false);
+        }
+        if te.changed() {
+            suche = Some(false);
+        }
+        if r1.clicked() {
+            self.suchfeld.gross_klein = !self.suchfeld.gross_klein;
+        }
+        let enter = te.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let f3 = te.has_focus() && ui.input(|i| i.key_pressed(egui::Key::F3));
+        if r2.clicked() || f3 {
+            suche = Some(true);
+        } else if enter {
+            suche = Some(false);
+        }
+        // Begriff in den Verlauf (Original: beim Verlassen des Feldes)
+        if r2.clicked() || te.lost_focus() {
+            crate::baum::verlauf_merken(&mut self.suchfeld.verlauf, &self.search);
+        }
+        if enter {
+            te.request_focus();
+        }
+        if let Some(weiter) = suche {
+            self.baum_suchen(weiter);
+        }
+    }
+
+    /// Knoten des aktuellen Baums suchen, markieren, Vorfahren aufklappen und hinrollen.
+    fn baum_suchen(&mut self, weiter: bool) {
+        self.suchfeld.nicht_gefunden = false;
+        if self.search.is_empty() {
+            return;
+        }
+        let nodes = match self.right_tab {
+            RightTab::Projekt => self.project_tree(),
+            RightTab::Symbole => self.symbol_tree(),
+            RightTab::Bauteile => self.part_tree(),
+        };
+        match crate::baum::suchen(&nodes, &self.search, self.suchfeld.gross_klein, self.tree_sel.as_deref(), weiter) {
+            Some((pfad, id)) => {
+                self.tree_open.extend(pfad);
+                self.suchfeld.scroll_to = Some(id.clone());
+                self.tree_sel = Some(id);
+            }
+            None => {
+                self.suchfeld.nicht_gefunden = true;
+                self.info = format!("„{}“ nicht gefunden", self.search);
+            }
         }
     }
 

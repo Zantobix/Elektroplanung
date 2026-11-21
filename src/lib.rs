@@ -1,6 +1,7 @@
 //! Elektroplanung – Nachbau in Rust. Bibliothek mit Datenmodell, Dateiformaten, Zeichnen, GUI und MCP-Server.
 
 pub mod app;
+pub mod baum;
 pub mod bauteil_darstellung;
 pub mod berechnet;
 pub mod bildexport;

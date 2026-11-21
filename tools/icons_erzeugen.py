@@ -151,18 +151,91 @@ ICONS = {
 }
 
 
+# Symbole des Projektexplorers (16 × 16 wie die Baumsymbole des Originals, aber eigene Entwürfe):
+# kräftigere Formen und Farben, damit sie in Originalgröße lesbar bleiben.
+CY = '#19d3e6'  # Türkis (Bücher der Symbolbibliothek)
+DC = '#0b6f8a'  # dunkles Türkis (Buchrücken)
+BR = '#b8401f'  # Rotbraun (Sammelschiene)
+GN = '#2e9e4f'  # Grün
+
+
+def book(x, y, w=6.5, h=10, shadow=True):
+    """Buch der Symbolbibliothek: türkiser Einband mit dunklem Rücken, grauer Schatten."""
+    s = f'<rect x="{x - 1.3}" y="{y - 1.3}" width="{w}" height="{h}" fill="{G}"/>' if shadow else ''
+    return (s + f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{CY}" {st(D, 1)}/>'
+            f'<path d="M{x + 1.6} {y}v{h}" {st(DC, 1.2)}/>')
+
+
+def arrow16(x, y0, y1, col):
+    """Senkrechter Pfeil von y0 nach y1 mit gefüllter Spitze."""
+    d = 1 if y1 > y0 else -1
+    return (f'<path d="M{x} {y0}V{y1 - d * 2.2}" {st(col, 1.4)}/>'
+            f'<path d="M{x} {y1}l-2.2 {-d * 2.8}h4.4z" fill="{col}"/>')
+
+
+ICONS16 = {
+    # Potentiale: Formelzeichen U mit Pfeilen nach oben und unten
+    'tree_potentiale': (f'<path d="M2 2.5v6.5a3.25 3.25 0 0 0 6.5 0V2.5" {st(D, 2)}/>'
+                        + arrow16(12.5, 7, 1.2, R) + arrow16(12.5, 9, 14.8, B)),
+    # Leitungen: aufgewickelte Leitung mit Aderende
+    'tree_leitungen': (f'<circle cx="7" cy="6" r="4.6" {st(D, 2.2)}/><circle cx="7" cy="6" r="2" {st(G, 1)}/>'
+                       f'<path d="M10.5 9c1.5 1.6 1.5 3 0.5 4.5" {st(D, 1.4)}/>'
+                       f'<rect x="9" y="12.5" width="3.2" height="3" rx="0.6" fill="{B}"/><rect x="12.2" y="13.3" width="2.3" height="1.4" fill="{Y}"/>'),
+    # Objektkatalog: Rahmen mit schräger Linie (Zeichenobjekt)
+    'tree_objektkatalog': (f'<rect x="1" y="3" width="14" height="10" fill="{W}" {st(D, 1.2)}/>'
+                           f'<path d="M3 11L13 5" {st(D, 1.4)}/>'),
+    # Stifte: schräger Zeichenstift
+    'tree_stifte': (f'<path d="M1.5 3.5l2-2 9 9-2 2z" fill="{D}" {st(D, 1)}/>'
+                    f'<path d="M10.5 12.5l2-2 2.5 4.5z" fill="{LY}" {st(D, 0.9)}/><path d="M14.2 14.2l0.8 0.8" {st(D, 1.4)}/>'),
+    # Grafiken: Fotoapparat
+    'tree_grafiken': (f'<rect x="1" y="5" width="14" height="9" rx="1.2" fill="{D}"/><rect x="3" y="3" width="4" height="2.5" fill="{D}"/>'
+                      f'<circle cx="9.5" cy="9.5" r="3" fill="{G}" stroke="{W}" stroke-width="1.2"/><circle cx="3.5" cy="7" r="0.8" fill="{Y}"/>'),
+    # Bauteile: Reiheneinbaugerät mit Anschlussklemmen und Hutschiene
+    'tree_bauteile': (f'<rect x="3" y="1.5" width="10" height="7.5" fill="{LB}" {st(D, 1.2)}/>'
+                      + ''.join(f'<circle cx="{x}" cy="4" r="0.9" fill="{D}"/>' for x in (5.5, 8, 10.5))
+                      + f'<path d="M5.5 9v4.5M10.5 9v4.5M1.5 14.5h13" {st(D, 1.4)}/>'),
+    # Platzhaltergruppen: offener Ring („C“) mit T (Textersetzung)
+    'tree_platzhalter': (f'<path d="M13.2 4.2A6.5 6.5 0 1 0 13.2 11.8" {st(D, 2)}/>'
+                         f'<path d="M5 5h6M8 5v6.5" {st(D, 1.8)}/><circle cx="13.6" cy="4" r="1.2" fill="{R}"/>'),
+    # Sammelschienen: Kupferschiene mit zwei Schrauben
+    'tree_sammelschienen': (f'<rect x="0.5" y="4.5" width="15" height="7" rx="0.8" fill="{BR}"/>'
+                            f'<rect x="0.5" y="4.5" width="15" height="1.6" fill="{Y}"/>'
+                            + ''.join(f'<circle cx="{x}" cy="8.4" r="1.9" fill="#d0d0d0" stroke="{D}" stroke-width="0.6"/>'
+                                      f'<path d="M{x - 1.1} {8.4 + 1.1}l2.2 -2.2" stroke="{D}" stroke-width="0.6"/>' for x in (4.5, 11.5))),
+    # Klemmleisten: Reihe von Reihenklemmen (grau, blau, grün-gelb)
+    'tree_klemmleisten': ''.join(f'<rect x="{0.5 + i * 3}" y="2" width="3" height="12.5" fill="{c}" stroke="{D}" stroke-width="0.6"/>'
+                                 f'<rect x="{1.4 + i * 3}" y="3.2" width="1.2" height="2" fill="{D}"/>'
+                                 for i, c in enumerate(['#a8a8a8', '#a8a8a8', B, B, GN]))
+                         + f'<path d="M12.5 7h3M12.5 10.5h3" stroke="{Y}" stroke-width="1.4"/>',
+    # Blätter: Stapel von Blättern
+    'tree_blaetter': (f'<rect x="6" y="1" width="8" height="11" fill="{W}" {st(G, 1)}/>'
+                      f'<rect x="4" y="2.5" width="8" height="11" fill="{W}" {st(G, 1)}/>'
+                      f'<rect x="2" y="4" width="8" height="11" fill="{W}" {st(D, 1.1)}/>'
+                      f'<path d="M3.8 7.5h4.4M3.8 9.8h4.4M3.8 12.1h3" {st(G, 0.9)}/>'),
+    # Gruppe der Symbolbibliothek: geschlossen ein Buch, geöffnet drei Bücher
+    'tree_buch': book(5.5, 4.5),
+    'tree_buecher': book(1.5, 1.5, shadow=False) + book(4.5, 3.5, shadow=False) + book(7.5, 5.5, shadow=False),
+}
+
+
+def write_icon(out, name, body, size):
+    import re
+    # Elemente mit eigener Füllung: das fill="none" aus st() entfernen (doppelte Attribute sind ungültig)
+    body = re.sub(r'<[^>]+>', lambda m: m.group(0).replace(' fill="none"', '', 1) if m.group(0).count('fill=') > 1 else m.group(0), body)
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">{body}</svg>\n'
+    with open(os.path.join(out, name + '.svg'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(svg)
+
+
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(root, 'resources', 'icons')
     os.makedirs(out, exist_ok=True)
-    import re
     for name, body in ICONS.items():
-        # Elemente mit eigener Füllung: das fill="none" aus st() entfernen (doppelte Attribute sind ungültig)
-        body = re.sub(r'<[^>]+>', lambda m: m.group(0).replace(' fill="none"', '', 1) if m.group(0).count('fill=') > 1 else m.group(0), body)
-        svg =f'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">{body}</svg>\n'
-        with open(os.path.join(out, name + '.svg'), 'w', encoding='utf-8', newline='\n') as f:
-            f.write(svg)
-    print(f'{len(ICONS)} Icons nach {out}')
+        write_icon(out, name, body, 24)
+    for name, body in ICONS16.items():
+        write_icon(out, name, body, 16)
+    print(f'{len(ICONS) + len(ICONS16)} Icons nach {out}')
 
 
 if __name__ == '__main__':
