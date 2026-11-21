@@ -242,6 +242,8 @@ pub struct App {
     pub multi_props: Option<crate::mehrfach::MultiProps>,
     /// Symbol wird aus der Bibliothek auf das Blatt gezogen (Loslassen außerhalb bricht ab)
     pub lib_drag: bool,
+    /// weitere Dialoge (zusatz.rs: Parameter, Projektgrafik)
+    pub zusatz: crate::zusatz::Zusatz,
 }
 
 impl App {
@@ -346,6 +348,7 @@ impl App {
             owner_pick: None,
             move_follow: vec![],
             multi_props: None,
+            zusatz: Default::default(),
             lib_drag: false,
             lib_dir: None,
             lib_info: String::new(),
@@ -600,6 +603,7 @@ impl App {
         self.redo.clear();
         self.dirty = true;
         self.project.geaendert = today();
+        self.mark_sheet_changed();
     }
 
     pub fn do_undo(&mut self) {
@@ -1211,7 +1215,7 @@ impl App {
             self.save_as();
             return;
         };
-        let is_epr = p.extension().map(|e| e.eq_ignore_ascii_case("epr")).unwrap_or(false);
+        let is_epr = crate::vorlage::is_epr_format(&p);
         let mut skipped = vec![];
         let res = if is_epr {
             // Vor dem ersten Überschreiben einer Originaldatei eine Sicherung anlegen
@@ -1240,14 +1244,14 @@ impl App {
     }
 
     pub fn open(&mut self, add: bool) {
-        let dlg = rfd::FileDialog::new().add_filter("Elektroplanung Projekt", &["epj", "epr"]).add_filter("Neues Format", &["epj"]).add_filter("Altes Format", &["epr"]);
+        let dlg = rfd::FileDialog::new().add_filter("Elektroplanung Projekt", &["epj", "epr", "epv"]).add_filter("Neues Format", &["epj"]).add_filter("Altes Format", &["epr"]);
         let Some(p) = dlg.pick_file() else { return };
         self.open_path(p, add);
     }
 
     /// Projekt laden: .epr (Originalformat, wird übernommen) oder .epj (eigenes Format).
     pub fn open_path(&mut self, p: PathBuf, add: bool) {
-        let is_epr = p.extension().map(|e| e.eq_ignore_ascii_case("epr")).unwrap_or(false);
+        let is_epr = crate::vorlage::is_epr_format(&p);
         let res = if is_epr {
             crate::epr::import(&p)
         } else {

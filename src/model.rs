@@ -208,7 +208,7 @@ pub struct TextStyle {
 /// Weitere Symboleinstellungen wie im Eigenschaftendialog des Originals (TSymbol).
 /// Ablage im Original (VSY): 12/15 Ausrichtung Titel/Wert (Hi-Word) + Bit 24 hochkant, 13/14 Wertversatz,
 /// 20 Freigaben (Bit 0 = keine Querverweise, Bit 24 = Sicherungsübersicht), 21 Alternativtext,
-/// Unterblöcke FKT (Funktion), SPA (Rackposition).
+/// Unterblöcke FKT (Funktion), SPA (Parameterwerte), ALT (benutzerdefinierte Texte).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SymExt {
     #[serde(default)]

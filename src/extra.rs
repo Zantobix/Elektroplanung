@@ -120,7 +120,7 @@ impl SymEdit {
 
 pub enum XDialog {
     Stift { idx: usize, name: String, style: usize, width: String, color: Color32 },
-    Leitung { idx: usize, name: String, color: Color32, quer: String, adern: String, kennz: usize, width: String },
+    Leitung { idx: usize, name: String, color: Color32, quer: String, adern: String, kennz: usize, width: String, style: u8 },
     Potential { idx: usize, name: String },
     Columns { text: String },
     /// Sammelschienenassistent (TS_Assi): L1, L2, L3, N, PE; `auto` = unter die vorhandenen Sammelschienen
@@ -712,6 +712,7 @@ impl App {
                 adern: l.adern.to_string(),
                 kennz: l.kennz as usize,
                 width: format!("{:.2}", l.width_mm).replace('.', ","),
+                style: l.style,
             });
         }
     }
@@ -1431,7 +1432,9 @@ impl App {
                 }
             }
             ("Neues Symbol", _) => self.open_symbol_editor(None),
-            ("Neue Grafik", _) => self.tool = Tool::Image,
+            ("Neue Grafik", _) => self.new_project_graphic(),
+            ("Eigenschaften", TAction::Bild(i)) => self.open_grafik_dialog(*i),
+            ("Löschen", TAction::Bild(i)) => self.delete_project_graphic(*i),
             ("Neue Leitung", _) => {
                 self.new_leitung();
                 self.open_leitung_dialog(self.leitung);
@@ -1461,6 +1464,14 @@ impl App {
         // Bauteilliste: neues Bauteil anlegen und danach gleich dem Symbol zuordnen
         let mut new_part_for: Option<u64> = None;
         let parts: Vec<String> = self.project.bauteile.iter().map(|b| format!("{} {}", b.name, b.typ)).collect();
+        // Leitung › Stift › Neu: neuen Stift mit der Darstellung der Leitung anlegen
+        let pens = self.project.stifte.clone();
+        let bt_firmen = crate::bauteil_darstellung::firmen(&self.project);
+        let bt_darst = match &d {
+            XDialog::Bauteil { idx: Some(i), .. } => crate::bauteil_darstellung::darstellung(&self.project, &self.lib, *i),
+            _ => ("Keins".to_string(), "Standard".to_string()),
+        };
+        let mut new_pen_ltg = false;
         egui::Modal::new(egui::Id::unique("xdlg")).show(ctx, |ui| {
             ui.style_mut().override_font_id = Some(FontId::proportional(13.0));
             ui.set_min_width(320.0);
@@ -1487,7 +1498,7 @@ impl App {
                         ui.end_row();
                     });
                 }
-                XDialog::Leitung { name, color, quer, adern, kennz, width, .. } => {
+                XDialog::Leitung { name, color, quer, adern, kennz, width, style, .. } => {
                     ui.strong("Leitung");
                     egui::Grid::new("lt").num_columns(2).show(ui, |ui| {
                         ui.label("Name");
@@ -1510,8 +1521,11 @@ impl App {
                         ui.label("Farbe");
                         ui.color_edit_button_srgba(color);
                         ui.end_row();
-                        ui.label("Darstellung: Breite in mm");
-                        ui.text_edit_singleline(width);
+                        // Darstellung: Stift wie im Original (leitung_stift.rs)
+                        ui.label("Darstellung: Stift");
+                        if crate::leitung_stift::stift_ui(ui, &pens, width, style) {
+                            new_pen_ltg = true;
+                        }
                         ui.end_row();
                     });
                 }
@@ -1602,7 +1616,12 @@ impl App {
                             ("Intern Nr", &mut b.nummer),
                         ] {
                             ui.label(l);
-                            ui.text_edit_singleline(v);
+                            if l == "Hersteller" {
+                                // Herstellerliste (BFirma): Hersteller der vorhandenen Bauteile zur Auswahl
+                                crate::bauteil_darstellung::firma_ui(ui, v, &bt_firmen);
+                            } else {
+                                ui.text_edit_singleline(v);
+                            }
                             ui.end_row();
                         }
                     });
@@ -1619,13 +1638,14 @@ impl App {
                     });
                     ui.group(|ui| {
                         ui.label("Darstellung");
+                        // Symbol und Bild der Symbole, denen das Bauteil zugeordnet ist (bauteil_darstellung.rs)
                         ui.horizontal(|ui| {
                             ui.label("Symbol:");
-                            ui.label("Keins");
+                            ui.label(bt_darst.0.as_str());
                         });
                         ui.horizontal(|ui| {
                             ui.label("Bild");
-                            ui.add_enabled(false, egui::Button::new("Standard"));
+                            ui.add_enabled(false, egui::Button::new(bt_darst.1.as_str()));
                         });
                     });
                 }
@@ -1709,6 +1729,16 @@ impl App {
                 close = true;
             }
         });
+        if new_pen_ltg {
+            if let XDialog::Leitung { width, style, .. } = &d {
+                self.new_pen();
+                let w = width.trim().replace(',', ".").parse::<f32>().unwrap_or(0.25).clamp(0.05, 5.0);
+                if let Some(p) = self.project.stifte.last_mut() {
+                    p.width = w;
+                    p.style = *style;
+                }
+            }
+        }
         if let Some(obj) = new_part_for {
             self.new_bauteil_dialog();
             self.part_assign_after = Some(obj);
@@ -1733,7 +1763,7 @@ impl App {
                     s.color = from_c32(color);
                 }
             }
-            XDialog::Leitung { idx, name, color, quer, adern, kennz, width } => {
+            XDialog::Leitung { idx, name, color, quer, adern, kennz, width, style } => {
                 self.checkpoint();
                 if let Some(l) = self.project.leitungen.get_mut(idx) {
                     l.name = name;
@@ -1742,6 +1772,7 @@ impl App {
                     l.adern = adern.trim().parse().unwrap_or(3);
                     l.kennz = kennz as u8;
                     l.width_mm = num(&width, 0.25).clamp(0.05, 5.0);
+                    l.style = style;
                 }
             }
             XDialog::Potential { idx, name } => {

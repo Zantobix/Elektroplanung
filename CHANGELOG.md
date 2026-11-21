@@ -9,6 +9,22 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Neu:
+- Blattmenü › Parameter und › Alternativtext › Benutzerdefiniert: Tabelle wie im Original; Werte werden im
+  `.epr` gespeichert (VSY › SPA / ALT)
+- Symboleditor: Reiter „Stifte / Parameter“ bearbeitet die Parameter des Symbols (GRD › PRA)
+- Symboleigenschaften: „Index“ zeigt den Zähler %C und lässt sich mit „Korrektur“ ändern
+- Drucken: „Änderung seit …“ und „seit dem letzten Ausdruck“ wählen die Blätter nach ihrem Änderungsdatum
+- Projektgrafiken: Hinzufügen › Grafik legt eine Grafik aus einer Bilddatei an; Eigenschaften (Name, Laden)
+  und Löschen im Projektbaum
+- Datei › Export › PDF (Beta) öffnet die Exporteinstellung mit der Projektliste; Vorlagen als `.epv`
+- Blattnummer: Regeln des Originals für Nummer 0, Subindex 0 und Deckblatt
+- Sammelschienen-Objekt: Knopf „Bearbeiten“ für die Schiene; Leitung: Darstellung über einen Stift
+- Tabelle › Daten „Inhaltsverzeichnis“; Bauteil: Herstellerliste und Darstellung (Symbol, Bild)
+
+Behoben:
+- Die Rackposition überschrieb beim Speichern die Parameterwerte des Symbols (SPA)
+
 ## [0.1.2]
 
 Neu:
