@@ -167,15 +167,19 @@ nicht. Gemessen werden stattdessen:
   zeichnen mit der installierten Schrift (gesucht über die Namenstabelle der Schriftdateien in den Schriftordnern
   des Systems – Windows: Fonts und Benutzerschriften; Linux: XDG-Ordner wie /usr/share/fonts und
   ~/.local/share/fonts, ohne fontconfig, mit metrisch gleichen Ersatzschriften wie Liberation; macOS:
-  /System/Library/Fonts, /Library/Fonts, ~/Library/Fonts). Fehlt die Schrift, wird Times gezeichnet. Das PDF bettet
-  keine Schrift ein, sondern nimmt die Standardschriften Times, Helvetica (Arial, Segoe UI, Tahoma …) und
-  Courier (Courier New, Consolas …).
+  /System/Library/Fonts, /Library/Fonts, ~/Library/Fonts). Fehlt die Schrift, wird Times gezeichnet. Umriss,
+  Treffertest, Markierung und Griffe rechnen mit der Metrik dieser Schrift (Vorschübe, Zeilenhöhe), sonst mit
+  Times. Das PDF bettet die Schrift als Teilmenge ein (TrueType, Type0/Identity-H mit ToUnicode, Glyphenabstände
+  wie auf dem Bildschirm); Times bleibt Standardschrift. Nicht einbettbare Schriften (nicht installiert,
+  CFF-Umrisse, Lizenzbits) und der Schrift fehlende Zeichen kommen wie bisher als Times, Helvetica (Arial,
+  Segoe UI, Tahoma …) oder Courier (Courier New, Consolas …).
 - Tools › Ausrichtung: Knöpfe und Referenzpunkt wie im Original; die genaue Auswahl im Feld „Referenzpunkt“
   füllt das Original zur Laufzeit – der Nachbau listet die markierten Objekte.
 - Symboleditor: Stifte des Symbols (SIT, Nummer ab 4) lassen sich anlegen, ändern, löschen und Elementen
   zuweisen und werden ins `.epr` geschrieben. Die Freigaben eines Symbols (Querverweise, Sicherungsübersicht,
   SYM Byte 112, Bit 0/1, an W2.epr ermittelt) werden gelesen und geschrieben und gelten als Vorgabe für neu
-  gesetzte Symbole; in der Symbolbibliothek (Symbole.tfi) ist ihre Ablage noch unbekannt.
+  gesetzte Symbole. In der Symbolbibliothek (Symbole.tfi) stehen sie als u32 ab Byte 45 des Symbolkopfs und
+  werden beim Laden übernommen (leerer Kopf oder Textreste: Querverweise an, Sicherungsübersicht aus).
 - Schriftfeld bearbeiten: Linien, Texte (bis 8 Zeilen) und Logo werden grafisch bearbeitet und ins `.epr`
   geschrieben (FUS › GRS/STR); unbekannte Elementarten des Originals bleiben angehängt erhalten.
 - Tabelle › Daten „Inhaltsverzeichnis“/„Querverweise“: der Inhalt wird bei jedem Zeichnen aus dem Projekt

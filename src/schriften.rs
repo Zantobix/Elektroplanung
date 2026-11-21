@@ -6,7 +6,8 @@
 //! (Familienname wie bei GDI, Name-ID 1/2, zusätzlich die typografische Familie 16/17), also unabhängig vom
 //! Dateinamen. Fehlt eine Schrift, wird Times gezeichnet wie bisher.
 //!
-//! PDF: Die Schrift wird nicht eingebettet; Serifenlose (Arial, Segoe UI, Tahoma …) werden als Helvetica,
+//! PDF: Installierte TrueType-Schriften werden als Teilmenge eingebettet (`pdf_schriften`). Geht das nicht (nicht
+//! installiert, CFF-Umrisse, Lizenzbits), werden Serifenlose (Arial, Segoe UI, Tahoma …) als Helvetica,
 //! Schreibmaschinenschriften (Courier New, Consolas …) als Courier, alles andere als Times ausgegeben.
 
 use eframe::egui::{self, FontFamily, FontId};
@@ -328,7 +329,7 @@ pub fn finden(name: &str, bold: bool, italic: bool) -> Option<Schnitt> {
 }
 
 /// Gelesene Schriftdateien (Pfad → Inhalt), damit jede Datei nur einmal im Speicher liegt
-fn datei_inhalt(p: &Path) -> Option<Arc<Vec<u8>>> {
+pub(crate) fn datei_inhalt(p: &Path) -> Option<Arc<Vec<u8>>> {
     static C: OnceLock<Mutex<HashMap<PathBuf, Arc<Vec<u8>>>>> = OnceLock::new();
     let c = C.get_or_init(Default::default);
     if let Some(d) = c.lock().ok()?.get(p) {

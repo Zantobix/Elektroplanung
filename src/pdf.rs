@@ -1,6 +1,8 @@
 //! PDF-Ausgabe (für "PDF Export" und "Drucken"): Die Blätter werden mit denselben Zeichenroutinen wie auf
 //! dem Bildschirm in eine unsichtbare Ebene gezeichnet; die entstandenen Formen werden als Vektor-PDF
 //! (Linien, Kurven, Text in den PDF-Standardschriften Times, Helvetica, Courier; `schriften::pdf_art`) geschrieben.
+//! Texte mit eigener, installierter TrueType-Schrift werden in dieser Schrift ausgegeben (eingebettete Teilmenge,
+//! `pdf_schriften`).
 
 use eframe::egui::{self, epaint::ClippedShape, Color32, Pos2, Rect, Shape};
 
@@ -110,6 +112,8 @@ const PT_PER_MM: f32 = 72.0 / 25.4;
 struct W<'a> {
     s: String,
     page: &'a Page,
+    /// eingebettete Schriften (Texte mit eigener Schrift, `pdf_schriften`)
+    schriften: &'a mut crate::pdf_schriften::Schriften,
 }
 
 impl W<'_> {
@@ -208,38 +212,68 @@ impl W<'_> {
         let size_pt = size_px / self.page.z * PT_PER_MM;
         // Schrift und Schnitt aus der Schriftfamilie: F1–F4 Times, F5–F8 Helvetica, F9–F12 Courier
         // (je Standard, Fett, Kursiv, Fett Kursiv)
-        let fname = match g.job.sections.first().map(|s| &s.format.font_id.family) {
-            Some(fam) => {
-                let (name, bold, italic) = crate::schriften::aus_familie(fam);
-                let basis = match crate::schriften::pdf_art(&name) {
-                    crate::schriften::PdfArt::Times => 1,
-                    crate::schriften::PdfArt::Helvetica => 5,
-                    crate::schriften::PdfArt::Courier => 9,
-                };
-                format!("F{}", basis + bold as usize + 2 * italic as usize)
-            }
-            None => "F1".to_string(),
+        let (name, bold, italic) = g.job.sections.first().map(|s| crate::schriften::aus_familie(&s.format.font_id.family)).unwrap_or_default();
+        let basis = match crate::schriften::pdf_art(&name) {
+            crate::schriften::PdfArt::Times => 1,
+            crate::schriften::PdfArt::Helvetica => 5,
+            crate::schriften::PdfArt::Courier => 9,
         };
-        let color =t.override_text_color.or_else(|| g.job.sections.first().map(|s| s.format.color)).unwrap_or(t.fallback_color);
+        let fname = format!("F{}", basis + bold as usize + 2 * italic as usize);
+        // eigene Schrift eingebettet (sonst und für fehlende Zeichen: Standardschrift wie bisher)
+        let eigen = self.schriften.schrift(&name, bold, italic);
+        let color = t.override_text_color.or_else(|| g.job.sections.first().map(|s| s.format.color)).unwrap_or(t.fallback_color);
         let (sin, cos) = t.angle.sin_cos();
+        // PDF dreht gegen den Uhrzeigersinn, der Bildschirm (y nach unten) im Uhrzeigersinn
+        let (a, b) = (cos, -sin);
         for row in &g.rows {
-            let Some(first) = row.row.glyphs.first() else { continue };
-            let text: String = row.row.glyphs.iter().map(|gl| gl.chr).collect();
-            if text.trim().is_empty() {
+            let glyphs = &row.row.glyphs;
+            if glyphs.iter().all(|gl| gl.chr.is_whitespace()) {
                 continue;
             }
-            let local = Pos2::new(row.pos.x + first.pos.x, row.pos.y + first.pos.y);
-            let world = Pos2::new(t.pos.x + local.x * cos - local.y * sin, t.pos.y + local.x * sin + local.y * cos);
-            // PDF dreht gegen den Uhrzeigersinn, der Bildschirm (y nach unten) im Uhrzeigersinn
-            let (a, b) = (cos, -sin);
-            let x = self.x(world);
-            let y = self.y(world);
-            self.s.push_str(&format!(
-                "BT /{fname} {size_pt:.3} Tf {} rg {a:.5} {b:.5} {:.5} {a:.5} {x:.3} {y:.3} Tm ({}) Tj ET\n",
-                Self::color(color),
-                -b,
-                pdf_string(&text)
-            ));
+            // Läufe gleicher Schrift: (Glyphe ab, Glyphe bis, eingebettet)
+            let mut laeufe: Vec<(usize, usize, Option<usize>)> = vec![];
+            for (i, gl) in glyphs.iter().enumerate() {
+                let k = eigen.filter(|&k| self.schriften.glyphe(k, gl.chr).is_some());
+                match laeufe.last_mut() {
+                    Some(l) if l.2 == k => l.1 = i + 1,
+                    _ => laeufe.push((i, i + 1, k)),
+                }
+            }
+            for (von, bis, k) in laeufe {
+                let first = &glyphs[von];
+                let local = Pos2::new(row.pos.x + first.pos.x, row.pos.y + first.pos.y);
+                let world = Pos2::new(t.pos.x + local.x * cos - local.y * sin, t.pos.y + local.x * sin + local.y * cos);
+                let x = self.x(world);
+                let y = self.y(world);
+                let (font, text) = match k {
+                    // Glyphennummern; Abstände nach den Glyphenlagen von egui (Unterschneidung), in 1/1000 Geviert
+                    Some(k) => {
+                        let mut s = String::from("[<");
+                        let mut soll = 0.0;
+                        for (j, gl) in glyphs[von..bis].iter().enumerate() {
+                            let Some((gid, w)) = self.schriften.glyphe(k, gl.chr) else { continue };
+                            let ist = (gl.pos.x - first.pos.x) / size_px.max(0.01) * 1000.0;
+                            let d = soll - ist;
+                            if j > 0 && d.abs() >= 0.5 {
+                                s.push_str(&format!("> {d:.0} <"));
+                                soll -= d.round();
+                            }
+                            s.push_str(&format!("{gid:04X}"));
+                            soll += w;
+                        }
+                        s.push_str(">] TJ");
+                        (crate::pdf_schriften::Schriften::res(k), s)
+                    }
+                    None => {
+                        let text: String = glyphs[von..bis].iter().map(|gl| gl.chr).collect();
+                        if text.trim().is_empty() {
+                            continue;
+                        }
+                        (fname.clone(), format!("({}) Tj", pdf_string(&text)))
+                    }
+                };
+                self.s.push_str(&format!("BT /{font} {size_pt:.3} Tf {} rg {a:.5} {b:.5} {:.5} {a:.5} {x:.3} {y:.3} Tm {text} ET\n", Self::color(color), -b));
+            }
         }
     }
 }
@@ -271,13 +305,14 @@ fn pdf_string(s: &str) -> String {
 
 pub fn build(pages: &[Page]) -> Vec<u8> {
     let mut objs: Vec<String> = vec![];
-    // 1 Katalog, 2 Seitenliste, 3 Schrift, danach je Seite: Seite + Inhalt
+    // 1 Katalog, 2 Seitenliste, 3 Schrift, danach je Seite: Seite + Inhalt, Verknüpfungen, eingebettete Schriften
     let n = pages.len();
     let kids: Vec<String> = (0..n).map(|i| format!("{} 0 R", 4 + i * 2)).collect();
     objs.push("<< /Type /Catalog /Pages 2 0 R >>".into());
     objs.push(format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), n));
     // Objekt 3: Schriftverzeichnis mit den Standardschriften Times, Helvetica und Courier in je vier Schnitten
-    objs.push(
+    // (die eingebetteten Schriften kommen nach den Seiten hinzu)
+    let standard =
         [
             "Times-Roman",
             "Times-Bold",
@@ -295,14 +330,14 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
             .iter()
             .enumerate()
             .map(|(i, n)| format!("/F{} << /Type /Font /Subtype /Type1 /BaseFont /{n} /Encoding /WinAnsiEncoding >>", i + 1))
-            .fold("<<".to_string(), |a, b| a + " " + &b)
-            + " >>",
-    );
+            .fold("<<".to_string(), |a, b| a + " " + &b);
+    objs.push(String::new());
+    let mut schriften = crate::pdf_schriften::Schriften::default();
     // Verknüpfungen als eigene Objekte hinter allen Seiten (Nummern ab 4 + 2n)
     let mut annot_nr = 4 + 2 * n;
     let mut annots: Vec<String> = vec![];
     for (i, pg) in pages.iter().enumerate() {
-        let mut w = W { s: String::from("1 J 1 j\n"), page: pg };
+        let mut w = W { s: String::from("1 J 1 j\n"), page: pg, schriften: &mut schriften };
         let page_rect = Rect::from_min_max(pg.origin, Pos2::new(pg.origin.x + pg.w_mm * pg.z, pg.origin.y + pg.h_mm * pg.z));
         for cs in &pg.shapes {
             let clip = cs.clip_rect.intersect(page_rect.expand(2.0));
@@ -339,11 +374,17 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
         objs.push(format!("<< /Length {} >>\nstream\n{}endstream", content.len(), content));
     }
     objs.extend(annots);
+    let (font_objs, eintraege) = schriften.objekte(objs.len() + 1);
+    objs[2] = eintraege.iter().fold(standard, |a, b| a + " " + b) + " >>";
+    let mut objs: Vec<Vec<u8>> = objs.into_iter().map(String::into_bytes).collect();
+    objs.extend(font_objs);
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec();
     let mut offsets = vec![];
     for (i, o) in objs.iter().enumerate() {
         offsets.push(out.len());
-        out.extend_from_slice(format!("{} 0 obj\n{}\nendobj\n", i + 1, o).as_bytes());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
     }
     let xref = out.len();
     out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
