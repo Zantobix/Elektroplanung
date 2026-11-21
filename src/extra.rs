@@ -120,7 +120,8 @@ pub enum XDialog {
     Leitung { idx: usize, name: String, color: Color32, quer: String, adern: String, kennz: usize, width: String },
     Potential { idx: usize, name: String },
     Columns { text: String },
-    Busbar { pots: Vec<(String, bool)>, y: String, dy: String, x0: String, x1: String },
+    /// Sammelschienenassistent (TS_Assi): L1, L2, L3, N, PE; `auto` = unter die vorhandenen Sammelschienen
+    Busbar { pots: Vec<(String, bool)>, auto: bool, y: String, dy: String, x0: String, x1: String },
     TextGen { scope_project: bool },
     Title { elems: Vec<TbOwned> },
     Bauteil { idx: Option<usize>, b: Bauteil },
@@ -713,8 +714,9 @@ impl App {
     }
 
     pub fn open_busbar_assistant(&mut self) {
-        let pots = self.project.potentiale.iter().map(|p| (p.clone(), ["L1", "L2", "L3", "N", "PE"].contains(&p.as_str()))).collect();
-        self.xdlg = Some(XDialog::Busbar { pots, y: "40".into(), dy: "10".into(), x0: "25".into(), x1: "282".into() });
+        // wie im Original: feste Auswahl L1, L2, L3, N, PE (alle angehakt)
+        let pots = BUSBAR_NAMES.iter().map(|p| (p.to_string(), true)).collect();
+        self.xdlg = Some(XDialog::Busbar { pots, auto: true, y: "40".into(), dy: "10".into(), x0: "25".into(), x1: "282".into() });
     }
 
     pub fn open_title_editor(&mut self) {
@@ -1447,7 +1449,6 @@ impl App {
         let mut close = false;
         // Bauteilliste: neues Bauteil anlegen und danach gleich dem Symbol zuordnen
         let mut new_part_for: Option<u64> = None;
-        let pots_names = self.project.potentiale.clone();
         let parts: Vec<String> = self.project.bauteile.iter().map(|b| format!("{} {}", b.name, b.typ)).collect();
         egui::Modal::new(egui::Id::unique("xdlg")).show(ctx, |ui| {
             ui.style_mut().override_font_id = Some(FontId::proportional(13.0));
@@ -1515,7 +1516,7 @@ impl App {
                     ui.label("Bezeichnungen der Strompfade, durch Komma getrennt (leer = fortlaufende Nummern):");
                     ui.add(egui::TextEdit::multiline(text).desired_width(420.0).desired_rows(3));
                 }
-                XDialog::Busbar { pots, y, dy, x0, x1 } => {
+                XDialog::Busbar { pots, auto, y, dy, x0, x1 } => {
                     ui.strong("Sammelschienenassistent");
                     ui.label("Erzeugen der Sammelschienen:");
                     ui.horizontal_wrapped(|ui| {
@@ -1523,9 +1524,10 @@ impl App {
                             ui.checkbox(on, n.as_str());
                         }
                     });
+                    ui.checkbox(auto, "Auto (unter die vorhandenen Sammelschienen des Blattes)");
                     egui::Grid::new("bb").num_columns(2).show(ui, |ui| {
                         ui.label("Startpunkt Y in mm");
-                        ui.text_edit_singleline(y);
+                        ui.add_enabled(!*auto, egui::TextEdit::singleline(y));
                         ui.end_row();
                         ui.label("Abstand in mm");
                         ui.text_edit_singleline(dy);
@@ -1537,7 +1539,6 @@ impl App {
                         ui.text_edit_singleline(x1);
                         ui.end_row();
                     });
-                    let _ = &pots_names;
                 }
                 XDialog::TextGen { scope_project } => {
                     ui.strong("Textgenerator");
@@ -1748,11 +1749,25 @@ impl App {
                     }
                 });
             }
-            XDialog::Busbar { pots, y, dy, x0, x1 } => {
+            XDialog::Busbar { pots, auto, y, dy, x0, x1 } => {
                 let (y, dy, x0, x1) = (num(&y, 40.0), num(&dy, 10.0), num(&x0, 25.0), num(&x1, 282.0));
+                // wie im Original (TS_Assi): nur auf Schaltplänen, mindestens eine Schiene gewählt
+                if self.sheet().map(|s| !matches!(s.art, 0 | 3)).unwrap_or(true) {
+                    self.info = "Sammelschienen können hier nicht eingefügt werden".into();
+                    return;
+                }
+                if !pots.iter().any(|(_, on)| *on) {
+                    self.info = "Keine Sammelschiene zum Erzeugen ausgewählt!".into();
+                    return;
+                }
                 self.checkpoint();
                 let a = self.cur().map(|r| r.anlage).unwrap_or(0);
                 let leitung = self.leitung;
+                // Auto: im Abstand unter die unterste vorhandene Sammelschiene des Blattes
+                let y = match (auto, self.sheet()) {
+                    (true, Some(s)) => busbar_auto_y(s, dy),
+                    _ => y,
+                };
                 let mut k = 0;
                 for (name, on) in pots {
                     if !on {
@@ -1762,11 +1777,19 @@ impl App {
                     k += 1;
                     let id = self.project.alloc_id();
                     let tid = self.project.alloc_id();
+                    // vorhandene Sammelschiene gleichen Namens verwenden, sonst anlegen; PE wie im Original
+                    // mit Stift "Strich/Punkt"
+                    let pen = if name == "PE" { 2 } else { 0 };
                     if let Some(anl) = self.project.anlagen.get_mut(a) {
-                        anl.sammelschienen.push(name.clone());
+                        if !anl.sammelschienen.contains(&name) {
+                            anl.sammelschienen.push(name.clone());
+                            if pen != 0 {
+                                anl.schienen.entry(name.clone()).or_default().stift = pen;
+                            }
+                        }
                     }
                     self.with_sheet(|s, _| {
-                        s.objects.push(Obj { id, kind: Kind::Wire { pts: vec![P::new(x0, yy), P::new(x1, yy)], leitung, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
+                        s.objects.push(Obj { id, kind: Kind::Wire { pts: vec![P::new(x0, yy), P::new(x1, yy)], leitung, bez: vec![], opts: 0 }, pen, fixed: false, group: None, raw: None });
                         s.objects.push(Obj { id: tid, kind: Kind::Text { pos: P::new(x0 - 1.0, yy), text: name.clone(), size: 2.5, align: Align::Right, vertical: false, style: Default::default() }, pen: 0, fixed: false, group: None, raw: None });
                     });
                 }
@@ -1837,4 +1860,18 @@ pub fn default_titleblock() -> Vec<TbOwned> {
 pub fn load_default_titleblock() -> Option<Vec<TbOwned>> {
     let s = std::fs::read_to_string(appdir().join("schriftfeld.json")).ok()?;
     serde_json::from_str(&s).ok()
+}
+
+/// Sammelschienen des Assistenten (Original: feste Liste L1, L2, L3, N, PE).
+pub const BUSBAR_NAMES: [&str; 5] = ["L1", "L2", "L3", "N", "PE"];
+
+/// Startpunkt Y für "Auto": im Abstand `dy` unter der untersten Sammelschiene des Blattes, ohne Sammelschiene
+/// `dy` unter der Strompfadleiste.
+pub fn busbar_auto_y(s: &Sheet, dy: f32) -> f32 {
+    let lowest = s.objects.iter().filter_map(|o| if let Kind::Busbar { a, .. } = &o.kind { Some(a.y) } else { None }).fold(f32::MIN, f32::max);
+    if lowest > f32::MIN {
+        lowest + dy
+    } else {
+        s.frame().1 + COLUMN_BAR_H + dy
+    }
 }
