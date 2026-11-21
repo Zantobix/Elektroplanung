@@ -63,7 +63,14 @@ pub fn groesse(text: &str, size: f32, bold: bool, italic: bool) -> (f32, f32) {
 /// an `pos` ausgerichtet (waagerecht mittig zur Höhe, hochkant von `pos` nach oben), mit Textbox in ihr nach
 /// Ausrichtung und senkrecht mittig. Mit Textbox zählt die Box selbst mit (Rahmen, Markierung des Originals).
 pub fn text_umriss(pos: P, text: &str, size: f32, align: Align, vertical: bool, st: &TextStyle) -> (P, P) {
-    let (w, h) = groesse(text, size, st.bold, st.italic);
+    let (mut w, mut h) = groesse(text, size, st.bold, st.italic);
+    if let (true, Some((a, b))) = (st.wrap, st.rect) {
+        // mit Umbruch: Maße der umbrochenen Zeilen (wie canvas::draw_text_box)
+        let bw = if vertical { (a.y - b.y).abs() } else { (a.x - b.x).abs() };
+        let zeilen = crate::umbruch::text_umbrechen(text, (bw - 1.0).max(0.5), &|s| breite(s, size, st.bold, st.italic));
+        w = zeilen.iter().map(|l| breite(l, size, st.bold, st.italic)).fold(0.0, f32::max);
+        h = zeilen.len().max(1) as f32 * zeilenhoehe(size);
+    }
     let Some((a, b)) = st.rect else {
         let dx = match align {
             Align::Left => 0.0,

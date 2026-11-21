@@ -266,10 +266,13 @@ impl App {
         let fav = pick(&|d| d.fav);
         let user = pick(&|d| d.haupt == 200 || d.haupt == 0);
         let std = pick(&|d| d.haupt == 300 || d.haupt == 100);
+        // leere Gruppen der Benutzerbibliothek (Bibliotheksverwaltung › Hinzufügen)
+        let mut user_nodes = group_nodes("sym/user", &user, 0);
+        crate::bib_gruppen::in_baum(&mut user_nodes, "sym/user", &self.lib_gruppen);
         vec![
             TNode { id: "sym/none".into(), label: "Keine Zuordnung".into(), bold: false, icon: 0, action: TAction::None, children: vec![] },
             TNode { id: "sym/fav".into(), label: "Favoriten".into(), bold: true, icon: 2, action: TAction::None, children: group_nodes("sym/fav", &fav, 0) },
-            TNode { id: "sym/user".into(), label: "Benutzerbauteile".into(), bold: true, icon: 1, action: TAction::None, children: group_nodes("sym/user", &user, 0) },
+            TNode { id: "sym/user".into(), label: "Benutzerbauteile".into(), bold: true, icon: 1, action: TAction::None, children: user_nodes },
             TNode { id: "sym/std".into(), label: "Standardbauteile".into(), bold: true, icon: 1, action: TAction::None, children: group_nodes("sym/std", &std, 0) },
         ]
     }
@@ -357,8 +360,21 @@ impl App {
         }
         ui.allocate_space(Vec2::new(ui.available_width().max(10.0), (y - top).max(10.0)));
         if let Some(t) = ev.toggled {
-            if !self.tree_open.remove(&t) {
-                self.tree_open.insert(t);
+            crate::baum_klappen::umschalten(&mut self.tree_open, &t);
+        }
+        // Tastatur: ein Klick in den Baum gibt ihm die Pfeiltasten, ein Klick daneben nimmt sie wieder
+        let ctx = ui.ctx().clone();
+        if let Some(q) = ui.input(|i| if i.pointer.any_pressed() { i.pointer.interact_pos() } else { None }) {
+            crate::baum_klappen::setze_fokus(&ctx, ui.clip_rect().contains(q));
+        }
+        if crate::baum_klappen::hat_fokus(&ctx) && !ctx.egui_wants_keyboard_input() {
+            if let Some(sel) = self.tree_sel.clone() {
+                let (l, r) = ui.input(|i| (i.key_pressed(egui::Key::ArrowLeft), i.key_pressed(egui::Key::ArrowRight)));
+                if l || r {
+                    if let Some(neu) = crate::baum_klappen::pfeil(nodes, &mut self.tree_open, &sel, r) {
+                        self.tree_sel = Some(neu);
+                    }
+                }
             }
         }
         if let Some(n) = ev.clicked {
@@ -405,28 +421,40 @@ impl App {
         let top_y = if depth == 0 && (*y - ui.max_rect().top()) < 5.0 { mid } else { *y - 1.0 };
         p.line_segment([Pos2::new(hx, top_y), Pos2::new(hx, if last { mid } else { *y + row_h })], lc);
         p.line_segment([Pos2::new(hx, mid), Pos2::new(hx + 6.0, mid)], lc);
+        // Plus/Minus-Kästchen vor Knoten mit Kindern (Windows-TreeView); ein Klick darauf klappt um
+        let kinder = !node.children.is_empty();
+        let offen = self.tree_open.contains(&node.id);
+        if kinder {
+            crate::baum_klappen::kaestchen(&p, Pos2::new(hx, mid), offen);
+            let kr = Rect::from_center_size(Pos2::new(hx, mid), Vec2::splat(11.0));
+            if ui.interact(kr, ui.scope_id().with(("kaestchen", &node.id)), Sense::click()).clicked() && crate::baum_klappen::klappt_um(kinder, crate::baum_klappen::Klick::Kaestchen) {
+                ev.toggled = Some(node.id.clone());
+            }
+        }
         let mut tx = hx + 7.0;
         // Knotensymbol (baum.rs); Bibliotheksgruppen zeigen aufgeklappt einen Bücherstapel
-        tx += crate::baum::zeichne(ui, node.icon, self.tree_open.contains(&node.id), tx, mid);
+        tx += crate::baum::zeichne(ui, node.icon, offen, tx, mid);
         let font = if node.bold { FontId::new(12.0, egui::FontFamily::Name("bold".into())) } else { FontId::proportional(11.0) };
         let selected = self.tree_sel.as_deref() == Some(node.id.as_str());
         let galley = p.layout_no_wrap(node.label.clone(), font, Color32::BLACK);
         let tr = Rect::from_min_size(Pos2::new(tx + 1.0, mid - galley.size().y / 2.0), galley.size());
-        let resp = ui.interact(Rect::from_min_max(Pos2::new(hx, *y), Pos2::new(tr.right() + 4.0, *y + row_h)), ui.scope_id().with(&node.id), Sense::click_and_drag());
+        let resp = ui.interact(Rect::from_min_max(Pos2::new(hx + 6.0, *y), Pos2::new(tr.right() + 4.0, *y + row_h)), ui.scope_id().with(&node.id), Sense::click_and_drag());
         if selected {
             p.rect_filled(tr.expand(1.0), 0.0, Color32::from_rgb(0, 120, 215));
             p.galley(tr.min, galley, Color32::WHITE);
         } else {
             p.galley(tr.min, galley, Color32::BLACK);
         }
+        // Klick auf den Text markiert nur; Doppelklick klappt Knoten mit Kindern um, Blätter führen ihre Aktion aus
         if resp.clicked() || resp.drag_started() {
-            if node.bold {
-                ev.toggled = Some(node.id.clone());
-            }
             ev.clicked = Some(node.clone());
         }
         if resp.double_clicked() {
-            ev.dbl = Some(node.clone());
+            if crate::baum_klappen::klappt_um(kinder, crate::baum_klappen::Klick::Doppelt) {
+                ev.toggled = Some(node.id.clone());
+            } else {
+                ev.dbl = Some(node.clone());
+            }
         }
         // vom Suchfeld gefundener Knoten: sichtbar rollen
         if self.suchfeld.scroll_to.as_deref() == Some(node.id.as_str()) {
@@ -1270,6 +1298,23 @@ impl App {
             }
         }
 
+        // Kontaktspiegel › Set Referenz: das angeklickte Symbol wird Referenz der gemerkten Zeile
+        if self.spiegel_pick_aktiv() {
+            if inside && pressed_l {
+                let sym = self.sheet().and_then(|s| {
+                    s.objects.iter().rev().find(|o| matches!(o.kind, Kind::Symbol { .. }) && canvas::hit(o, m, tol, &self.lib)).map(|o| o.id)
+                });
+                match sym {
+                    Some(id) => self.spiegel_pick_ende(Some(id)),
+                    None => self.info = "Referenz setzen: bitte ein Symbol anklicken (Esc = Abbruch)".into(),
+                }
+                self.drag = Drag::None;
+            }
+            if inside && pressed_r {
+                self.spiegel_pick_ende(None);
+            }
+            return;
+        }
         // Eigentümer › Setzen: das angeklickte Symbol gibt seine Kennzeichnung an die gemerkten Symbole
         if self.owner_pick.is_some() {
             if inside && pressed_l {
@@ -1900,10 +1945,15 @@ impl App {
         for id in fired {
             self.run_befehl(id);
         }
+        // Pfeiltasten gehören dem Projektbaum, solange er zuletzt angeklickt wurde
+        let arrows = if crate::baum_klappen::hat_fokus(ctx) { [false; 4] } else { arrows };
         // Esc bricht „Eigentümer setzen“ immer ab (auch bei anderer Belegung von „Werkzeug: Auswahl“)
         if self.owner_pick.is_some() && ctx.input(|i| i.key_pressed(Key::Escape)) {
             self.owner_pick = None;
             self.info = "Eigentümer setzen abgebrochen".into();
+        }
+        if self.spiegel_pick_aktiv() && ctx.input(|i| i.key_pressed(Key::Escape)) {
+            self.spiegel_pick_ende(None);
         }
         if copy {
             self.copy();

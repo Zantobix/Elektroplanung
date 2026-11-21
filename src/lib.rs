@@ -2,8 +2,10 @@
 
 pub mod app;
 pub mod baum;
+pub mod baum_klappen;
 pub mod bauteil_darstellung;
 pub mod berechnet;
+pub mod bib_gruppen;
 pub mod bildexport;
 pub mod blattnummer;
 pub mod canvas;
@@ -49,6 +51,7 @@ pub mod symbol_stifte;
 pub mod symbols;
 pub mod textmass;
 pub mod titleblock;
+pub mod umbruch;
 pub mod variantenrad;
 pub mod verweise;
 pub mod view;

@@ -399,6 +399,42 @@ pub fn block(p: &Project, o: &Obj, eigene: u64, kennung: &dyn Fn(&Obj) -> u64, o
     Some(b)
 }
 
+/// „Set Referenz“ abgeschlossen: Zeile `zeile` bekommt das Symbol `id` als Referenz (die leere letzte Zeile wird
+/// dabei neu angelegt, mit der Art aus dem Symbolnamen). Die Spule selbst ist keine Referenz.
+pub fn referenz_setzen(d: &mut SpiegelDlg, zeile: usize, id: u64, art: u8) -> bool {
+    if id == 0 || id == d.owner {
+        return false;
+    }
+    match d.rows.get_mut(zeile) {
+        Some(z) => z.referenz = id,
+        None => d.rows.push(Zeile { art, referenz: id, ..Default::default() }),
+    }
+    d.sel = Some(zeile.min(d.rows.len() - 1));
+    d.pick = None;
+    true
+}
+
+/// Beim Übernehmen wird die Spule Eigentümer der referenzierten Kontakte (Original 0x4995ac): Kontakte mit anderer
+/// Kennzeichnung übernehmen Kennzeichnung und Zähler der Spule wie bei „Eigentümer › Setzen“.
+pub fn eigentuemer_setzen(p: &mut Project, owner: u64, ids: &[u64]) -> bool {
+    let Some(ziel) = bmk_von(p, owner) else { return false };
+    let Some(Kind::Symbol { bmk, ext, .. }) = p.find_obj(owner).map(|(_, o)| o.kind.clone()) else { return false };
+    let mut changed = false;
+    for &id in ids {
+        if id == owner || bmk_von(p, id).is_none_or(|b| b == ziel) {
+            continue;
+        }
+        if let Some(o) = p.anlagen.iter_mut().flat_map(|a| &mut a.sheets).flat_map(|s| &mut s.objects).find(|o| o.id == id) {
+            if let Kind::Symbol { bmk: b, ext: e, .. } = &mut o.kind {
+                *b = bmk.clone();
+                e.counter = ext.counter;
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Dialog (TSSpiegel)
 
@@ -409,6 +445,8 @@ pub struct SpiegelDlg {
     pub rows: Vec<Zeile>,
     pub sel: Option<usize>,
     pub auto: bool,
+    /// „Set Referenz“: der Dialog ist ausgeblendet und wartet auf einen Klick auf das Symbol für diese Zeile
+    pub pick: Option<usize>,
 }
 
 impl App {
@@ -426,23 +464,56 @@ impl App {
             return;
         }
         let rows = kontakte(&self.project, &self.lib, o.id).into_iter().map(|(referenz, art)| Zeile { art, referenz, ..Default::default() }).collect();
-        self.zusatz.spiegel = Some(SpiegelDlg { owner: o.id, obj: None, rows, sel: None, auto: true });
+        self.zusatz.spiegel = Some(SpiegelDlg { owner: o.id, obj: None, rows, sel: None, auto: true, pick: None });
     }
 
     /// Eigenschaften eines Kontaktspiegels (Doppelklick/Eigenschaften); false, wenn `id` keiner ist.
     pub fn spiegel_props(&mut self, id: u64) -> bool {
         let Some(Kind::Spiegel { owner, rows, auto, .. }) = self.sheet().and_then(|s| s.objects.iter().find(|o| o.id == id)).map(|o| o.kind.clone()) else { return false };
-        self.zusatz.spiegel = Some(SpiegelDlg { owner, obj: Some(id), rows, sel: None, auto });
+        self.zusatz.spiegel = Some(SpiegelDlg { owner, obj: Some(id), rows, sel: None, auto, pick: None });
         true
+    }
+
+    /// Wartet „Set Referenz“ auf einen Klick auf das Blatt?
+    pub fn spiegel_pick_aktiv(&self) -> bool {
+        self.zusatz.spiegel.as_ref().is_some_and(|d| d.pick.is_some())
+    }
+
+    /// Klick bei „Set Referenz“ (SetzeReferenz1Click 0x4b5d20: Dialog ausblenden, Hauptfenster wartet auf das Symbol):
+    /// `Some(id)` = angeklicktes Symbol, `None` = Abbruch. Danach erscheint der Dialog wieder.
+    pub fn spiegel_pick_ende(&mut self, id: Option<u64>) {
+        let art = id.and_then(|i| self.project.find_obj(i)).and_then(|(_, o)| if let Kind::Symbol { key, .. } = &o.kind { Some(art_aus(symbols::find(&self.lib, key))) } else { None }).unwrap_or(0);
+        let Some(d) = self.zusatz.spiegel.as_mut() else { return };
+        let Some(zeile) = d.pick else { return };
+        match id {
+            Some(i) if referenz_setzen(d, zeile, i, art) => self.info = format!("Referenz für Zeile {} gesetzt: {}", zeile + 1, lage(&self.project, i).unwrap_or_default()),
+            Some(_) => self.info = "Referenz setzen: bitte einen Kontakt anklicken, nicht die Spule (Esc = Abbruch)".into(),
+            None => {
+                d.pick = None;
+                self.info = "Referenz setzen abgebrochen".into();
+            }
+        }
     }
 
     /// Dialog „Kontaktspiegel“ zeichnen und übernehmen.
     pub fn spiegel_ui(&mut self, ctx: &egui::Context) {
+        // „Set Referenz“ läuft: Dialog ausgeblendet, bis das Symbol angeklickt ist
+        if self.zusatz.spiegel.as_ref().is_some_and(|d| d.pick.is_some()) {
+            return;
+        }
         let Some(mut d) = self.zusatz.spiegel.take() else { return };
         let mut done: Option<bool> = None;
-        // Auswahl für die Referenz: alle Symbole gleicher Kennzeichnung mit ihrer Lage
+        let mut setze_referenz: Option<usize> = None;
+        // Auswahl für die Referenz: alle Symbole gleicher Kennzeichnung mit ihrer Lage, dazu per „Set Referenz“
+        // gewählte andere Symbole
+        let mut ids: Vec<u64> = kontakte(&self.project, &self.lib, d.owner).into_iter().map(|(i, _)| i).collect();
+        for z in &d.rows {
+            if z.referenz != 0 && !ids.contains(&z.referenz) && self.project.find_obj(z.referenz).is_some() {
+                ids.push(z.referenz);
+            }
+        }
         let wahl: Vec<(u64, String)> = std::iter::once((0, String::new()))
-            .chain(kontakte(&self.project, &self.lib, d.owner).into_iter().map(|(i, _)| {
+            .chain(ids.into_iter().map(|i| {
                 let name = self.project.find_obj(i).and_then(|(_, o)| if let Kind::Symbol { key, .. } = &o.kind { symbols::find(&self.lib, key).map(|d| d.name.clone()) } else { None }).unwrap_or_default();
                 (i, format!("{} {name}", lage(&self.project, i).unwrap_or_default()))
             }))
@@ -461,9 +532,17 @@ impl App {
                     for i in 0..=n {
                         let z = if i < n { &mut d.rows[i] } else { &mut neu };
                         let vorher = z.clone();
-                        if ui.selectable_label(d.sel == Some(i), (i + 1).to_string()).clicked() {
+                        let nr = ui.selectable_label(d.sel == Some(i), (i + 1).to_string());
+                        if nr.clicked() || nr.secondary_clicked() {
                             d.sel = Some(i);
                         }
+                        // Kontextmenü der Liste wie im Original (PopupMenu1 › „Setze Referenz“)
+                        nr.context_menu(|ui| {
+                            if ui.button("Setze Referenz").clicked() {
+                                setze_referenz = Some(i);
+                                ui.close();
+                            }
+                        });
                         egui::ComboBox::from_id_salt(("sp_art", i)).width(80.0).selected_text(ARTEN[z.art.min(2) as usize]).show_ui(ui, |ui| {
                             for (k, a) in ARTEN.iter().enumerate() {
                                 ui.selectable_value(&mut z.art, k as u8, *a);
@@ -497,7 +576,11 @@ impl App {
                         d.auto = false;
                     }
                 }
-                ui.add_space(120.0);
+                // Original: Knopf rechts neben „Zeile löschen“ (Button4, gleicher Handler wie das Kontextmenü)
+                if ui.add_enabled(d.sel.is_some(), egui::Button::new("Set Referenz")).on_hover_text("Referenz der markierten Zeile: danach das Symbol auf dem Blatt anklicken").clicked() {
+                    setze_referenz = d.sel;
+                }
+                ui.add_space(40.0);
                 if ui.button("Abbruch").clicked() {
                     done = Some(false);
                 }
@@ -506,6 +589,12 @@ impl App {
                 }
             });
         });
+        if let Some(i) = setze_referenz.filter(|_| done.is_none()) {
+            d.sel = Some(i);
+            d.pick = Some(i);
+            self.placing = None;
+            self.info = "Referenz setzen: Symbol auf dem Blatt anklicken (Esc = Abbruch)".into();
+        }
         match done {
             None => self.zusatz.spiegel = Some(d),
             Some(false) => {}
@@ -518,6 +607,8 @@ impl App {
         let rows: Vec<Zeile> = d.rows.into_iter().filter(|z| z.referenz != 0 || z.felder.iter().any(|f| !f.trim().is_empty())).collect();
         let Some((r, owner)) = self.project.find_obj(d.owner).map(|(r, o)| (r, o.clone())) else { return };
         self.checkpoint();
+        let refs: Vec<u64> = rows.iter().map(|z| z.referenz).filter(|i| *i != 0).collect();
+        eigentuemer_setzen(&mut self.project, d.owner, &refs);
         match d.obj {
             Some(id) => {
                 if let Some(o) = self.project.anlagen.iter_mut().flat_map(|a| &mut a.sheets).flat_map(|s| &mut s.objects).find(|o| o.id == id) {
@@ -606,6 +697,29 @@ mod tests {
         p.anlagen[0].sheets[0].objects.remove(1);
         assert!(nachfuehren(&mut p, &[]));
         assert!(matches!(&p.find_obj(9).unwrap().1.kind, Kind::Spiegel { rows, .. } if rows.is_empty()));
+    }
+
+    #[test]
+    fn set_referenz() {
+        let mut p = Project::new_default();
+        p.anlagen[0].sheets[0].objects.push(sym(1, "-K1", 40.0));
+        p.anlagen[0].sheets[0].objects.push(sym(2, "-K1", 120.0));
+        p.anlagen[0].sheets[0].objects.push(sym(3, "-S5", 200.0));
+        let mut d = SpiegelDlg { owner: 1, obj: None, rows: vec![Zeile { art: 0, referenz: 2, ..Default::default() }], sel: Some(0), auto: true, pick: Some(0) };
+        // die Spule selbst ist keine Referenz: weiter warten
+        assert!(!referenz_setzen(&mut d, 0, 1, 0));
+        assert_eq!((d.rows[0].referenz, d.pick), (2, Some(0)));
+        // vorhandene Zeile umsetzen
+        assert!(referenz_setzen(&mut d, 0, 3, 1));
+        assert_eq!((d.rows[0].referenz, d.rows[0].art, d.pick), (3, 0, None));
+        // leere letzte Zeile: neue Zeile mit Art aus dem Symbol
+        assert!(referenz_setzen(&mut d, 1, 2, 2));
+        assert_eq!((d.rows.len(), d.rows[1].referenz, d.rows[1].art, d.sel), (2, 2, 2, Some(1)));
+        // Übernehmen: -S5 bekommt die Kennzeichnung der Spule und bleibt so auch bei automatischer Aufnahme
+        assert!(eigentuemer_setzen(&mut p, 1, &[3, 2]));
+        assert_eq!(bmk_von(&p, 3).as_deref(), Some("-K1"));
+        assert!(!eigentuemer_setzen(&mut p, 1, &[3, 2]));
+        assert_eq!(kontakte(&p, &[], 1).iter().map(|k| k.0).collect::<Vec<_>>(), vec![2, 3]);
     }
 
     #[test]

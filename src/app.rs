@@ -217,6 +217,8 @@ pub struct App {
     /// Bauteil wird aus „Bauteil zuordnen“ heraus angelegt → danach diesem Symbol zuordnen
     pub part_assign_after: Option<u64>,
     pub fav_overrides: std::collections::BTreeMap<String, bool>,
+    /// Leere Gruppen der Benutzerbibliothek (Bibliotheksverwaltung › Hinzufügen, bib_gruppen.rs)
+    pub lib_gruppen: Vec<Vec<String>>,
     pub recent: Vec<String>,
     pub show_library: bool,
     /// weitere Dialoge (dialoge3.rs)
@@ -336,6 +338,7 @@ impl App {
             xdlg: None,
             part_assign_after: None,
             fav_overrides: Default::default(),
+            lib_gruppen: vec![],
             recent: vec![],
             show_library: false,
             dlg3: None,
