@@ -474,6 +474,14 @@ impl App {
                 }
             }
         }
+        // Symbolvorschau als Tooltip (vorschau.rs)
+        let resp = match &node.action {
+            TAction::Symbol(k) => match symbols::find(&self.lib, k).or_else(|| symbols::find(&self.project.symdefs, k)) {
+                Some(d) if self.tree_drag.is_none() => resp.on_hover_ui(|ui| crate::vorschau::symbol_vorschau(ui, d)),
+                _ => resp,
+            },
+            _ => resp,
+        };
         resp.context_menu(|ui| {
             ui.style_mut().override_font_id = Some(FontId::proportional(12.0));
             self.tree_menu(ui, node, ev);
@@ -1513,10 +1521,9 @@ impl App {
                         }
                     }
                 });
-                if ui.button("Bitmapexport").clicked() {
-                    if let Some(p) = rfd::FileDialog::new().add_filter("PNG-Bild", &["png"]).set_file_name("Blatt.png").save_file() {
-                        self.export_req = Some(p);
-                    }
+                // Bitmapexport des Originals: PNG mit wählbarer Auflösung (bildexport.rs)
+                if ui.button("Als Bild exportieren…").on_hover_text("Bitmapexport").clicked() {
+                    self.open_bild_export();
                 }
                 if ui.button("DXF Import").clicked() {
                     self.dxf_import();
@@ -1564,6 +1571,9 @@ impl App {
                 }
                 // Original: Trennlinie am Ende, Rückgängig/Forwärts nur über Strg+Z / Strg+W und die Werkzeugleiste
                 ui.separator();
+                if ui.add(egui::Button::new("Suchen…").shortcut_text(crate::kuerzel::belegung(&self.opt.tasten, "suchen"))).clicked() {
+                    self.open_suche();
+                }
             });
             ui.menu_button("Hinzufügen", |ui| {
                 if ui.button("Anlage").on_hover_text("Erweitert das Projekt um eine neue Anlage").clicked() {
@@ -1632,6 +1642,9 @@ impl App {
                 }
                 if ui.button("Listen Export").clicked() {
                     self.list_export();
+                }
+                if ui.button("Projekt prüfen").clicked() {
+                    self.open_pruefen();
                 }
             });
             ui.menu_button("Extras", |ui| {
@@ -1900,6 +1913,10 @@ impl App {
 
     /// Alle Blätter des Projekts als Vektor-PDF ausgeben (und auf Wunsch drucken).
     fn make_pdf(&mut self, ctx: &egui::Context) {
+        // vorher Projekt prüfen (Optionen), bei Hinweisen Rückfrage in suche.rs
+        if !self.ausgabe_freigeben() {
+            return;
+        }
         let Some((path, print)) = self.pdf_req.take() else { return };
         let sel = self.print_sel.take();
         let (bytes, n) = crate::pdf::render_sheets(ctx, &self.project, &self.lib, &self.images, &|r| sel.as_ref().map(|v| v.contains(&r)).unwrap_or(true));
@@ -2003,6 +2020,7 @@ impl eframe::App for App {
         self.extra_dialogs(&ctx);
         self.dialoge3_ui(&ctx);
         self.ask_save_ui(&ctx);
+        self.suche_ui(&ctx);
         self.make_pdf(&ctx);
     }
 }
@@ -2171,6 +2189,7 @@ impl App {
             "speichern" => self.save(),
             "speichern_als" => self.save_as(),
             "drucken" => self.open_druck_dialog(),
+            "suchen" => self.open_suche(),
             "rueck" => self.do_undo(),
             "vor" | "vor2" => self.do_redo(),
             "loeschen" => self.delete_selection(),

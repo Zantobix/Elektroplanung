@@ -24,6 +24,8 @@ pub struct Optionen {
     /// Doppelklick auf Verweise: 0 = Ziel anzeigen, 1 = Eigenschaften
     pub doppelklick_verweis: usize,
     pub backup: bool,
+    /// vor Drucken/PDF-Export das Projekt prüfen und bei Hinweisen nachfragen
+    pub pruefen_vor_druck: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
     pub sym_hoehe: f32,
@@ -73,6 +75,7 @@ impl Default for Optionen {
             ungueltige_loeschen: true,
             doppelklick_verweis: 0,
             backup: true,
+            pruefen_vor_druck: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
             blatt_farbe: [238, 221, 221],
@@ -249,6 +252,7 @@ impl App {
                                         });
                                     });
                                     mark(ui, &mut o.backup, "Backup-Datei erzeugen!");
+                                    mark(ui, &mut o.pruefen_vor_druck, "Vor dem Drucken Projekt prüfen");
                                 });
                                 egui::Frame::group(ui.style()).show(ui, |ui| {
                                     ui.set_width(330.0);
