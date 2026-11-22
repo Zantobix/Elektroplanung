@@ -31,9 +31,30 @@ pub fn anschluss_richtung(sheet: &Sheet, lib: &[SymDef], pin: P) -> Option<P> {
             mn = P::new(mn.x.min(p.x), mn.y.min(p.y));
             mx = P::new(mx.x.max(p.x), mx.y.max(p.y));
         }
-        return richtung_am_umriss(pin, mn, mx, T);
+        // Eckanschluss eines mehrpoligen Symbols (Maus-Befund M24, 3-polige Sicherung: Pol 5 oben rechts): ein
+        // anderer Anschluss genau darunter/darüber (Polpaar) heißt oben/unten, einer auf gleicher Höhe links/rechts
+        let senkrecht = pins.iter().any(|q| q.dist(pin) > 0.05 && (q.x - pin.x).abs() <= 0.05);
+        let waagerecht = pins.iter().any(|q| q.dist(pin) > 0.05 && (q.y - pin.y).abs() <= 0.05);
+        return richtung_mit_paar(pin, mn, mx, T, senkrecht, waagerecht);
     }
     None
+}
+
+/// Wie `richtung_am_umriss`, aber an einer Ecke entscheidet das Polpaar: `senkrecht` = ein anderer Anschluss in
+/// derselben Spalte, `waagerecht` = einer in derselben Zeile (nur eines von beiden zählt).
+pub fn richtung_mit_paar(p: P, mn: P, mx: P, t: f32, senkrecht: bool, waagerecht: bool) -> Option<P> {
+    let ecke_v = (p.y - mn.y).abs() <= t || (p.y - mx.y).abs() <= t;
+    let ecke_h = (p.x - mn.x).abs() <= t || (p.x - mx.x).abs() <= t;
+    if ecke_v && ecke_h && senkrecht != waagerecht {
+        let (a, b) = if senkrecht {
+            // nur die Höhe zählt: Umriss in x auf den Punkt verengen
+            (P::new(p.x - 1.0, mn.y), P::new(p.x + 1.0, mx.y))
+        } else {
+            (P::new(mn.x, p.y - 1.0), P::new(mx.x, p.y + 1.0))
+        };
+        return richtung_am_umriss(p, a, b, t);
+    }
+    richtung_am_umriss(p, mn, mx, t)
 }
 
 /// Richtung nach außen für einen Punkt auf dem Umriss `mn`..`mx` (Toleranz `t`); bei einem Eckpunkt zählt die
@@ -281,6 +302,16 @@ mod tests {
         assert_eq!(&neu[..2], &[p(40.0, 100.0), p(40.0, 120.0)]);
         assert_eq!(neu.last(), Some(&p(60.0, 100.0)));
         assert!(!laeuft_hinein(&neu, UNTEN, OBEN));
+    }
+
+    #[test]
+    fn eckpol_mehrpolig_nach_paar() {
+        // 3-polige Sicherung, Umriss 14 × 10 breit: Pol 5 oben rechts mit Pol 6 darunter → oben (M24)
+        let (mn, mx) = (p(-7.0, 0.0), p(7.0, 10.0));
+        assert_eq!(richtung_mit_paar(p(7.0, 0.0), mn, mx, 0.2, true, false), OBEN);
+        assert_eq!(richtung_mit_paar(p(7.0, 10.0), mn, mx, 0.2, true, false), UNTEN);
+        // ohne Paar wie bisher (breit → seitlich)
+        assert_eq!(richtung_mit_paar(p(7.0, 0.0), mn, mx, 0.2, false, false), Some(p(1.0, 0.0)));
     }
 
     #[test]
