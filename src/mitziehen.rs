@@ -472,6 +472,39 @@ mod tests_profil {
         assert!(eq(&r[0].1, &soll), "{:?}", r[0].1);
     }
 
+    #[test]
+    fn enden_bleiben_genau_am_anschluss_abseits_des_rasters() {
+        // Maus-Befund M30: Anschlüsse abseits des Rasters (Schließer bei y = 131,8), mehrere Verschiebungen
+        // hintereinander mit Quadrantenwechsel – die Enden müssen genau auf den Anschlüssen bleiben (nur innere Knicke
+        // auf das Raster), sonst gilt die Leitung im Original nicht mehr als angeschlossen
+        let lib = crate::symbols::builtin();
+        let raster = |p: P| P::new((p.x / 5.0).round() * 5.0, (p.y / 5.0).round() * 5.0);
+        let mut s = Sheet::new(1);
+        s.objects.push(schliesser(1, P::new(52.3, 101.8)));
+        let pins = |s: &Sheet| canvas::obj_pins(&s.objects[0], &lib);
+        let (oben, unten) = (pins(&s)[0], pins(&s)[1]);
+        s.objects.push(wire(2, vec![oben, P::new(oben.x, 85.0), P::new(20.0, 85.0), P::new(20.0, 60.0)]));
+        s.objects.push(wire(3, vec![unten, P::new(unten.x, 120.0), P::new(90.0, 120.0), P::new(90.0, 150.0)]));
+        for d in [P::new(10.0, 5.0), P::new(80.0, 45.0), P::new(-3.7, 2.2), P::new(-120.0, -60.0)] {
+            let f = find_followers(&s, &lib, &[1], &[1], false);
+            assert_eq!(f.len(), 2, "beide Leitungen hängen weiter am Symbol ({d:?})");
+            s.objects[0].kind.translate(d);
+            for w in &f {
+                let neu = folgen(&w.pts, w.ends, d, w.dirs, w.profil, 2.5, &raster);
+                if let Some(Obj { kind: Kind::Wire { pts, .. }, .. }) = s.objects.iter_mut().find(|o| o.id == w.id) {
+                    *pts = neu;
+                }
+            }
+            let p = pins(&s);
+            for (id, pin, fern) in [(2, p[0], P::new(20.0, 60.0)), (3, p[1], P::new(90.0, 150.0))] {
+                let Kind::Wire { pts, .. } = &s.objects.iter().find(|o| o.id == id).unwrap().kind else { unreachable!() };
+                assert!(pts[0].dist(pin) < 1e-4, "{d:?} Leitung {id}: {pts:?}, Anschluss {pin:?}");
+                assert!(pts.last().unwrap().dist(fern) < 1e-4, "{d:?} Leitung {id}: {pts:?}");
+                assert!(rechtwinklig(pts), "{d:?} Leitung {id}: {pts:?}");
+            }
+        }
+    }
+
     fn klemme_in_leitung() -> Sheet {
         // L-Leitung (10, 50) → (60, 50) → (60, 80), Klemmstelle bei (30, 50) eingesetzt
         let mut s = Sheet::new(1);
