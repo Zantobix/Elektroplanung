@@ -16,6 +16,8 @@ Behoben (Maustest 22.11.2026):
   Anschlüssen (bisher wurde die ganze Leitung verschoben und getrennt)
 - Leitungsende auf einer Sammelschiene oder einer anderen Leitung trifft diese senkrecht in der Flucht, statt auf
   den nächsten Rasterpunkt zu springen
+- In eine Leitung eingesetzte Klemmstelle lässt sich mit der Maus ziehen; beide Leitungsteile wandern mit (bisher
+  begann das Ziehen eine neue Leitung, beim Verschieben mit Strg blieb eine Lücke)
 - „Neue Sammelschiene“ legt ein echtes Sammelschienen-Objekt an (wie in W2: Name darüber, gestapelt) statt einer
   Leitung mit Text
 

@@ -100,16 +100,21 @@ fn follow_start(pts: &[P], d: P, rund: &dyn Fn(P) -> P) -> Vec<P> {
 /// Leitungen, die an Anschlüssen der verschobenen Symbole/Klemmstellen `moved` enden. Leitungen in `exclude`
 /// (Markierung) und fixierte Leitungen (bei aktiver Fixierung) bleiben unverändert.
 pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u64], fix_active: bool) -> Vec<Mitzieh> {
-    let pins: Vec<P> = sheet
+    // Klemmstellen in einer Leitung: die Teile enden KLEMME_R vor dem Mittelpunkt (klemme_leitung.rs) und zählen
+    // trotzdem als angeschlossen – sonst blieb beim Verschieben eine Lücke (todo 1, Maus-Befund M4)
+    let pins: Vec<(P, f32)> = sheet
         .objects
         .iter()
         .filter(|o| moved.contains(&o.id) && matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. } | Kind::Verweis { .. }))
-        .flat_map(|o| canvas::obj_pins(o, lib))
+        .flat_map(|o| {
+            let tol = if matches!(o.kind, Kind::Terminal { .. }) { crate::klemme_leitung::KLEMME_R + PIN_TOL } else { PIN_TOL };
+            canvas::obj_pins(o, lib).into_iter().map(move |q| (q, tol))
+        })
         .collect();
     if pins.is_empty() {
         return vec![];
     }
-    let am_pin = |p: P| pins.iter().any(|q| q.dist(p) <= PIN_TOL);
+    let am_pin = |p: P| pins.iter().any(|(q, t)| q.dist(p) <= *t);
     sheet
         .objects
         .iter()
@@ -123,6 +128,24 @@ pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u
             (ends[0] || ends[1]).then(|| Mitzieh { id: o.id, pts: pts.clone(), ends })
         })
         .collect()
+}
+
+/// Liegt bei `p` eine in eine Leitung eingesetzte Klemmstelle (mindestens zwei Leitungsenden am Klemmenkreis)?
+pub fn eingesetzte_klemme(sheet: &Sheet, p: P) -> bool {
+    let tol = crate::klemme_leitung::KLEMME_R + PIN_TOL;
+    let klemme = sheet.objects.iter().any(|o| matches!(&o.kind, Kind::Terminal { pos, .. } if pos.dist(p) <= PIN_TOL));
+    if !klemme {
+        return false;
+    }
+    let enden = sheet
+        .objects
+        .iter()
+        .filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts) } else { None })
+        .flat_map(|pts| [pts.first().copied(), pts.last().copied()])
+        .flatten()
+        .filter(|e| e.dist(p) <= tol)
+        .count();
+    enden >= 2
 }
 
 impl App {
@@ -241,5 +264,23 @@ mod tests {
         // markierte Leitung bewegt sich selbst und folgt nicht
         let f = find_followers(&s, &lib, &[1], &[1, 2], false);
         assert_eq!(f.iter().map(|m| m.id).collect::<Vec<_>>(), vec![3, 5]);
+    }
+}
+
+#[cfg(test)]
+mod tests_klemme {
+    use super::*;
+
+    #[test]
+    fn eingesetzte_klemmstelle_zieht_beide_teile_mit() {
+        let mut s = Sheet::new(1);
+        let wire = |id: u64, pts: Vec<P>| Obj { id, kind: Kind::Wire { pts, leitung: 0, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None };
+        s.objects.push(wire(1, vec![P::new(10.0, 50.0), P::new(29.2, 50.0)]));
+        s.objects.push(wire(2, vec![P::new(30.8, 50.0), P::new(60.0, 50.0)]));
+        s.objects.push(Obj { id: 3, kind: Kind::Terminal { pos: P::new(30.0, 50.0), leiste: "X1".into(), nr: 1, level: 0, text_off: None, tpl: String::new(), opt: Default::default() }, pen: 0, fixed: false, group: None, raw: None });
+        assert!(eingesetzte_klemme(&s, P::new(30.0, 50.0)));
+        let f = find_followers(&s, &[], &[3], &[3], false);
+        assert_eq!(f.len(), 2);
+        assert!(f.iter().all(|m| m.ends[0] != m.ends[1]));
     }
 }
