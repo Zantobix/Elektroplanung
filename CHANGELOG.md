@@ -81,6 +81,9 @@ Behoben (Maustest 22.11.2026):
   auf der Kreuzung mit einer anderen Leitung)
 - Hinzufügen › Blatt (auch Datei › Neu › Blatt, Knopf „Neues Blatt“) öffnet wie im Original gleich den
   Eigenschaftendialog des neuen Blattes; Abbruch nimmt es wieder weg
+- Leitungsenden werden wie im Original gespeichert (Art, Kennung, Anschlussnummer an Symbol, Schiene, Klemmstelle,
+  Leitung); Klemmpläne vom Nachbau gezeichneter Projekte sind im Original nicht mehr leer. Klemmplan nennt Schienen
+  „Kürzel (Name)“ wie das Original
 - Rahmenauswahl wie im Original: markiert werden Objekte, deren Anfangs-/Einfügepunkt im Rahmen liegt (bisher nur
   ganz enthaltene Objekte)
 - Blattrahmen (mit Strompfadleiste, Schriftfeld und Zeichenfläche) kommt aus den Blatträndern der Anlage statt aus

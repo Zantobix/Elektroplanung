@@ -176,9 +176,13 @@ impl<'a> Netz<'a> {
                 }
                 Kind::Terminal { pos, leiste, nr, level, tpl, opt, .. } => n.terms.push(Klemmstelle { pos: *pos, leiste: leiste.clone(), nr: *nr, level: *level, tpl: tpl.clone(), opt: opt.clone() }),
                 Kind::Busbar { a, x2, name, .. } => {
-                    let kurz = anlage.schienen.get(name).map(|s| s.kurz.trim().to_string()).filter(|k| !k.is_empty()).unwrap_or_else(|| name.clone());
+                    // wie im Original (Wine-Gegenprobe 22.11.2026): „Kürzel (freier Name)“, z. B. „L2 (Schiene 2)“;
+                    // in W2 heißen die Schienen „Schiene <Kürzel>“ → „L1 (Schiene L1)“
+                    let set = anlage.schienen.get(name);
+                    let kurz = set.map(|s| s.kurz.trim().to_string()).filter(|k| !k.is_empty()).unwrap_or_else(|| name.clone());
+                    let frei = set.map(|s| s.name.trim().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| format!("Schiene {name}"));
                     let x0 = a.x.min(*x2);
-                    n.bars.push((*a, *x2, Ziel { kennung: format!("{kurz} (Schiene {name})"), kl: String::new(), pfad: pfad(sheet, x0) }));
+                    n.bars.push((*a, *x2, Ziel { kennung: format!("{kurz} ({frei})"), kl: String::new(), pfad: pfad(sheet, x0) }));
                 }
                 _ => {}
             }
