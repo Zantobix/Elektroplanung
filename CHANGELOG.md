@@ -9,6 +9,10 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Anschlusskreise wie im Original:
+- An jedem Symbolanschluss ein kleiner hellgrauer Kreis (Ø 1,6 mm), auch an angeschlossenen – nur auf dem
+  Bildschirm, nicht im Druck/PDF/Bildexport (Gegenprobe Original unter Wine und Original-Ausdruck).
+
 Brückenbögen an Kreuzungen (bewusste Erweiterung, das Original zeichnet keine):
 - Kreuzen sich zwei Leitungen, ohne verbunden zu sein, springt die waagerechtere in einem kleinen Halbkreis über
   die andere (Bildschirm, Druck, PDF, Bildexport). Keine Bögen an Verbindungen (Leitungsende oder Klemmstelle im

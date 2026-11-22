@@ -1064,6 +1064,8 @@ impl App {
                 _ => {}
             }
         }
+        // Anschlusskreise wie im Original (nur Bildschirm), unter den Objekten
+        crate::anschlusskreise::zeichnen(&clip, xf, sheet, &self.lib);
         for o in &sheet.objects {
             let sel = self.selection.contains(&o.id);
             canvas::draw_object(&dc, o, if sel { Some(SEL) } else { None });
