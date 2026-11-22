@@ -27,6 +27,8 @@ pub struct Mitzieh {
     pub ends: [bool; 2],
     pub dirs: [Option<P>; 2],
     pub profil: bool,
+    /// Abzweig zweiter Stufe: das Ende hängt auf dieser mitgezogenen Leitung (Knick oder Mittelstück) und folgt ihr
+    pub wirt: Option<u64>,
 }
 
 fn waagerecht(a: P, b: P) -> bool {
@@ -209,9 +211,75 @@ pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u
             // Nachbarpunkt = erster vom Ende verschiedene Punkt (doppelte Punkte überspringen)
             let nb = |mut it: Box<dyn Iterator<Item = &P> + '_>, p: P| it.find(|q| q.dist(p) >= EPS).copied().unwrap_or(p);
             let dirs = [ende_richtung(sheet, lib, a, nb(Box::new(pts.iter()), a)), ende_richtung(sheet, lib, e, nb(Box::new(pts.iter().rev()), e))];
-            Some(Mitzieh { id: o.id, pts: pts.clone(), ends, dirs, profil })
+            Some(Mitzieh { id: o.id, pts: pts.clone(), ends, dirs, profil, wirt: None })
         })
-        .collect()
+        .collect::<Vec<_>>()
+        .pipe_abzweige(sheet, lib, moved, exclude, fix_active)
+}
+
+/// Zweite Stufe (Maustest Runde 10): Leitungen, deren Ende als Abzweig auf einer mitgezogenen Leitung liegt (an
+/// einem Knick oder im Innern), folgen dieser – sonst blieb ihr Ende nach dem Umformen der Wirtsleitung frei stehen.
+trait Abzweige {
+    fn pipe_abzweige(self, sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u64], fix_active: bool) -> Vec<Mitzieh>;
+}
+
+impl Abzweige for Vec<Mitzieh> {
+    fn pipe_abzweige(mut self, sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u64], fix_active: bool) -> Vec<Mitzieh> {
+        let wirte: Vec<(u64, Vec<P>)> = self.iter().map(|w| (w.id, w.pts.clone())).collect();
+        if wirte.is_empty() {
+            return self;
+        }
+        let mut neu = vec![];
+        for o in &sheet.objects {
+            if exclude.contains(&o.id) || moved.contains(&o.id) || (o.fixed && fix_active) || wirte.iter().any(|(id, _)| *id == o.id) {
+                continue;
+            }
+            let Kind::Wire { pts, .. } = &o.kind else { continue };
+            if pts.len() < 2 {
+                continue;
+            }
+            let n = pts.len();
+            let auf = |p: P| wirte.iter().find(|(_, w)| w.windows(2).any(|s| seg_dist(p, s[0], s[1]) <= PIN_TOL)).map(|(id, _)| *id);
+            let (wa, we) = (auf(pts[0]), auf(pts[n - 1]));
+            // nur ein Ende als Abzweig (beide Enden auf Wirten: Leitung bleibt, um nichts zu verdrehen)
+            let (ends, wirt) = match (wa, we) {
+                (Some(w), None) => ([true, false], w),
+                (None, Some(w)) => ([false, true], w),
+                _ => continue,
+            };
+            let nb = |mut it: Box<dyn Iterator<Item = &P> + '_>, p: P| it.find(|q| q.dist(p) >= EPS).copied().unwrap_or(p);
+            let dirs = [ende_richtung(sheet, lib, pts[0], nb(Box::new(pts.iter()), pts[0])), ende_richtung(sheet, lib, pts[n - 1], nb(Box::new(pts.iter().rev()), pts[n - 1]))];
+            neu.push(Mitzieh { id: o.id, pts: pts.clone(), ends, dirs, profil: true, wirt: Some(wirt) });
+        }
+        self.extend(neu);
+        self
+    }
+}
+
+/// Lage des Punkts `e` (auf dem Zug `alt`) auf dem umgeformten Zug `neu`: gleiche Punktzahl → gleiches Teilstück,
+/// gleicher Anteil (ein Knick bleibt ein Knick); sonst der nächste Punkt auf `neu`.
+pub fn abzweig_lage(alt: &[P], neu: &[P], e: P) -> P {
+    if alt.len() == neu.len() {
+        if let Some(i) = (0..alt.len().saturating_sub(1)).find(|&i| seg_dist(e, alt[i], alt[i + 1]) <= PIN_TOL) {
+            let (a, b) = (alt[i], alt[i + 1]);
+            let l = a.dist(b);
+            let t = if l < 1e-6 { 0.0 } else { a.dist(e) / l };
+            let (c, d) = (neu[i], neu[i + 1]);
+            return P::new(c.x + (d.x - c.x) * t, c.y + (d.y - c.y) * t);
+        }
+    }
+    let mut best = (f32::INFINITY, e);
+    for s in neu.windows(2) {
+        let (a, b) = (s[0], s[1]);
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let l2 = dx * dx + dy * dy;
+        let t = if l2 < 1e-9 { 0.0 } else { (((e.x - a.x) * dx + (e.y - a.y) * dy) / l2).clamp(0.0, 1.0) };
+        let q = P::new(a.x + dx * t, a.y + dy * t);
+        if q.dist(e) < best.0 {
+            best = (q.dist(e), q);
+        }
+    }
+    best.1
 }
 
 /// Richtung nach außen am Leitungsende `p` (Nachbarpunkt `nb`): am Symbolanschluss dessen Richtung, sonst die
@@ -284,12 +352,12 @@ impl App {
         }
         // Stich der Neuführung wie beim Zeichnen ein halbes Raster (leitung_route.rs)
         let stich = self.raster() / 2.0;
-        // Abgriff an einer Sammelschiene wandert mit (schiene_halten.rs)
         // Abzweig auf einer Schiene bzw. Leitung: gerade auf das Gleis, der Abgriff wandert mit (schiene_halten.rs)
         let (sch, gl) = self.sheet().map(|s| (crate::schiene_halten::schienen(s, &[]), crate::schiene_halten::gleise(s))).unwrap_or_default();
         // Symbole als Hindernisse der Neuführung (M29); die Symbole sind schon verschoben
         let umrisse = self.sheet().map(|s| crate::leitung_hindernis::umrisse(s, &self.lib)).unwrap_or_default();
-        let neu: Vec<(u64, Vec<P>, bool)> = f
+        let (f2, f): (Vec<&Mitzieh>, Vec<&Mitzieh>) = f.iter().partition(|w| w.wirt.is_some());
+        let mut neu: Vec<(u64, Vec<P>, bool)> = f
             .iter()
             .map(|w| {
                 let hind = hindernisse(&umrisse, w, d);
@@ -302,6 +370,16 @@ impl App {
                 (w.id, pts, w.ends[0] && w.ends[1])
             })
             .collect();
+        // zweite Stufe: Abzweige auf umgeformten Leitungen folgen ihrem Wirt (Ende an dieselbe Stelle des Zuges)
+        for w in f2 {
+            let Some(wirt) = w.wirt else { continue };
+            let alt = f.iter().find(|h| h.id == wirt).map(|h| h.pts.clone());
+            let jetzt = neu.iter().find(|(id, _, _)| *id == wirt).map(|(_, p, _)| p.clone());
+            let (Some(alt), Some(jetzt)) = (alt, jetzt) else { continue };
+            let e = if w.ends[0] { w.pts[0] } else { w.pts[w.pts.len() - 1] };
+            let de = abzweig_lage(&alt, &jetzt, e).sub(e);
+            neu.push((w.id, folgen(&w.pts, w.ends, de, w.dirs, w.profil, stich, &|p| p), false));
+        }
         self.with_sheet(|s, _| {
             for (id, pts, ganz) in neu {
                 if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
@@ -449,7 +527,7 @@ mod tests_profil {
 
     /// Objekte `moved` um `d` verschieben und die Leitungen wie beim Ziehen mitführen; Rückgabe: Leitungspunkte je Id.
     fn ziehen(s: &mut Sheet, lib: &[SymDef], moved: &[u64], d: P) -> Vec<(u64, Vec<P>)> {
-        let f = find_followers(s, lib, moved, moved, false);
+        let f: Vec<Mitzieh> = find_followers(s, lib, moved, moved, false).into_iter().filter(|w| w.wirt.is_none()).collect();
         s.objects.iter_mut().filter(|o| moved.contains(&o.id)).for_each(|o| o.kind.translate(d));
         let mut out = vec![];
         for w in &f {
@@ -509,8 +587,10 @@ mod tests_profil {
         // T-Abzweig: fremde Leitung endet im Innern → Profil aus, Verhalten wie bisher (nur Endstück)
         s.objects.push(wire(3, vec![P::new(90.0, 130.0), P::new(90.0, 160.0)]));
         let f = find_followers(&s, &lib, &[1], &[1], false);
-        assert_eq!(f.len(), 1);
+        // Leitung 3 folgt als Abzweig zweiter Stufe ihrem Wirt
+        assert_eq!(f.len(), 2);
         assert!(!f[0].profil);
+        assert_eq!((f[1].id, f[1].wirt), (3, Some(f[0].id)));
         let r = ziehen(&mut s, &lib, &[1], P::new(10.0, 0.0));
         let soll = [P::new(60.0, 107.0), P::new(60.0, 117.0), P::new(70.0, 117.0), P::new(70.0, 130.0), P::new(110.0, 130.0), P::new(110.0, 150.0)];
         assert!(eq(&r[0].1, &soll), "{:?}", r[0].1);
@@ -592,5 +672,16 @@ mod tests_profil {
         s.objects.push(klemme(3, P::new(30.0, 50.0)));
         s.objects.push(wire(1, vec![P::new(10.0, 50.0), P::new(29.2, 50.0)]));
         assert_eq!(eingesetzte_klemme_bei(&s, P::new(29.2, 50.0)), None);
+    }
+
+    #[test]
+    fn abzweig_lage_folgt_knick_und_mittelstueck() {
+        let alt = [P::new(139.1, 160.0), P::new(139.1, 145.0), P::new(107.5, 145.0)];
+        let neu = [P::new(132.0, 170.0), P::new(132.0, 145.0), P::new(107.5, 145.0)];
+        // Abzweig am Knick bleibt am Knick
+        assert!(abzweig_lage(&alt, &neu, P::new(139.1, 145.0)).dist(P::new(132.0, 145.0)) < 1e-3);
+        // Punktzahl geändert: nächster Punkt
+        let neu2 = [P::new(122.0, 170.0), P::new(122.0, 149.7), P::new(166.6, 149.7)];
+        assert!(abzweig_lage(&alt, &neu2, P::new(129.1, 150.0)).dist(P::new(129.1, 149.7)) < 1e-3);
     }
 }

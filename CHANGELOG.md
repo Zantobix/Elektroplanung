@@ -48,6 +48,7 @@ Sammelschienen und Vormarkierung:
   zu laufen.
 - Wird eine Leitung mitverschoben, folgen Leitungen, die als Abzweig auf ihr enden (vorher blieb ihr Ende frei
   stehen).
+- Ebenso folgen Abzweige auf einer Leitung, die beim Mitziehen umgeformt wird (am Knick bzw. im Mittelstück).
 
 BMK neuer Symbole wie im Original:
 - Neue Symbole speichern die BMK mit Ortsplatzhalter („-E1+%P“ wie in W2), so dass ein später eingetragenes

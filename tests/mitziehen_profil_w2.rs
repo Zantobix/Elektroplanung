@@ -24,7 +24,8 @@ fn w2_verschieben_enden_und_rechtwinkligkeit_bleiben() {
             for s in &a.sheets {
                 let bewegbar: Vec<u64> = s.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })).map(|o| o.id).collect();
                 for id in bewegbar {
-                    let f = mitziehen::find_followers(s, &lib, &[id], &[id], false);
+                    // Abzweige zweiter Stufe folgen ihrem Wirt, nicht der Verschiebung (App::apply_followers)
+                    let f: Vec<_> = mitziehen::find_followers(s, &lib, &[id], &[id], false).into_iter().filter(|w| w.wirt.is_none()).collect();
                     if f.is_empty() {
                         continue;
                     }
