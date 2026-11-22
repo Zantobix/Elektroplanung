@@ -153,6 +153,49 @@ pub const S_SCHREIBEN: &str = "Fehler beim schreiben in die Datei";
 pub const S_KEIN_BACKUP: &str = "Es konnte keine Backup-Datei angelegt werden,\n das Projekt wurde NICHT gespeichert!";
 pub const S_SCHREIBSCHUTZ: &str = "Die Datei kann nicht überschrieben werden!\n(Schreibschutz oder keine Rechte)";
 pub const S_NICHT_ANGELEGT: &str = "Die Datei konnte nicht angelegt werden";
+pub const S_DATENFEHLER: &str = "Fehler in den gespeicherten Daten";
+pub const S_TEMP_1: &str = "Die Temporäre Datendatei:\n";
+pub const S_TEMP_2: &str = "\nkann nicht in den gewollten Dateinamen geändert werden!";
+pub const S_ALLGEMEIN: &str = "Fehler beim abspeichern der Projekt-Daten";
+
+// ------------------------------------------------------------------ Laden: Statuszeile und Fehlerliste (0x426310, 0x498308)
+
+pub const L_OEFFNEN: &str = "Projekt wird geöffnet";
+pub const L_LESEN: &str = "Projekt wird gelesen";
+pub const L_FEHLERHAFT: &str = "Fehlerhaftes Projekt";
+pub const L_BILDDATEN: &str = "Fehler beim Laden der Bilddaten von: ";
+pub const O_EBENEN: &str = "Anzahl Ebenen der Klemmleiste wird auf 4 begrenzt! Klemmleiste: ";
+
+// ------------------------------------------------------------------ Eigenschaften mehrerer Objekte (0x4427d4)
+
+pub const MP_UNTERSCHIEDLICH: &str = "Unterschiedliche Objekte";
+pub const MP_GEMEINSAM: &str = "Gemeinsame Eigenschaften";
+
+// ------------------------------------------------------------------ Tabellen der Symboleigenschaften (0x4795dc, 0x479064)
+
+pub const TA_ORIGINAL: &str = "original Text";
+pub const TA_ALTERNATIV: &str = "alternativ Text";
+pub const TA_WAHL: &str = "Wahl ";
+pub const TA_NEUE_WAHL: &str = "Neue Wahl";
+pub const TA_PARAMETER: &str = "Parameter";
+pub const TA_WERT: &str = "Wert";
+pub const SE_SEITEN: &str = "Definierte Seiten";
+pub const SE_OPTIONEN: &str = "Definierte Optionen";
+pub const SE_OPTIONSNAME: &str = "Optionsname";
+pub const SE_STIFTE: &str = "Definierte Stifte";
+pub const SE_PARAMETER: &str = "Definierte Parameter";
+pub const SE_PARAMETERNAME: &str = "Parametername";
+pub const SE_DEFAULTWERT: &str = "Defaultwert";
+pub const SE_ZU_VIELE_TEXTE: &str = "Zu viele Alternativtexte freigegeben!\n Es werden nur 32 Alternativtexte zur Bearbeitung freigegeben!";
+pub const SE_ZU_VIELE_OPTIONEN: &str = "Zu viele Optionen definiert!\n Es werden nur 32 Optionen zur Bearbeitung freigegeben!";
+/// Höchstzahl der Alternativtexte bzw. Optionen, die der Dialog bearbeitet
+pub const SE_HOECHSTENS: usize = 32;
+
+// ------------------------------------------------------------------ Bibliothek: Gruppe hinzufügen (TBiblio.Button2Click)
+
+pub const BG_NEUE_GRUPPE: &str = "Neue Gruppe";
+pub const BG_HAUPTGRUPPE: &str = "Hauptgruppe: ";
+pub const BG_NEUE_HAUPTGRUPPE: &str = "Neue Hauptgruppe";
 
 // ------------------------------------------------------------------ Export (TFORM1.Export)
 
@@ -565,6 +608,10 @@ pub fn ladefehler_liste(d: &[u8]) -> Vec<String> {
         if sum != crate::eprfile::checksum(data) {
             melden(&stapel, format!("{O_PRUEFSUMME}{name}"), &mut out);
         }
+        // Klemmleiste mit mehr als 4 Ebenen (KLM Feld 15): das Original begrenzt sie beim Laden (klemmen.rs)
+        if &tag == b"KLM" && data.get(60..64).is_some_and(|e| i32::from_le_bytes(e.try_into().unwrap()) > 4) {
+            melden(&stapel, format!("{O_EBENEN}{}", crate::symbols::cstr(&data[..44])), &mut out);
+        }
         p = q + ln + 4;
     }
     if let Some((tag, _)) = stapel.last().cloned() {
@@ -574,6 +621,22 @@ pub fn ladefehler_liste(d: &[u8]) -> Vec<String> {
         }
     }
     out
+}
+
+/// Fehlerliste: Projektbilder (PRJ › BLD › JPG), deren Bilddaten sich nicht lesen lassen (wie 0x426310 mit Namen).
+pub fn bildfehler(p: &Project) -> Vec<String> {
+    p.bilder.iter().filter(|b| image::load_from_memory(&b.jpeg).is_err()).map(|b| format!("{L_BILDDATEN}{}", b.name)).collect()
+}
+
+/// Bibliothek › Symbolgruppen › Hinzufügen (TBiblio.Button2Click): Beschriftung („Hauptgruppe: <markierte>“ bzw.
+/// „Neue Hauptgruppe“) und der volle Name der neuen Gruppe aus der Eingabe (leer = „Neue Gruppe“).
+pub fn neue_gruppe_ziel(markiert: &str) -> (String, impl Fn(&str) -> String + '_) {
+    let haupt = markiert.trim();
+    let text = if haupt.is_empty() { BG_NEUE_HAUPTGRUPPE.to_string() } else { format!("{BG_HAUPTGRUPPE}{haupt}") };
+    (text, move |eingabe: &str| {
+        let name = if eingabe.trim().is_empty() { BG_NEUE_GRUPPE } else { eingabe.trim() };
+        if haupt.is_empty() { name.to_string() } else { format!("{haupt} / {name}") }
+    })
 }
 
 // ------------------------------------------------------------------ Speichern
@@ -588,6 +651,41 @@ pub fn speicherfehler(pfad: &std::path::Path) -> &'static str {
         Ok(_) => S_SCHREIBEN,
         Err(_) => S_NICHT_ANGELEGT,
     }
+}
+
+/// Projektdatei schreiben wie das Original (0x4228c4): erst in eine temporäre Datei im Zielordner, dann – nach der
+/// Sicherung `backup` (falls angegeben) – die Zieldatei ersetzen. Fehler als Meldungstext des Originals; scheitert
+/// erst das Umbenennen, bleibt die temporäre Datei stehen und die Meldung nennt sie.
+pub fn speichern_ueber_temp(pfad: &std::path::Path, daten: &[u8], backup: Option<&std::path::Path>) -> Result<(), String> {
+    use std::io::Write;
+    if pfad.as_os_str().is_empty() {
+        return Err(S_KEIN_NAME.into());
+    }
+    // Name der temporären Datei: Zeitstempel hexadezimal (das Original nimmt die 8 Byte der aktuellen Zeit)
+    let zeit = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+    let temp = pfad.with_file_name(format!("{zeit:016X}.tmp"));
+    let mut f = std::fs::File::create(&temp).map_err(|_| S_NICHT_ANGELEGT.to_string())?;
+    if f.write_all(daten).and_then(|_| f.sync_all()).is_err() {
+        drop(f);
+        let _ = std::fs::remove_file(&temp);
+        return Err(S_SCHREIBEN.into());
+    }
+    drop(f);
+    let weg = |t: &std::path::Path, m: &str| {
+        let _ = std::fs::remove_file(t);
+        Err(m.to_string())
+    };
+    if let Ok(m) = std::fs::metadata(pfad) {
+        if let Some(b) = backup {
+            if std::fs::copy(pfad, b).is_err() {
+                return weg(&temp, S_KEIN_BACKUP);
+            }
+        }
+        if m.permissions().readonly() {
+            return weg(&temp, S_SCHREIBSCHUTZ);
+        }
+    }
+    std::fs::rename(&temp, pfad).map_err(|_| format!("{S_TEMP_1}{}{S_TEMP_2}", temp.display()))
 }
 
 /// Meldung zu einer nicht schreibbaren Exportdatei (TFORM1.Export: Fehlercodes der Export.dll).
@@ -823,6 +921,73 @@ mod tests {
         assert_eq!(t, "Elektroplanung C:/a/W2.epr (Version:EP16)");
         assert_eq!(speicherfehler(std::path::Path::new("")), S_KEIN_NAME);
         assert_eq!(speicherfehler(std::path::Path::new("/gibt/es/nicht/x.epr")), S_NICHT_ANGELEGT);
+    }
+
+    #[test]
+    fn speichern_ueber_temporaere_datei() {
+        let dir = std::env::temp_dir().join(format!("ep_meldungen2_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ziel = dir.join("a.epr");
+        let bak = dir.join("a.epr.bak");
+        // neue Datei, dann Überschreiben mit Sicherung der alten Fassung
+        speichern_ueber_temp(&ziel, b"eins", None).unwrap();
+        speichern_ueber_temp(&ziel, b"zwei", Some(&bak)).unwrap();
+        assert_eq!(std::fs::read(&ziel).unwrap(), b"zwei");
+        assert_eq!(std::fs::read(&bak).unwrap(), b"eins");
+        // keine temporäre Datei bleibt liegen
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        assert_eq!(speichern_ueber_temp(std::path::Path::new(""), b"x", None), Err(S_KEIN_NAME.to_string()));
+        assert_eq!(speichern_ueber_temp(&dir.join("fehlt/b.epr"), b"x", None), Err(S_NICHT_ANGELEGT.to_string()));
+        // schreibgeschützte Zieldatei
+        let mut perm = std::fs::metadata(&ziel).unwrap().permissions();
+        perm.set_readonly(true);
+        std::fs::set_permissions(&ziel, perm.clone()).unwrap();
+        assert_eq!(speichern_ueber_temp(&ziel, b"drei", None), Err(S_SCHREIBSCHUTZ.to_string()));
+        #[allow(clippy::permissions_set_readonly_false)]
+        perm.set_readonly(false);
+        std::fs::set_permissions(&ziel, perm).unwrap();
+        // Umbenennen scheitert (Ziel ist ein Ordner): Meldung nennt die temporäre Datei, die stehen bleibt
+        let ordner = dir.join("ordner.epr");
+        std::fs::create_dir_all(ordner.join("x")).unwrap();
+        let m = speichern_ueber_temp(&ordner, b"vier", None).unwrap_err();
+        assert!(m.starts_with(S_TEMP_1) && m.ends_with(S_TEMP_2), "{m}");
+        let temp = m.trim_start_matches(S_TEMP_1).trim_end_matches(S_TEMP_2);
+        assert_eq!(std::fs::read(temp).unwrap(), b"vier");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ladefehler_klemmleiste_und_bilder() {
+        let mut klm = b"Leiste X1".to_vec();
+        klm.resize(80, 0);
+        klm[60..64].copy_from_slice(&6i32.to_le_bytes());
+        let mut name = b"Anlage 1".to_vec();
+        name.resize(56, 0);
+        let mut d = b"EP16".to_vec();
+        d.extend(block("PRJ", &[0; 8]));
+        d.extend(block("ANL", &name));
+        d.extend(block("KLM", &klm));
+        d.extend_from_slice(b"\x99END\x99END\x99END");
+        let l = ladefehler_liste(&d);
+        assert_eq!(l.last().unwrap(), "    Anzahl Ebenen der Klemmleiste wird auf 4 begrenzt! Klemmleiste: Leiste X1");
+        // beim Lesen begrenzt
+        let k = crate::eprfile::Block::new("KLM", klm);
+        assert_eq!(crate::klemmen::klemm_info(&k).etagen, 4);
+        let mut p = Project::new_default();
+        p.bilder = vec![Bild { name: "Logo".into(), nr: 1, jpeg: vec![1, 2, 3] }];
+        assert_eq!(bildfehler(&p), vec!["Fehler beim Laden der Bilddaten von: Logo".to_string()]);
+    }
+
+    #[test]
+    fn neue_bibliotheksgruppe() {
+        let (t, name) = neue_gruppe_ziel("");
+        assert_eq!(t, "Neue Hauptgruppe");
+        assert_eq!(name(""), "Neue Gruppe");
+        assert_eq!(name(" Taster "), "Taster");
+        let (t, name) = neue_gruppe_ziel("Schalter");
+        assert_eq!(t, "Hauptgruppe: Schalter");
+        assert_eq!(name(""), "Schalter / Neue Gruppe");
     }
 
     #[test]

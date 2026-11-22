@@ -155,7 +155,16 @@ pub fn liste_ui(ui: &mut eframe::egui::Ui, pens: &mut Vec<(u32, Stift)>, sel: &m
         ui.set_width(345.0);
         egui::Frame::new().fill(Color32::WHITE).stroke(Stroke::new(1.0, Color32::from_gray(160))).show(ui, |ui| {
             ui.set_min_size(egui::Vec2::new(341.0, 270.0));
-            egui::ScrollArea::vertical().id_salt("symstifte").max_height(270.0).show(ui, |ui| {
+            // Überschriften wie TSymEigenschaften (0x4795dc): blaue Titelzeile, darunter die Spalten
+            let fett = |t: &str| egui::RichText::new(t).font(crate::props::bold(13.0));
+            ui.label(fett(crate::meldungen::SE_STIFTE).color(Color32::BLUE));
+            ui.horizontal(|ui| {
+                ui.add_space(18.0);
+                for (t, w) in [("Name", 114.0), ("Breite in mm", 64.0), ("Art", 92.0), ("Farbe", 40.0)] {
+                    ui.add_sized([w, 16.0], egui::Label::new(fett(t)));
+                }
+            });
+            egui::ScrollArea::vertical().id_salt("symstifte").max_height(230.0).show(ui, |ui| {
                 if pens.is_empty() {
                     ui.weak("Keine eigenen Stifte – „Neuer Stift“ in der Symbolleiste legt einen an.");
                 }

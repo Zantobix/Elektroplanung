@@ -124,9 +124,13 @@ pub fn param_table_ui(ui: &mut egui::Ui, rows: &mut Vec<(u32, String, String)>, 
             ui.set_min_size(Vec2::new(w - 4.0, 270.0));
             egui::ScrollArea::vertical().id_salt("symparam").max_height(270.0).show(ui, |ui| {
                 egui::Grid::new("symparamgrid").num_columns(3).show(ui, |ui| {
+                    // Überschriften wie TSymEigenschaften (0x4795dc): blaue Titelzeile, darunter die Spalten
                     ui.label("");
-                    ui.label(RichText::new("Name").font(crate::props::bold(13.0)));
-                    ui.label(RichText::new("Vorgabe").font(crate::props::bold(13.0)));
+                    ui.label(RichText::new(crate::meldungen::SE_PARAMETER).font(crate::props::bold(13.0)).color(Color32::BLUE));
+                    ui.end_row();
+                    ui.label("");
+                    ui.label(RichText::new(crate::meldungen::SE_PARAMETERNAME).font(crate::props::bold(13.0)));
+                    ui.label(RichText::new(crate::meldungen::SE_DEFAULTWERT).font(crate::props::bold(13.0)));
                     ui.end_row();
                     for (i, (_, n, v)) in rows.iter_mut().enumerate() {
                         ui.label(format!("{}", i + 1));
@@ -199,7 +203,8 @@ impl App {
                 ui.set_min_size(Vec2::new(360.0, 200.0));
                 egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                     egui::Grid::new("paramgrid").striped(true).num_columns(2).show(ui, |ui| {
-                        let head = if d.mode == 2 { ("Name", "Wert") } else { ("Standard", "Text") };
+                        // Kopfzeile wie 0x479064: Parameter/Wert bzw. original Text/alternativ Text
+                        let head = if d.mode == 2 { (crate::meldungen::TA_PARAMETER, crate::meldungen::TA_WERT) } else { (crate::meldungen::TA_ORIGINAL, crate::meldungen::TA_ALTERNATIV) };
                         ui.label(RichText::new(head.0).font(crate::props::bold(13.0)));
                         ui.label(RichText::new(head.1).font(crate::props::bold(13.0)));
                         ui.end_row();

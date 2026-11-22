@@ -114,6 +114,11 @@ pub struct SymEigenProps {
     /// Textnummern der Textelemente (Spalten der Alternativtext-Tabelle) und je Satz die Texte
     pub text_cols: Vec<u32>,
     pub alt: Vec<Vec<String>>,
+    /// Text des Textelements je Spalte (Spalte „original Text“)
+    pub text_orig: Vec<String>,
+    /// über die Höchstzahl (32) hinaus vorhandene Alternativtexte bzw. Optionen: bleiben unverändert erhalten
+    pub alt_rest: Vec<Vec<(u32, String)>>,
+    pub optionen_rest: Vec<String>,
     /// Parameter (GRD › PRA): Nummer, Name, Vorgabe – Reiter „Stifte / Parameter“
     pub params: Vec<(u32, String, String)>,
     pub sel_param: usize,
@@ -336,6 +341,34 @@ impl App {
         }
         text_cols.sort();
         text_cols.dedup();
+        // wie das Original (0x4795dc): höchstens 32 Alternativtexte und 32 Optionen zur Bearbeitung
+        let hoechstens = crate::meldungen::SE_HOECHSTENS;
+        if text_cols.len() > hoechstens {
+            crate::meldungen::warnung(crate::meldungen::T_ACHTUNG, crate::meldungen::SE_ZU_VIELE_TEXTE);
+            text_cols.truncate(hoechstens);
+        }
+        let mut optionen = e.flag_names.clone();
+        let optionen_rest = if optionen.len() > hoechstens {
+            crate::meldungen::warnung(crate::meldungen::T_ACHTUNG, crate::meldungen::SE_ZU_VIELE_OPTIONEN);
+            optionen.split_off(hoechstens)
+        } else {
+            vec![]
+        };
+        let alt_rest = e.alt_sets.iter().map(|set| set.iter().filter(|(i, _)| !text_cols.contains(i)).cloned().collect()).collect();
+        let text_orig = text_cols
+            .iter()
+            .map(|c| {
+                e.text_idx
+                    .iter()
+                    .filter(|(_, n)| *n == c)
+                    .find_map(|(id, _)| e.sheet.objects.iter().find(|o| o.id == *id))
+                    .and_then(|o| match &o.kind {
+                        Kind::Text { text, .. } => Some(text.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default()
+            })
+            .collect();
         let alt = e.alt_sets.iter().map(|set| text_cols.iter().map(|c| set.iter().find(|(i, _)| i == c).map(|(_, t)| t.clone()).unwrap_or_default()).collect()).collect();
         self.props = Some(Props::SymEigen(SymEigenProps {
             name: e.name.clone(),
@@ -346,13 +379,16 @@ impl App {
             tab: 0,
             seiten: e.options.clone(),
             sel_seite: e.option as usize,
-            optionen: e.flag_names.clone(),
+            optionen,
             sel_option: 0,
             stifte: e.pens.clone(),
             sel_stift: 0,
             stift_geloescht: vec![],
             text_cols,
             alt,
+            text_orig,
+            alt_rest,
+            optionen_rest,
             params: e.params.clone(),
             sel_param: 0,
         }));
@@ -569,7 +605,7 @@ impl App {
                     if e.option as usize >= e.options.len() {
                         e.option = 0;
                     }
-                    e.flag_names = sp.optionen.clone();
+                    e.flag_names = sp.optionen.iter().chain(&sp.optionen_rest).cloned().collect();
                     if e.cur_flag as usize > e.flag_names.len() {
                         e.cur_flag = 0;
                     }
@@ -578,7 +614,12 @@ impl App {
                     e.alt_sets = sp
                         .alt
                         .iter()
-                        .map(|row| sp.text_cols.iter().zip(row).map(|(i, t)| (*i, t.clone())).collect())
+                        .enumerate()
+                        .map(|(k, row)| {
+                            let mut set: Vec<(u32, String)> = sp.text_cols.iter().zip(row).map(|(i, t)| (*i, t.clone())).collect();
+                            set.extend(sp.alt_rest.get(k).cloned().unwrap_or_default());
+                            set
+                        })
                         .collect();
                     e.frg = (sp.quer, sp.fuse);
                     e.params = crate::parameter::clean_params(&sp.params);
@@ -865,12 +906,20 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
         }
     });
     ui.separator();
-    let list = |ui: &mut egui::Ui, id: &str, items: &mut Vec<String>, sel: &mut usize, w: f32, del: &str, min: usize| {
+    // `kopf`: Titelzeile (blau) und Spaltenüberschrift der Tabelle wie im Original (0x4795dc)
+    let list = |ui: &mut egui::Ui, id: &str, items: &mut Vec<String>, sel: &mut usize, w: f32, del: &str, min: usize, kopf: (&str, Option<&str>)| {
         ui.vertical(|ui| {
             ui.set_width(w);
             egui::Frame::new().fill(Color32::WHITE).stroke(egui::Stroke::new(1.0, Color32::from_gray(160))).show(ui, |ui| {
                 ui.set_min_size(Vec2::new(w - 4.0, 270.0));
-                egui::ScrollArea::vertical().id_salt(id).max_height(270.0).show(ui, |ui| {
+                ui.label(bt(kopf.0).color(Color32::BLUE));
+                if let Some(k) = kopf.1 {
+                    ui.horizontal(|ui| {
+                        ui.add_space(14.0);
+                        ui.label(bt(k));
+                    });
+                }
+                egui::ScrollArea::vertical().id_salt(id).max_height(230.0).show(ui, |ui| {
                     for (i, it) in items.iter_mut().enumerate() {
                         ui.horizontal(|ui| {
                             ui.label(format!("{}", i + 1));
@@ -896,9 +945,9 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
     match s.tab {
         0 => {
             ui.horizontal_top(|ui| {
-                list(ui, "seiten", &mut s.seiten, &mut s.sel_seite, 280.0, "Seite Löschen", 1);
+                list(ui, "seiten", &mut s.seiten, &mut s.sel_seite, 280.0, "Seite Löschen", 1, (crate::meldungen::SE_SEITEN, None));
                 ui.add_space(12.0);
-                list(ui, "optionen", &mut s.optionen, &mut s.sel_option, 388.0, "Option Löschen", 0);
+                list(ui, "optionen", &mut s.optionen, &mut s.sel_option, 388.0, "Option Löschen", 0, (crate::meldungen::SE_OPTIONEN, Some(crate::meldungen::SE_OPTIONSNAME)));
             });
         }
         1 => {
@@ -911,30 +960,44 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
         _ => {
             egui::Frame::new().fill(Color32::WHITE).stroke(egui::Stroke::new(1.0, Color32::from_gray(160))).show(ui, |ui| {
                 ui.set_min_size(Vec2::new(680.0, 270.0));
-                egui::Grid::new("altgrid").striped(true).show(ui, |ui| {
-                    ui.label(bt("Satz"));
-                    for c in &s.text_cols {
-                        ui.label(bt(&format!("Text {c}")));
-                    }
-                    ui.end_row();
-                    let mut del: Option<usize> = None;
-                    for (r, row) in s.alt.iter_mut().enumerate() {
-                        // Kontextmenü wie TTextAbfrage: Zeile Löschen
-                        ui.label(format!("{}", r + 1)).context_menu(|ui| {
-                            if ui.button("Zeile Löschen").clicked() {
-                                del = Some(r);
-                                ui.close();
-                            }
-                        });
-                        row.resize(s.text_cols.len(), String::new());
-                        for cell in row.iter_mut() {
-                            ui.add(egui::TextEdit::singleline(cell).desired_width(70.0));
+                // Tabelle wie TSymEigenschaften (0x4795dc → 0x479064): je Textfeld eine Zeile mit dem Text des
+                // Symbols („original Text“), je Alternativtext eine Spalte „Wahl n“, dahinter „Neue Wahl“ (legt an)
+                egui::ScrollArea::horizontal().id_salt("altscroll").show(ui, |ui| {
+                    egui::Grid::new("altgrid").striped(true).show(ui, |ui| {
+                        let mut del: Option<usize> = None;
+                        ui.label(bt(crate::meldungen::TA_ORIGINAL));
+                        for k in 0..s.alt.len() {
+                            // Kontextmenü wie TTextAbfrage: Alternativtext löschen
+                            ui.label(bt(&format!("{}{}", crate::meldungen::TA_WAHL, k + 1))).context_menu(|ui| {
+                                if ui.button("Zeile Löschen").clicked() {
+                                    del = Some(k);
+                                    ui.close();
+                                }
+                            });
                         }
+                        let neue_wahl = !s.text_cols.is_empty() && ui.add(egui::Button::new(bt(crate::meldungen::TA_NEUE_WAHL)).frame(false)).clicked();
                         ui.end_row();
-                    }
-                    if let Some(r) = del {
-                        s.alt.remove(r);
-                    }
+                        let n = s.text_cols.len();
+                        for row in s.alt.iter_mut() {
+                            row.resize(n, String::new());
+                        }
+                        for c in 0..n {
+                            ui.label(s.text_orig.get(c).cloned().unwrap_or_default());
+                            for row in s.alt.iter_mut() {
+                                ui.add(egui::TextEdit::singleline(&mut row[c]).desired_width(70.0));
+                            }
+                            ui.end_row();
+                        }
+                        if neue_wahl {
+                            s.alt.push(vec![String::new(); n]);
+                        }
+                        if let Some(k) = del {
+                            s.alt.remove(k);
+                            if k < s.alt_rest.len() {
+                                s.alt_rest.remove(k);
+                            }
+                        }
+                    });
                 });
             });
             ui.horizontal(|ui| {

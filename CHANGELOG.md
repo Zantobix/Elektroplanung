@@ -9,6 +9,20 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Laufzeittexte wie im Original (Verhaltensmetrik M5):
+- Speichern über eine temporäre Datei im Zielordner wie das Original; Meldungen „Die Temporäre Datendatei: … kann
+  nicht in den gewollten Dateinamen geändert werden!“, „Fehler in den gespeicherten Daten“, „Fehler beim abspeichern
+  der Projekt-Daten“
+- Laden: Statuszeile „Projekt wird geöffnet“ (Öffnen) bzw. „Projekt wird gelesen“ (Hinzufügen), „Fehlerhaftes
+  Projekt“ bei Fehlern; Fehlerliste meldet unlesbare Projektbilder und Klemmleisten mit mehr als 4 Ebenen (werden
+  auf 4 begrenzt)
+- Eigenschaften mehrerer Objekte: Überschriften „Unterschiedliche Objekte“ und „Gemeinsame Eigenschaften“
+- Symboleigenschaften: Tabellenköpfe „Definierte Seiten/Optionen/Stifte/Parameter“, Alternativtexte als Tabelle
+  „original Text | Wahl 1 … | Neue Wahl“, Hinweis bei mehr als 32 Alternativtexten bzw. Optionen; Parameter- und
+  Textdialog mit den Spaltenköpfen des Originals
+- Bibliothek › Symbolgruppen › Hinzufügen: neue Gruppe unter der markierten („Hauptgruppe: …“) oder als „Neue
+  Hauptgruppe“, ohne Eingabe „Neue Gruppe“
+
 Behoben (Maustest 22.11.2026):
 - Leitung aufziehen: die Vorschau folgt von Anfang an stetig der Maus; die Knickrichtung wechselt nur nahe am
   Anschluss bei deutlich anderer Bewegung (Hysterese), vom Anschluss weg geht es mindestens einen Stich nach außen,

@@ -113,7 +113,7 @@ pub fn klemm_info(k: &Block) -> KlemmInfo {
         name: k.kid("TIT").map(txt).unwrap_or_else(|| intern.clone()),
         nrs: k.kids_of("KFO").map(|f| f.i32(4).max(0) as u32).collect(),
         intern,
-        etagen: k.i32(15).max(1),
+        etagen: k.i32(15).clamp(1, 4), // mehr als 4 Ebenen begrenzt das Original (meldungen::O_EBENEN)
         titel_off: (k.i32(10), k.i32(11)),
     }
 }

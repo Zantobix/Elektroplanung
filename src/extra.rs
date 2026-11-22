@@ -1151,17 +1151,22 @@ impl App {
                         for g in &groups {
                             let n = self.lib.iter().filter(|d| d.group.join(" / ") == *g).count();
                             if ui.selectable_label(self.lib_filter == *g, format!("{g}  ({n})")).clicked() {
-                                self.lib_filter = g.clone();
+                                // erneuter Klick hebt die Markierung auf (dann: neue Hauptgruppe)
+                                self.lib_filter = if self.lib_filter == *g { String::new() } else { g.clone() };
                             }
                         }
                     });
+                    // wie TBiblio.Button2Click: neue Gruppe unter der markierten („Hauptgruppe: …“) bzw. als neue
+                    // Hauptgruppe; ohne Eingabe heißt sie „Neue Gruppe“
+                    let ziel = crate::meldungen::neue_gruppe_ziel(&self.lib_filter);
+                    ui.label(egui::RichText::new(&ziel.0).strong());
                     ui.horizontal(|ui| {
                         ui.label("Name:");
-                        ui.text_edit_singleline(&mut self.lib_sync.4);
+                        ui.add(egui::TextEdit::singleline(&mut self.lib_sync.4).hint_text(crate::meldungen::BG_NEUE_GRUPPE));
                     });
                     ui.horizontal(|ui| {
                         if ui.button("Hinzufügen").clicked() {
-                            group_act = Some((0, self.lib_filter.clone(), self.lib_sync.4.clone()));
+                            group_act = Some((0, self.lib_filter.clone(), ziel.1(&self.lib_sync.4)));
                         }
                         if ui.button("Löschen").clicked() {
                             group_act = Some((1, self.lib_filter.clone(), String::new()));
