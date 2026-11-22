@@ -139,3 +139,19 @@ fn ueberlappung_mit_leitung_und_schiene() {
     assert!(!ueberlappt(&s, &[P::new(10.0, 50.0), P::new(10.0, 70.0)]));
     assert!(!ueberlappt(&s, &[P::new(0.0, 30.0), P::new(20.0, 30.0)]));
 }
+
+/// Maustest Runde 12: kopierte Klemmstelle bekommt die nächste freie Nummer.
+#[test]
+fn eingefuegte_klemme_neue_nummer() {
+    let mut app = test_app();
+    app.project = Project::new_default();
+    app.tabs = vec![SheetRef { anlage: 0, sheet: 0 }];
+    app.active = 0;
+    app.with_sheet(|s, _| s.objects.push(wire(900, &[(100.0, 40.0), (100.0, 150.0)])));
+    let k = app.klemmstelle_setzen(P::new(100.0, 80.0), 1.0);
+    app.selection = vec![k];
+    app.copy();
+    app.paste();
+    let nrs: Vec<u32> = app.sheet().unwrap().objects.iter().filter_map(|o| if let Kind::Terminal { nr, .. } = &o.kind { Some(*nr) } else { None }).collect();
+    assert_eq!(nrs, vec![1, 2]);
+}

@@ -22,6 +22,9 @@ Leitungsführung nach Nutzerwünschen (Runde 12):
   auf keiner Leitung bzw. Schiene liegt (bisher lief die Zuleitung nach dem Drehen ein Stück auf der Schiene N).
 - Wird beim Ziehen ein vorher verbundenes Leitungsende frei, wird die Leitung bis zum nächsten Verbindungspunkt
   gekürzt (kein frei hängender Überstand).
+- Einfügen: Klemmstellen bekommen die nächste freie Nummer ihrer Leiste (bisher doppelt „X1.1“). Symbole mit fester
+  Kennungsvorlage ohne Zähler (z. B. Lampe „-E1+%P“) bekommen beim Einfügen und Platzieren die nächste freie Zahl
+  („-E2“); das Original vergibt die Kennung dann doppelt.
 - Verschobene Symbole und Klemmstellen rücken wieder auf das Raster (erster Anschluss), auch wenn sie vorher daneben
   lagen (bewusste Abweichung: das Original behält den Rest).
 

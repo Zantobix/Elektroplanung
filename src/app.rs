@@ -601,7 +601,10 @@ impl App {
             .filter_map(|o| if let Kind::Symbol { bmk, .. } = &o.kind { Some(bmk.clone()) } else { None })
             .collect();
         if !tpl.contains("%C") {
-            return symbols::bmk_vorlage(&tpl, 1, sheet_no);
+            // Vorlage ohne Zähler (z. B. „-E1+%P“): ist die Kennung schon vergeben, die erste Zahl darin erhöhen
+            // (bewusste Abweichung: das Original vergibt dann dieselbe Kennung doppelt, Gegenprobe Runde 11)
+            let b = symbols::bmk_vorlage(&tpl, 1, sheet_no);
+            return if used.contains(&b) { naechste_freie(&b, &used).unwrap_or(b) } else { b };
         }
         for c in 1..10000 {
             let b = symbols::bmk_vorlage(&tpl, c, sheet_no);
@@ -951,6 +954,15 @@ impl App {
             };
             if let (Kind::Symbol { bmk, .. }, Some(nb)) = (&mut o.kind, new_bmk) {
                 *bmk = nb;
+            }
+            // Klemmstelle: nächste freie Nummer ihrer Leiste (Maustest Runde 12: Kopie hieß wieder „X1.1“)
+            if let Kind::Terminal { leiste, nr, .. } = &o.kind {
+                let n = self.next_terminal(leiste);
+                if n != *nr {
+                    if let Kind::Terminal { nr, .. } = &mut o.kind {
+                        *nr = n;
+                    }
+                }
             }
             new_sel.push(o.id);
             self.with_sheet(|s, _| s.objects.push(o));
@@ -2111,4 +2123,12 @@ mod blatt_dialog_tests {
         assert_eq!(app.project.anlagen[0].sheets.len(), vorher);
         assert_eq!(app.redo.len(), redo);
     }
+}
+
+/// Kennung `b` mit erhöhter erster Zahl, bis sie nicht in `used` steht („-E1+%P“ → „-E2+%P“).
+fn naechste_freie(b: &str, used: &HashSet<String>) -> Option<String> {
+    let start = b.find(|c: char| c.is_ascii_digit())?;
+    let ende = b[start..].find(|c: char| !c.is_ascii_digit()).map(|i| start + i).unwrap_or(b.len());
+    let n: u32 = b[start..ende].parse().ok()?;
+    (n + 1..n + 10000).map(|k| format!("{}{}{}", &b[..start], k, &b[ende..])).find(|c| !used.contains(c))
 }
