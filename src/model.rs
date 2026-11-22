@@ -486,10 +486,15 @@ pub const WIRE_MARKIERUNG: u8 = 16;
 pub const WIRE_UNTERSTRICH: u8 = 32;
 pub const WIRE_DURCH: u8 = 64;
 
-/// Sammelschiene (TSSchiene): Kürzel, Potential, Stift und Schalter des Originaldialogs.
+/// Sammelschiene (TSSchiene): Potential, Stift und Schalter des Originaldialogs. Geführt wird die Schiene unter
+/// ihrem Kürzel (SMS › TIT, steht auf dem Blatt); `name` ist der freie Name (SMS Byte 0–20, z. B. „Schiene 1“).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SchieneSet {
+    /// veraltet (früher zweites Kürzel neben dem Schlüssel); nur noch zum Lesen alter .epj
     pub kurz: String,
+    /// freier Name der Schiene (SMS Byte 0–20); leer = „Schiene <Kürzel>“
+    #[serde(default)]
+    pub name: String,
     pub potential: String,
     pub stift: usize,
     pub quer: bool,
@@ -502,7 +507,7 @@ pub struct SchieneSet {
 
 impl Default for SchieneSet {
     fn default() -> Self {
-        SchieneSet { kurz: String::new(), potential: String::new(), stift: 0, quer: true, pfeile: true, klemmen: false, schleife: false, autoende: false, einspeisung: false }
+        SchieneSet { kurz: String::new(), name: String::new(), potential: String::new(), stift: 0, quer: true, pfeile: true, klemmen: false, schleife: false, autoende: false, einspeisung: false }
     }
 }
 

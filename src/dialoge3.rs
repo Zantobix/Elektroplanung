@@ -407,8 +407,9 @@ impl App {
                     field(ui, 96.0, "Länge", laenge, 70.0);
                 }
                 Dlg3::Schiene { name, set, pots, stifte, .. } => {
-                    field(ui, 70.0, "Name", name, 180.0);
-                    field(ui, 70.0, "Kürzel", &mut set.kurz, 180.0);
+                    // Name = freier Name (SMS Byte 0), Kürzel = Schlüssel der Schiene (TIT, steht auf dem Blatt)
+                    field(ui, 70.0, "Name", &mut set.name, 180.0);
+                    field(ui, 70.0, "Kürzel", name, 180.0);
                     ui.horizontal(|ui| {
                         lbl(ui, 86.0, "Potential");
                         let mut i = if set.potential.is_empty() { 0 } else { pots.iter().skip(1).position(|p| *p == set.potential).map(|i| i + 1).unwrap_or(0) };

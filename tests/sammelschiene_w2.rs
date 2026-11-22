@@ -67,3 +67,35 @@ fn nach_oben_wird_zurueckgeschrieben() {
     let b = &o.raw.as_ref().unwrap().block;
     assert_eq!((b.data[0x3c], b.data[0x2c], b.data[0x2d]), (0, 0, 0));
 }
+
+/// Neue Schiene wie im Original (Gegenprobe Wine 22.11.2026, `fixtures/x_schiene_kuerzel.epr`): freier Name
+/// „Schiene 1“ in SMS Byte 0, Kürzel „L1“ im TIT; beides übersteht Speichern und Laden, beschriftet wird mit „L1“.
+#[test]
+fn neue_schiene_name_und_kuerzel() {
+    let mut p = Project::new_default();
+    p.anlagen[0].sammelschienen.push("L1".into());
+    p.anlagen[0].schienen.insert("L1".into(), SchieneSet { name: "Schiene 1".into(), pfeile: false, ..Default::default() });
+    let tmp = std::env::temp_dir().join("ep_schiene_kuerzel_test.epr");
+    epr_write::save(&p, &tmp).unwrap();
+    let roh = std::fs::read(&tmp).unwrap();
+    let q = epr::import(&tmp).unwrap();
+    let _ = std::fs::remove_file(&tmp);
+    let i = roh.windows(4).position(|w| w == b"\x99SMS").expect("SMS-Block");
+    assert_eq!(&roh[i + 8..i + 17], b"Schiene 1");
+    assert_eq!(&roh[i + 17..i + 18], b"\0");
+    assert_eq!(q.anlagen[0].sammelschienen, vec!["L1".to_string()]);
+    assert_eq!(q.anlagen[0].schienen.get("L1").map(|s| s.name.as_str()), Some("Schiene 1"));
+    assert_eq!(elektroplanung::schiene_platzieren::beschriftung("L1", q.anlagen[0].schienen.get("L1")), "L1");
+}
+
+/// Vom Original gespeicherte Schiene („Schiene 2“, Kürzel „L2“) wird genauso gelesen.
+#[test]
+fn original_schiene_name_und_kuerzel() {
+    let Ok(dir) = std::env::var("EP_FIXTURES") else { return };
+    let path = PathBuf::from(dir).join("x_schiene_kuerzel.epr");
+    if !path.exists() {
+        return;
+    }
+    let p = epr::import(&path).unwrap();
+    assert_eq!(p.anlagen[0].schienen.get("L2").map(|s| s.name.as_str()), Some("Schiene 2"));
+}

@@ -616,9 +616,11 @@ fn write_schienen(a: &Anlage, blk: &mut Block, pots: &std::collections::HashMap<
                 set_kid_text(&mut b, "TIT", name);
             }
             let set = a.schienen.get(name).cloned().unwrap_or_default();
-            if m[i].is_none() {
-                // Name einer neuen Schiene wie im Original "Schiene <Kürzel>"
-                put_str(&mut b.data, 0, 20, &format!("Schiene {name}"));
+            // freier Name (SMS Byte 0–20); neue Schiene ohne Namen wie im Original „Schiene <Kürzel>“. Nur bei
+            // Änderung schreiben (Rundreise unveränderter Dateien byteidentisch)
+            let frei = if set.name.trim().is_empty() { format!("Schiene {name}") } else { set.name.clone() };
+            if m[i].is_none() || crate::symbols::cstr(&b.data[..b.data.len().min(20)]) != frei {
+                put_str(&mut b.data, 0, 20, &frei);
             }
             // Potential: nur schreiben, wenn es sich gegenüber der Kennung im Block geändert hat
             let pid = pots.get(set.potential.as_str()).copied().unwrap_or(0);
@@ -692,8 +694,8 @@ pub fn nicht_gespeichert(project: &Project) -> Vec<String> {
     }
     for a in &project.anlagen {
         for (name, s) in &a.schienen {
-            // Der Nachbau führt die Schiene unter ihrem Kürzel (SMS › TIT); ein abweichendes zweites Kürzel hat im
-            // Original kein Gegenstück (dort ist SMS Byte 0–20 der freie Name, das Kürzel ist der TIT)
+            // Der Nachbau führt die Schiene unter ihrem Kürzel (SMS › TIT); ein abweichendes zweites Kürzel (alte
+            // .epj) hat im Original kein Gegenstück (dort ist SMS Byte 0–20 der freie Name, das Kürzel ist der TIT)
             if !s.kurz.trim().is_empty() && s.kurz != *name {
                 v.push(format!("{}: Kürzel \u{201e}{}\u{201c} der Sammelschiene {name}", a.name, s.kurz));
             }

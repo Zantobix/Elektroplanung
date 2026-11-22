@@ -1227,13 +1227,14 @@ impl App {
         self.checkpoint();
         let Some(anl) = self.project.anlagen.get_mut(a) else { return };
         let mut n = anl.sammelschienen.len() + 1;
-        while anl.sammelschienen.iter().any(|x| *x == format!("Schiene {n}")) {
+        while anl.sammelschienen.iter().any(|x| *x == format!("L{n}")) {
             n += 1;
         }
-        let name = format!("Schiene {n}");
+        // Vorgaben des Original-Dialogs: Name „Schiene n“, Kürzel „L<n>“ (Schlüssel, TIT), keine Zuordnung,
+        // Querverweise an, Pfeile aus
+        let name = format!("L{n}");
         anl.sammelschienen.push(name.clone());
-        // Vorgaben des Original-Dialogs: Kürzel „L<n>“, keine Zuordnung, Querverweise an, Pfeile aus
-        anl.schienen.insert(name.clone(), SchieneSet { kurz: format!("L{n}"), pfeile: false, ..Default::default() });
+        anl.schienen.insert(name.clone(), SchieneSet { name: format!("Schiene {n}"), pfeile: false, ..Default::default() });
         self.tree_open.insert(format!("prj/a{a}/ss"));
         self.open_schiene_dialog(a, &name);
     }
