@@ -76,7 +76,66 @@ pub fn verschieben(orig: &[P], idx: usize, d: P) -> Vec<P> {
     crate::leitung_fuehrung::bereinigen(out)
 }
 
+/// Fluchten, an die ein waagerechtes (`waagerecht`) bzw. senkrechtes Teilstück beim Ziehen gefangen wird: Höhen bzw.
+/// x-Lagen gleichgerichteter Teilstücke anderer Leitungen, Sammelschienen und Anschlüsse (ohne Leitung `ohne`).
+pub fn fluchten(sheet: &crate::model::Sheet, lib: &[crate::symbols::SymDef], ohne: u64, waagerecht: bool) -> Vec<f32> {
+    let mut v = vec![];
+    for o in &sheet.objects {
+        match &o.kind {
+            Kind::Wire { pts, .. } if o.id != ohne => {
+                for w in pts.windows(2) {
+                    if waagerecht && (w[0].y - w[1].y).abs() < EPS {
+                        v.push(w[0].y);
+                    } else if !waagerecht && (w[0].x - w[1].x).abs() < EPS {
+                        v.push(w[0].x);
+                    }
+                }
+            }
+            Kind::Busbar { a, .. } if waagerecht => v.push(a.y),
+            Kind::Symbol { .. } | Kind::Terminal { .. } => {
+                v.extend(crate::canvas::obj_pins(o, lib).iter().map(|p| if waagerecht { p.y } else { p.x }));
+            }
+            _ => {}
+        }
+    }
+    v
+}
+
 impl App {
+    /// Versatz des Teilstücks `idx` von `orig` beim Ziehen um `roh` (Maus seit dem Drücken, ungefangen): die neue Lage
+    /// kommt auf das Raster **absolut** – auch wenn das Teilstück vorher daneben lag – oder auf die Flucht einer
+    /// anderen Leitung, Schiene bzw. eines Anschlusses, wenn diese näher liegt (höchstens ein halbes Raster).
+    /// Nutzerwunsch Runde 12: Leitungen neben dem Raster ließen sich nicht auf eine andere legen und vereinfachen.
+    pub fn teilstueck_versatz(&self, id: u64, orig: &[P], idx: usize, roh: P) -> P {
+        let (a, b) = (orig[idx], orig[idx + 1]);
+        let d = quer(a, b, roh);
+        let waagerecht = (a.y - b.y).abs() < EPS;
+        let senkrecht = (a.x - b.x).abs() < EPS;
+        if !(waagerecht || senkrecht) {
+            return quer(a, b, self.snap(a.add(roh)).sub(a));
+        }
+        let alt = if waagerecht { a.y } else { a.x };
+        let soll = alt + if waagerecht { d.y } else { d.x };
+        let raster = if waagerecht { self.snap(P::new(a.x, soll)).y } else { self.snap(P::new(soll, a.y)).x };
+        let fang = self.raster() / 2.0;
+        let flucht = self
+            .sheet()
+            .map(|s| fluchten(s, &self.lib, id, waagerecht))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|f| (f - soll).abs() <= fang && (f - alt).abs() > EPS)
+            .min_by(|x, y| (x - soll).abs().total_cmp(&(y - soll).abs()));
+        let neu = match flucht {
+            Some(f) if (f - soll).abs() <= (raster - soll).abs() => f,
+            _ => raster,
+        };
+        if waagerecht {
+            P::new(0.0, neu - alt)
+        } else {
+            P::new(neu - alt, 0.0)
+        }
+    }
+
     /// Beim Drücken auf eine einzeln markierte Leitung: Teilstück-Ziehen beginnen. Liefert, ob es begonnen hat.
     pub fn teilstueck_greifen(&mut self, id: u64, m: P, tol: f32) -> bool {
         if self.selection != [id] {
@@ -103,7 +162,7 @@ impl App {
     /// Maus bewegt während des Teilstück-Ziehens.
     pub fn teilstueck_ziehen(&mut self, m: P) {
         let Drag::Teilstueck { id, idx, orig, start, moved, knick } = self.drag.clone() else { return };
-        let d = if knick { self.snap(m).sub(start) } else { quer(orig[idx], orig[idx + 1], self.snap(m).sub(start)) };
+        let d = if knick { self.snap(m).sub(start) } else { self.teilstueck_versatz(id, &orig, idx, m.sub(start)) };
         if !moved && d.x.abs() < 1e-4 && d.y.abs() < 1e-4 {
             return;
         }
