@@ -1527,6 +1527,10 @@ impl App {
                     if !ctrl && self.leitung_an_schiene_beginnen(m, tol) {
                         return;
                     }
+                    // Punkt einer Linie, eines Rechtecks, einer Kurve … ziehen wie im Original (zeichen_punkt.rs)
+                    if !ctrl && self.zeichenpunkt_greifen(m, tol) {
+                        return;
+                    }
                     if let Some(id) = self.hit_top(m, tol) {
                         if ctrl {
                             if let Some(i) = self.selection.iter().position(|s| *s == id) {
@@ -1588,6 +1592,9 @@ impl App {
         }
         if matches!(self.drag, Drag::Teilstueck { .. }) {
             self.teilstueck_ziehen(m);
+        }
+        if matches!(self.drag, Drag::Zeichenpunkt { .. }) {
+            self.zeichenpunkt_ziehen(m, xf.z);
         }
 
         if let Drag::Move { start, applied, moved } = self.drag.clone() {
@@ -2112,7 +2119,7 @@ impl App {
         // solange sie gedrückt sind; Umschalt schaltet den Rasterfang ab. Ein kurzer Druck ohne Setzen/Ziehen
         // schaltet beim Loslassen wie bisher um. Gilt nur für Belegungen ohne Strg/Umschalt/Alt.
         let busy = self.placing.is_some()
-            || matches!(self.drag, Drag::Move { .. } | Drag::Create { .. } | Drag::Wire { .. } | Drag::Kurve(_) | Drag::KurvenGriff { .. } | Drag::Resize { .. } | Drag::Scale { .. } | Drag::Beschriftung { .. });
+            || matches!(self.drag, Drag::Move { .. } | Drag::Create { .. } | Drag::Wire { .. } | Drag::Kurve(_) | Drag::KurvenGriff { .. } | Drag::Resize { .. } | Drag::Zeichenpunkt { .. } | Drag::Scale { .. } | Drag::Beschriftung { .. });
         let hold_keys: [Option<Key>; 2] = ["pfadfang", "autoverb"].map(|id| {
             crate::kuerzel::parse(&crate::kuerzel::belegung(&eigene, id)).filter(|(m, _)| !m.ctrl && !m.shift && !m.alt && !m.command).map(|(_, k)| k)
         });

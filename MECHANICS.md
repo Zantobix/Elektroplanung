@@ -347,7 +347,10 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Leitung (Zustand +0x78d = 10): Loslassen auf einem Anschluss beginnt sie, jeder Klick auf freie Fläche setzt einen
   Eckpunkt, rechtwinklig zum letzten Punkt (|dx| < |dy| → senkrecht, sonst waagerecht; < 6 px wird übergangen;
   gerade Fortsetzung verschiebt den letzten Punkt). Klick auf einen Anschluss beendet, Rechtsklick bricht ab.
-  Nachbau zusätzlich: Ziehen vom Anschluss zum Ziel, die erste deutliche Zugrichtung bestimmt das erste Teilstück.
+  Nachbau zusätzlich: Ziehen vom Anschluss zum Ziel, die erste Zugrichtung bestimmt das erste Teilstück; nahe am
+  Anschluss wechselt sie nur bei deutlich anderer Bewegung (Hysterese), Form stetig (src/leitung_zug.rs).
+- Zeichenobjekte (MouseMove 0x415f30): Punkt unter der Maus (Index F+0x8e0 aus fcn.00455274) → Zeiger 5
+  (Ressource 2, vier Pfeilspitzen), Ziehen verschiebt nur den Punkt; Körper → Zeiger 100 (src/zeichen_punkt.rs).
 
 ## Rechte Maustaste, Klemmstelle in Leitung, Tasten, „Heute“ (src/rechts_ziehen.rs, klemme_leitung.rs, blatt_tasten.rs)
 

@@ -84,6 +84,7 @@ pub mod umbruch;
 pub mod variantenrad;
 pub mod verweise;
 pub mod view;
+pub mod zeichen_punkt;
 pub mod zeiger;
 pub mod vorlage;
 pub mod vorschau;

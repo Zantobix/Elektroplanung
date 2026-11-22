@@ -10,6 +10,11 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 ## [Unveröffentlicht]
 
 Behoben (Maustest 22.11.2026):
+- Leitung aufziehen: die Vorschau folgt von Anfang an stetig der Maus; die Knickrichtung wechselt nur nahe am
+  Anschluss bei deutlich anderer Bewegung (Hysterese), vom Anschluss weg geht es mindestens einen Stich nach außen,
+  kein Sprung mehr auf die Z-Führung beim Überqueren der Anschlusshöhe; Loslassen ergibt die gezeigte Vorschau
+- Zeiger wie im Original: über einem Punkt einer Linie, eines Rechtecks, einer Kurve, eines Kreises … Pfeil mit
+  vier Pfeilspitzen, Ziehen dort verschiebt nur diesen Punkt (auch unmarkiert); über Klemmstellen das Leitungszeichen
 - Leitung ziehen: führt aus dem Anschluss in dessen Richtung heraus und tritt am Ziel von außen ein (Z-Führung
   über die Mitte wie im Original), statt durch das eigene Symbol zu laufen und dabei andere Anschlüsse zu treffen
 - Teilstück einer markierten Leitung ziehen verschiebt nur dieses Teilstück quer; die Enden bleiben an ihren

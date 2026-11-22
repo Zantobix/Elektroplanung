@@ -3,7 +3,9 @@
 //! Das Original lädt dafür eigene Zeiger (Pfeil + Zeichen) und wählt sie am Ende seiner MouseMove-Routine aus der
 //! Vormarkierung, dem Werkzeug und dem Ziehzustand. Übernommen sind nur Form und Bedeutung; die Zusätze sind eigene
 //! Vektorzeichnungen rechts unter der Pfeilspitze (egui kennt nur die Systemzeiger). Unterschiede des Originals:
-//! - Auswahlwerkzeug über einem Objekt (Symbol, Leitung, Text, Linie …): Pfeil mit Pfeilkreuz (verschieben)
+//! - Auswahlwerkzeug über einem Objekt (Symbol, Leitung, Text, Linie …): Pfeil mit Pfeilkreuz (verschieben);
+//!   über einem Punkt eines Zeichenobjekts (Ende einer Linie, Ecke eines Rechtecks, Kurvenpunkt): Pfeil mit vier
+//!   Pfeilspitzen (Original Zeiger 5 = Ressource 2, 0x415f30 Treffer 6 mit Punktindex; zeichen_punkt.rs)
 //! - über Titel/Wert eines Symbols und den Texten von Verbindungen (Querverweis einer Sammelschiene): Pfeil mit „A“
 //! - über einem Anschluss, einer Sammelschiene oder einem Verweis (Leitung beginnt hier): Pfeil mit Leitungszeichen;
 //!   mit Strg zählt ein Anschluss nicht (Pfeilkreuz, das Symbol wird verschoben)
@@ -11,7 +13,8 @@
 //!   Maus nach links oder oben gezogen wird – nach rechts unten
 //! - über einem Eckpunkt (Größe ändern): Pfeil mit vier einzelnen Pfeilspitzen; über dem Griff des Rahmens zur
 //!   Größenänderung: Pfeil mit Doppelpfeil
-//! - Klemmstellen und Kontaktspiegel: einfacher Pfeil; fixiertes Objekt bei aktiver Fixierung: Pfeil mit Sperrkreis
+//! - Klemmstellen wie Sammelschienen und Verweise (Sonderobjekt Art 0–2, 0x415e9e): Leitungszeichen;
+//!   Kontaktspiegel: einfacher Pfeil; fixiertes Objekt bei aktiver Fixierung: Pfeil mit Sperrkreis
 //! - rechte Maustaste auf einem Objekt gedrückt (Kopie ziehen, rechts_ziehen.rs): Pfeil mit Plus
 //! - Werkzeug Klemmstelle: Pfeil mit Klemme (über einer Leitung: Klemme in der Leitung); Zeichenwerkzeuge: Fadenkreuz
 //! - Auswahl eines Symbols (Eigentümer setzen, Referenz): Hand über gültigem Ziel, sonst Sperrzeiger; Lupe: Lupe
@@ -197,7 +200,7 @@ impl App {
             Drag::Move { .. } | Drag::Teilstueck { .. } => Ziehen::Verschieben,
             Drag::Beschriftung { .. } => Ziehen::Beschriftung,
             Drag::Scale { handle, .. } => Ziehen::Griff(*handle),
-            Drag::Resize { .. } => Ziehen::Ecke,
+            Drag::Resize { .. } | Drag::Zeichenpunkt { .. } => Ziehen::Ecke,
             Drag::Wire { f } => { let start = f.start(); Ziehen::Leitung { dx: (m.x - start.x) * z, dy: (m.y - start.y) * z } },
             Drag::Rubber { .. } | Drag::Create { .. } | Drag::Kurve(_) => Ziehen::Aufziehen,
             Drag::KurvenGriff { .. } => Ziehen::Ecke,
