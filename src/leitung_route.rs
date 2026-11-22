@@ -213,6 +213,10 @@ impl crate::app::App {
         let Some(sheet) = self.sheet() else { return weg };
         let da = anschluss_richtung(sheet, &self.lib, f.start());
         let db = anschluss_richtung(sheet, &self.lib, ende);
+        // Ziehen vom Anschluss: stetige Führung mit Hysterese (leitung_zug.rs)
+        if !f.klickbetrieb && f.schiene.is_none() {
+            return f.zugweg(ende, da, db, self.raster() / 2.0);
+        }
         // im Klickbetrieb bleiben die gesetzten Eckpunkte (Anfang + Ecken = pts.len() - 1 Teilstücke davor)
         let frei_ab = if f.klickbetrieb { f.pts.len() - 1 } else { 0 };
         // Stich ein halbes Raster (Original unter Wine: deutlich kürzer als ein Raster; genaue Länge offen)

@@ -8,9 +8,9 @@
 //! fort, wird dessen Endpunkt verschoben statt ein neuer Punkt angehängt. Ein Klick auf einen Anschluss beendet
 //! die Leitung, Rechtsklick bricht ab.
 //!
-//! Zusätzlich (Nachbau): Ziehen von einem Anschluss zum Ziel legt die Leitung in einem Zug; die erste deutliche
-//! Mausbewegung (waagerecht/senkrecht) bestimmt das erste Teilstück. Kehrt die Maus zum Anfang zurück, wird die
-//! Richtung neu bestimmt.
+//! Zusätzlich (Nachbau): Ziehen von einem Anschluss zum Ziel legt die Leitung in einem Zug; die erste Mausbewegung
+//! (waagerecht/senkrecht) bestimmt das erste Teilstück. Nahe am Anfang kann eine deutlich andere Bewegung die
+//! Richtung wechseln (Hysterese, stetige Vorschau: `leitung_zug.rs`).
 
 use crate::model::P;
 
@@ -112,18 +112,13 @@ impl Fuehrung {
         *self.pts.last().unwrap()
     }
 
-    /// Beim Ziehen die Maus `m` verfolgen: die erste Bewegung über `schwelle` (mm) hinaus legt die Richtung des
-    /// ersten Teilstücks fest; liegt die Maus wieder innerhalb der Schwelle um den Anfang, wird neu entschieden.
+    /// Beim Ziehen die Maus `m` verfolgen: die erste Bewegung legt die Richtung des ersten Teilstücks fest; nahe am
+    /// Anfang wechselt sie nur, wenn die andere Richtung deutlich überwiegt (Hysterese, `leitung_zug::hysterese`).
     pub fn bewegen(&mut self, m: P, schwelle: f32) {
         if self.klickbetrieb || self.schiene.is_some() {
             return;
         }
-        let d = m.sub(self.start());
-        if d.x.abs() <= schwelle && d.y.abs() <= schwelle {
-            self.richtung = None;
-        } else if self.richtung.is_none() {
-            self.richtung = Some(vorherrschend(d));
-        }
+        self.richtung = crate::leitung_zug::hysterese(self.richtung, m.sub(self.start()), schwelle);
     }
 
     /// Leitungsverlauf bis `ende` (Vorschau und Ergebnis): beim Ziehen ein Knick nach der Zugrichtung, im
@@ -199,7 +194,7 @@ mod tests {
     #[test]
     fn kleine_bewegung_entscheidet_nicht() {
         let mut f = Fuehrung::neu(p(0.0, 0.0));
-        f.bewegen(p(0.5, 0.8), 1.0);
+        f.bewegen(p(0.2, 0.3), 1.0);
         assert_eq!(f.richtung, None);
         // ohne Richtung: vorherrschende Richtung
         assert_eq!(f.weg(p(10.0, 4.0)), vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 4.0)]);
@@ -211,9 +206,11 @@ mod tests {
         let mut f = Fuehrung::neu(p(0.0, 0.0));
         f.bewegen(p(5.0, 0.0), 1.0);
         assert_eq!(f.richtung, Some(Richtung::Waagerecht));
-        // zurück zum Anschluss und dann nach oben
+        // zurück zum Anschluss: die Richtung bleibt (Hysterese), deutlich nach oben wechselt sie
         f.bewegen(p(0.3, 0.2), 1.0);
-        assert_eq!(f.richtung, None);
+        assert_eq!(f.richtung, Some(Richtung::Waagerecht));
+        f.bewegen(p(0.0, -2.5), 1.0);
+        assert_eq!(f.richtung, Some(Richtung::Senkrecht));
         f.bewegen(p(0.0, -4.0), 1.0);
         f.bewegen(p(8.0, -10.0), 1.0);
         assert_eq!(f.richtung, Some(Richtung::Senkrecht));

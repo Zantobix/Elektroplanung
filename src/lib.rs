@@ -43,6 +43,7 @@ pub mod kurve;
 pub mod leitung_fuehrung;
 pub mod leitung_route;
 pub mod leitung_stift;
+pub mod leitung_zug;
 pub mod listen;
 pub mod mcp;
 pub mod meldungen;
