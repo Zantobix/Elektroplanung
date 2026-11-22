@@ -9,6 +9,15 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Leitungsmechanik nach KiCad/QElectroTech:
+- Verbindungspunkte nach Richtungen: Ein Punkt erscheint, wo ein Leitungsende liegt und mindestens drei
+  verschiedene Leitungsrichtungen zusammentreffen (T-Abzweig, auch auf einem Knick); stumpf oder in gerader Flucht
+  aneinanderstoßende Enden und übereinanderlaufende Stücke bekommen keinen Punkt mehr.
+- Teilstück ziehen: Stücke der Länge 0 und zurücklaufende Stücke verschmelzen, auch beim Zurückziehen in die
+  Ausgangslage; es bleiben keine doppelten Punkte.
+- Neu im Kontextmenü einer Leitung: „Netz markieren“ markiert alle Leitungen, die über Enden, Abzweige,
+  Klemmstellen, Verweise und Sammelschienen elektrisch zusammenhängen (bewusste Erweiterung).
+
 Fehler melden und Wünsche äußern:
 - Neu im Menü Hilfe: „Fehler melden…“ und „Wunsch äußern…“. Ein kleines Fenster mit einem Textfeld öffnet ein
   fertig ausgefülltes Issue auf GitHub (Version und Betriebssystem auf Wunsch angehängt) oder kopiert den Text in

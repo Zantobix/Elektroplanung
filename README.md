@@ -207,6 +207,8 @@ nicht. Gemessen werden stattdessen:
     auf der Schiene entlangläuft; markierte Leitungen reißen beim Verschieben nicht von der Schiene ab
     (`src/schiene_halten.rs`).
   - Vormarkierung (gestricheltes Rechteck beim Überfahren) nur bei Objekten, nicht bei Leitungen.
+  - Kontextmenü einer Leitung › „Netz markieren“: markiert alle elektrisch verbundenen Leitungen des Blattes
+    (Netz-Index zur Laufzeit nach QElectroTech, `src/netz.rs`; nicht in der Datei).
   - Hilfe › „Fehler melden…“ / „Wunsch äußern…“: kleines Fenster, öffnet ein ausgefülltes GitHub-Issue im Browser
     (Systemangaben sichtbar und abwählbar, nie Projektinhalt) oder kopiert den Text (`src/fehlermeldung.rs`).
 - Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",

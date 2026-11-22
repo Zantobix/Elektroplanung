@@ -16,6 +16,7 @@
 //! - Kontaktspiegel hinzufügen: Symbol, das noch keinen Kontaktspiegel hat
 //! - Ausrichtung: Symboltext (Titel/Wert) sowie Text und Textbox · Fixieren: Zeichenobjekte (auch Text, Tabelle, Bild)
 //! - Eigenschaften: immer (auf freier Fläche im Symboleditor gesperrt) · Pfadbezeichnung: freie Fläche eines Stromlaufplans
+//! - Netz markieren (bewusste Erweiterung, nicht im Original, `netz.rs`): Leitung, am Ende nach einem Trenner
 
 use crate::app::App;
 use crate::model::*;
@@ -131,6 +132,8 @@ pub enum Eintrag {
     Eigenschaften,
     Fixieren,
     Pfadbezeichnung,
+    /// Nachbau: alle Leitungen des Netzes markieren (`netz.rs`)
+    NetzMarkieren,
 }
 
 /// Sichtbare Einträge (überzählige Trenner entfernt) wie im Original.
@@ -156,11 +159,13 @@ pub fn eintraege(l: &Lage) -> Vec<Eintrag> {
             Ausrichtung => matches!(z, MenueZiel::Symboltext { .. } | MenueZiel::Text(_)),
             Fixieren => matches!(z, MenueZiel::Text(_) | MenueZiel::Grafik(_) | MenueZiel::Anschluss(_)),
             Pfadbezeichnung => leer && l.stromlaufplan && !l.symboleditor,
+            NetzMarkieren => matches!(z, MenueZiel::Leitung(_)),
         }
     };
     let formular = [
         Loeschen, Trenner, ObjektEinfuegen, VerweisEinfuegen, Sammelschiene, Bildindex, Optionen, Parameter, Alternativtext, Eigentuemer, ZielSetzen,
         BezeichnerSetzen, Kontaktspiegel, Bauteilliste, Trenner, SymbolBearbeiten, Trenner, Ausrichtung, Eigenschaften, Fixieren, Pfadbezeichnung,
+        Trenner, NetzMarkieren,
     ];
     let mut v: Vec<Eintrag> = vec![];
     for e in formular.into_iter().filter(|e| sichtbar(*e)) {
@@ -369,7 +374,7 @@ mod tests {
 
     #[test]
     fn verbindungen_und_grafik() {
-        assert_eq!(eintraege(&lage(MenueZiel::Leitung(1))), vec![Loeschen, Trenner, Eigenschaften]);
+        assert_eq!(eintraege(&lage(MenueZiel::Leitung(1))), vec![Loeschen, Trenner, Eigenschaften, Trenner, NetzMarkieren]);
         assert_eq!(eintraege(&lage(MenueZiel::Sammelschiene(1))), vec![Loeschen, Trenner, Sammelschiene, Trenner, Eigenschaften]);
         assert_eq!(eintraege(&lage(MenueZiel::Verweis(1))), vec![Loeschen, Trenner, ZielSetzen, Trenner, Eigenschaften]);
         assert_eq!(eintraege(&lage(MenueZiel::Klemme(1))), vec![Loeschen, Trenner, Bauteilliste, Trenner, Eigenschaften]);
@@ -380,7 +385,7 @@ mod tests {
         assert_eq!(eintraege(&l)[0], Loeschen);
         let mut l = lage(MenueZiel::Leitung(1));
         l.markiert = false;
-        assert_eq!(eintraege(&l), vec![Eigenschaften]);
+        assert_eq!(eintraege(&l), vec![Eigenschaften, Trenner, NetzMarkieren]);
         assert_eq!(eintraege(&lage(MenueZiel::Grafik(1))), vec![Loeschen, Trenner, Eigenschaften, Fixieren]);
         let mut l = lage(MenueZiel::Anschluss(1));
         l.symboleditor = true;

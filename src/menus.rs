@@ -124,6 +124,14 @@ impl App {
                     });
                 }
                 Eintrag::Bauteilliste => self.menu_bauteilliste(ui, ziel),
+                Eintrag::NetzMarkieren => {
+                    if ui.button("Netz markieren").clicked() {
+                        if let MenueZiel::Leitung(id) = ziel {
+                            self.netz_markieren(id);
+                        }
+                        ui.close();
+                    }
+                }
                 Eintrag::Pfadbezeichnung => {
                     if ui.button("Pfadbezeichnung").clicked() {
                         self.open_columns_dialog();

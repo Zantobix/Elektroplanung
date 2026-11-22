@@ -57,6 +57,7 @@ pub mod mehrfach;
 pub mod menus;
 pub mod leitung_profil;
 pub mod mitziehen;
+pub mod netz;
 pub mod model;
 pub mod optionen;
 pub mod parameter;

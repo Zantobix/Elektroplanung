@@ -4,6 +4,13 @@
 //! Das Original (Gegenprobe unter Wine) verschiebt nur das gegriffene Teilstück quer zu seiner Richtung; die
 //! Nachbarteilstücke werden länger bzw. kürzer, die Enden bleiben an ihren Anschlüssen. Ist das gegriffene
 //! Teilstück das erste oder letzte, entsteht am festen Ende ein neues Querstück.
+//!
+//! Regeln neu geschrieben nach KiCad Eeschema `SCH_MOVE_TOOL::orthoLineDrag` (GPL; kein Code übernommen): Ein
+//! Nachbarstück, das quer zum gegriffenen liegt, wird gestreckt bzw. gestaucht; liegt es nicht so (schräg, in
+//! Flucht) oder ist dort das feste Leitungsende, wird ein Knick (Querstück über den alten Eckpunkt) eingefügt.
+//! Danach verschmelzen Stücke der Länge 0 und Stücke, die auf dem vorigen zurücklaufen
+//! (`leitung_fuehrung::bereinigen`), sodass weder doppelte Punkte noch Rückläufer bleiben. Gerechnet wird immer
+//! von der Ausgangslage aus; zurück in die Ausgangslage ergibt also wieder die (bereinigte) Ausgangsleitung.
 
 use crate::app::{App, Drag};
 use crate::model::{Kind, P};
@@ -143,5 +150,63 @@ mod tests {
         assert_eq!(teilstueck_bei(&pts, p(0.2, 0.0), 0.5), None);
         assert_eq!(teilstueck_bei(&pts, p(5.0, 0.3), 0.5), Some(0));
         assert_eq!(teilstueck_bei(&pts, p(10.2, 6.0), 0.5), Some(1));
+    }
+
+    /// Keine doppelten Punkte, keine Nullstücke, keine zurücklaufenden Stücke, alles achsgerade.
+    fn sauber(v: &[P]) {
+        for w in v.windows(2) {
+            assert!(w[0].dist(w[1]) > 0.01, "doppelter Punkt {v:?}");
+            assert!(achsengerade(w[0], w[1]), "schräg {v:?}");
+        }
+        for w in v.windows(3) {
+            let (d1, d2) = (w[1].sub(w[0]), w[2].sub(w[1]));
+            let parallel = (d1.x * d2.y - d1.y * d2.x).abs() < 1e-3;
+            assert!(!parallel, "Stücke in Flucht bzw. zurücklaufend {v:?}");
+        }
+    }
+
+    #[test]
+    fn nullstuecke_verschmelzen() {
+        // Z-Leitung: Mittelstück auf die Höhe des Anfangs gezogen → erstes Stück hat Länge 0, gerade Leitung
+        let alt = vec![p(0.0, 0.0), p(0.0, 10.0), p(20.0, 10.0), p(20.0, 20.0)];
+        let neu = verschieben(&alt, 1, p(0.0, -10.0));
+        assert_eq!(neu, vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 20.0)]);
+        sauber(&neu);
+        // U-Leitung ganz flach gezogen: eine gerade Leitung von Ende zu Ende
+        let alt = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(20.0, 10.0), p(20.0, 0.0), p(30.0, 0.0)];
+        let neu = verschieben(&alt, 2, p(0.0, -10.0));
+        assert_eq!(neu, vec![p(0.0, 0.0), p(30.0, 0.0)]);
+        // erstes Stück auf die Höhe des Folgestücks: Querstück und Nachbar verschmelzen
+        let alt = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0), p(30.0, 10.0)];
+        let neu = verschieben(&alt, 0, p(0.0, 10.0));
+        assert_eq!(neu, vec![p(0.0, 0.0), p(0.0, 10.0), p(30.0, 10.0)]);
+        sauber(&neu);
+    }
+
+    #[test]
+    fn hin_und_zurueck_ohne_rueckstaende() {
+        let alt = vec![p(0.0, 0.0), p(0.0, 10.0), p(20.0, 10.0), p(20.0, 30.0), p(40.0, 30.0)];
+        for idx in 0..alt.len() - 1 {
+            for d in [-30.0f32, -20.0, -10.0, -5.0, 5.0, 10.0, 20.0, 30.0] {
+                let dd = quer(alt[idx], alt[idx + 1], p(d, d));
+                let neu = verschieben(&alt, idx, dd);
+                sauber(&neu);
+                // Enden bleiben angeschlossen
+                assert_eq!((neu[0], *neu.last().unwrap()), (alt[0], alt[4]), "idx {idx} d {d}");
+            }
+            // zurück in die Ausgangslage: wieder die Ausgangsleitung
+            assert_eq!(verschieben(&alt, idx, p(0.0, 0.0)), alt);
+        }
+    }
+
+    #[test]
+    fn bereinigen_laeuft_zurueck_bis_zum_vorgaenger() {
+        use crate::leitung_fuehrung::bereinigen;
+        // Rückläufer bis genau auf den vorigen Eckpunkt: kein doppelter Punkt
+        assert_eq!(bereinigen(vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(10.0, 0.0), p(20.0, 0.0)]), vec![p(0.0, 0.0), p(20.0, 0.0)]);
+        // über den Anfang hinaus zurück: Anfang bleibt, Leitung läuft in die Gegenrichtung
+        assert_eq!(bereinigen(vec![p(0.0, 0.0), p(10.0, 0.0), p(-5.0, 0.0)]), vec![p(0.0, 0.0), p(-5.0, 0.0)]);
+        // doppelte Endpunkte
+        assert_eq!(bereinigen(vec![p(0.0, 0.0), p(0.0, 0.0), p(10.0, 0.0), p(10.0, 0.0)]), vec![p(0.0, 0.0), p(10.0, 0.0)]);
     }
 }
