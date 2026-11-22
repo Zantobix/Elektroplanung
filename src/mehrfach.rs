@@ -23,6 +23,8 @@ pub struct MultiProps {
     pub italic: Option<bool>,
     pub underline: Option<bool>,
     pub frame: Option<bool>,
+    /// Objekte verschiedener Art markiert (Überschrift „Unterschiedliche Objekte“ wie 0x4427d4)
+    pub gemischt: bool,
 }
 
 /// Gemeinsamer Wert aller Elemente oder `None`.
@@ -68,6 +70,7 @@ impl MultiProps {
             italic: st(|s| s.italic),
             underline: st(|s| s.underline),
             frame: st(|s| s.frame),
+            gemischt: objs.windows(2).any(|w| std::mem::discriminant(&w[0].kind) != std::mem::discriminant(&w[1].kind)),
         }
     }
 
@@ -143,11 +146,17 @@ impl App {
     pub fn multi_props_ui(&mut self, ctx: &egui::Context) {
         let Some(mut d) = self.multi_props.take() else { return };
         let pens: Vec<String> = self.project.stifte.iter().map(|s| s.name.clone()).collect();
-        let h = 112.0 + if d.texts { 30.0 } else { 0.0 } + if d.styles { 120.0 } else { 0.0 };
+        let h = 132.0 + if d.gemischt { 20.0 } else { 0.0 } + if d.texts { 30.0 } else { 0.0 } + if d.styles { 120.0 } else { 0.0 };
         let mut result: Option<bool> = None;
         let closed = tool_window(ctx, "multi_props", "Eigenschaften", [300.0, h], egui::Order::Middle, |ui| {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 5.0);
+            // Überschriften der Eigenschaftentabelle des Originals: rot bei verschiedenen Objektarten, blau darüber
+            // die gemeinsam einstellbaren Werte
+            if d.gemischt {
+                ui.label(RichText::new(crate::meldungen::MP_UNTERSCHIEDLICH).font(bold(13.0)).color(Color32::RED));
+            }
             ui.label(RichText::new(format!("{} Objekte markiert", d.ids.len())).font(bold(13.0)));
+            ui.label(RichText::new(crate::meldungen::MP_GEMEINSAM).font(bold(13.0)).color(Color32::BLUE));
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(Vec2::new(90.0, 20.0), egui::Sense::hover());
                 ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, "Stift", bold(13.0), Color32::BLACK);
@@ -240,6 +249,9 @@ mod tests {
         let objs = vec![text(1, 3.5, false, 0), line];
         let d = MultiProps::from_objs(&objs);
         assert!(!d.texts && !d.styles);
+        // Text und Linie: „Unterschiedliche Objekte“; nur Texte nicht
+        assert!(d.gemischt);
+        assert!(!MultiProps::from_objs(&[text(1, 3.5, false, 0), text(2, 2.5, false, 0)]).gemischt);
         assert_eq!((d.pen, d.fixed), (Some(0), None));
         let mut o2 = objs.clone();
         let d = MultiProps { fixed: Some(true), size: "9".into(), ..d };

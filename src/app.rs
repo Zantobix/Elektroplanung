@@ -1261,17 +1261,35 @@ impl App {
         let res = if is_epr {
             // Vor dem ersten Überschreiben einer Originaldatei eine Sicherung anlegen
             let bak = p.with_extension("epr.bak");
-            if self.opt.backup && p.exists() && !bak.exists() && std::fs::copy(&p, &bak).is_err() {
-                // wie das Original: ohne Sicherung wird nicht gespeichert
-                crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, crate::meldungen::S_KEIN_BACKUP);
-                return;
-            }
+            let backup = (self.opt.backup && p.exists() && !bak.exists()).then_some(bak.as_path());
             skipped = crate::epr_write::unsupported(&self.project);
             // Projekt-/Anlagenangaben, deren Ablage im Originalformat unbekannt ist
             skipped.extend(crate::epr_projekt::nicht_gespeichert(&self.project));
-            crate::epr_write::save(&self.project, &p)
+            // wie das Original: über eine temporäre Datei; ohne Sicherung wird nicht gespeichert (meldungen.rs)
+            match crate::epr_write::to_bytes(&self.project) {
+                Ok(d) => {
+                    if let Err(m) = crate::meldungen::speichern_ueber_temp(&p, &d, backup) {
+                        crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, &m);
+                        return;
+                    }
+                    Ok(())
+                }
+                Err(_) => {
+                    crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, crate::meldungen::S_DATENFEHLER);
+                    return;
+                }
+            }
         } else {
-            serde_json::to_string_pretty(&self.project).map_err(|e| e.to_string()).and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string()))
+            match serde_json::to_string_pretty(&self.project) {
+                Ok(s) => {
+                    if let Err(m) = crate::meldungen::speichern_ueber_temp(&p, s.as_bytes(), None) {
+                        crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, &m);
+                        return;
+                    }
+                    Ok(())
+                }
+                Err(e) => Err(e.to_string()),
+            }
         };
         match res {
             Ok(()) => {
@@ -1285,8 +1303,9 @@ impl App {
                     )));
                 }
             }
+            // nur noch Fehler beim Aufbereiten der Daten (Schreibfehler meldet speichern_ueber_temp)
             Err(_) => {
-                crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, crate::meldungen::speicherfehler(&p));
+                crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_FEHLER, crate::meldungen::S_ALLGEMEIN);
             }
         }
     }
@@ -1307,7 +1326,8 @@ impl App {
             return;
         }
         // Statuszeile des Originals während des Lesens (bleibt bei einem Fehler stehen)
-        self.info = "Projekt wird gelesen".into();
+        // (0x426310: „Projekt wird geöffnet“ beim Öffnen, „Projekt wird gelesen“ beim Hinzufügen)
+        self.info = if add { crate::meldungen::L_LESEN } else { crate::meldungen::L_OEFFNEN }.into();
         let res = if is_epr {
             crate::epr::import(&p)
         } else {
@@ -1340,11 +1360,14 @@ impl App {
                     self.right_tab = RightTab::Projekt;
                     // Fehler in den Daten (TErrliste): Prüfsummen/Struktur wie das Original, Blöcke ohne Darstellung
                     let mut lines = bytes.as_ref().and_then(|b| b.as_ref().ok()).map(|b| crate::meldungen::ladefehler_liste(b)).unwrap_or_default();
+                    lines.extend(crate::meldungen::bildfehler(&self.project));
+                    // Fehler im Sinne des Originals: Statuszeile „Fehlerhaftes Projekt“
+                    let fehlerhaft = !lines.is_empty();
                     lines.extend(crate::epr::load_warnings(&self.project));
                     if !lines.is_empty() {
                         self.dlg3 = Some(crate::dialoge3::Dlg3::Errliste { lines });
                     }
-                    self.info = format!("Ladestatus: {} Blätter geladen", self.project.total_sheets());
+                    self.info = if fehlerhaft { crate::meldungen::L_FEHLERHAFT.to_string() } else { format!("Ladestatus: {} Blätter geladen", self.project.total_sheets()) };
                     self.tree_open.retain(|k| !k.starts_with("prj/"));
                 }
             }
