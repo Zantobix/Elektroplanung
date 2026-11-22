@@ -64,6 +64,9 @@ Behoben (Maustest 22.11.2026):
 - Textbox-Eigenschaften: Felder Oben/Links schrumpfen nicht mehr („2100“ war abgeschnitten)
 - Bewusste Abweichung: Blattreiter mit gleicher Beschriftung aus verschiedenen Anlagen (z. B. zweimal „[1] Blatt 1“)
   tragen die Anlagen-Kurzform bzw. den Anlagennamen davor; das Original unterscheidet sie nicht
+- Leitung zu einer Sammelschiene von einem Anschluss, der von der Schiene weg zeigt: der Leiter trifft die Schiene
+  senkrecht an der Mausposition, statt um das Symbol herum und auf der Schiene zurück zu laufen (Knoten lag sonst
+  auf der Kreuzung mit einer anderen Leitung)
 - Rahmenauswahl wie im Original: markiert werden Objekte, deren Anfangs-/Einfügepunkt im Rahmen liegt (bisher nur
   ganz enthaltene Objekte)
 - Blattrahmen (mit Strompfadleiste, Schriftfeld und Zeichenfläche) kommt aus den Blatträndern der Anlage statt aus

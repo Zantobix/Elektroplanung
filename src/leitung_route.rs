@@ -157,6 +157,11 @@ pub fn schiene_bei(sheet: &Sheet, m: P, tol: f32) -> Option<(f32, f32, f32)> {
     })
 }
 
+/// Zeigt ein Anschluss bei `a` mit Richtung `da` zur Schiene in Höhe `y` (oder ist seine Richtung unbekannt)?
+pub fn zeigt_zur_schiene(a: P, da: Option<P>, y: f32) -> bool {
+    da.is_none_or(|d| d.y == 0.0 || (y - a.y) * d.y > 0.0)
+}
+
 /// Leitungsende auf einer Sammelschiene (Maus-Befund M3): der Leiter trifft die Schiene senkrecht in der Flucht
 /// des letzten festen Punktes `l` (innerhalb der Schiene), statt auf den nächsten Rasterpunkt zu springen.
 pub fn ende_auf_schiene(l: P, schiene: (f32, f32, f32)) -> P {
@@ -197,8 +202,12 @@ impl crate::app::App {
         if let Some(p) = self.pin_near(m, tol, &[]) {
             return p;
         }
-        if let Some(s) = self.sheet().and_then(|s| schiene_bei(s, m, tol)) {
-            return ende_auf_schiene(f.letzter(), s);
+        if let Some((sheet, s)) = self.sheet().and_then(|sh| schiene_bei(sh, m, tol).map(|s| (sh, s))) {
+            // Maus-Befund M16: zeigt der Anfangsanschluss (noch ohne Eckpunkte) von der Schiene weg, führte die
+            // Flucht des Anschlusses um das Symbol herum und auf der Schiene zurück – dann senkrecht an der Maus
+            let da = anschluss_richtung(sheet, &self.lib, f.start());
+            let bezug = if f.pts.len() == 1 && !zeigt_zur_schiene(f.start(), da, s.0) { self.snap(m) } else { f.letzter() };
+            return ende_auf_schiene(bezug, s);
         }
         // auf einer Leitung: senkrecht auf das getroffene Teilstück (Knoten in der Flucht)
         if let Some(p) = self.sheet().and_then(|s| ende_auf_leitung(s, f.letzter(), m, tol)) {
@@ -272,6 +281,18 @@ mod tests {
         assert_eq!(&neu[..2], &[p(40.0, 100.0), p(40.0, 120.0)]);
         assert_eq!(neu.last(), Some(&p(60.0, 100.0)));
         assert!(!laeuft_hinein(&neu, UNTEN, OBEN));
+    }
+
+    #[test]
+    fn anschluss_zeigt_zur_schiene() {
+        // Schiene oben (y = 20): oberer Anschluss bei y = 50 zeigt hin, unterer zeigt weg (M16)
+        assert!(zeigt_zur_schiene(p(40.0, 50.0), OBEN, 20.0));
+        assert!(!zeigt_zur_schiene(p(40.0, 120.0), UNTEN, 20.0));
+        // Schiene unten: unterer Anschluss zeigt hin
+        assert!(zeigt_zur_schiene(p(40.0, 120.0), UNTEN, 200.0));
+        // seitlicher oder unbekannter Anschluss: Flucht wie bisher
+        assert!(zeigt_zur_schiene(p(40.0, 120.0), Some(p(1.0, 0.0)), 20.0));
+        assert!(zeigt_zur_schiene(p(40.0, 120.0), None, 20.0));
     }
 
     #[test]
