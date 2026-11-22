@@ -13,6 +13,8 @@ Raster und Bearbeiten bestehender Pläne (Maustest Runde 11: W2 erweitern, neues
 - Ohne gemerkte Rasterweite stellt das Öffnen die Weite ein, in der das Projekt gezeichnet ist (größte Weite, auf
   der mindestens die Hälfte der Leitungsecken liegt; W2: 2,5 mm statt der Vorgabe 10 mm). So lassen sich neue
   Teile in die bestehenden Reihen setzen.
+- Einfügen versetzt die Kopie um mindestens 10 mm (ein Vielfaches des Rasters); bei 2,5 mm verdeckte sie sonst
+  das Original fast ganz.
 - Strg+V fügt unter Linux wieder ein: Kopieren legt zusätzlich einen kurzen Text in die System-Zwischenablage
   (egui meldet Einfügen nur, wenn dort Text liegt).
 - Mitziehen mit Formerhalt: Die Anschlussstücke (erstes und letztes Teilstück) behalten ihre Länge, solange innere

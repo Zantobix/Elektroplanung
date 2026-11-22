@@ -928,7 +928,9 @@ impl App {
             return;
         }
         self.checkpoint();
-        let d = if self.fang() > 0.0 { self.fang() } else { 5.0 };
+        // Versatz ein Vielfaches des Rasters, mindestens 10 mm: bei feinem Raster (2,5 mm) verdeckte die Kopie
+        // sonst das Original fast ganz (Maustest Runde 11)
+        let d = if self.fang() > 0.0 { self.fang() * (10.0 / self.fang()).ceil().max(1.0) } else { 10.0 };
         let mut new_sel = vec![];
         let clip = self.clipboard.clone();
         let mut gmap: HashMap<u64, u64> = HashMap::new();
