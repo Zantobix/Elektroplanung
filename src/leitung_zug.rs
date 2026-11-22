@@ -12,6 +12,8 @@
 //!   nach außen und biegt dann zum Ziel ab (J-Form). Liegt das Ziel jenseits des Stichs, ist das der einfache Knick;
 //!   liegt es dahinter, wächst das Rückstück stetig aus dem Stich heraus. Damit ändert sich die Vorschau bei
 //!   kleinen Mausbewegungen nur wenig.
+//! - Der Weg verlässt einen Anschluss mit Richtung **immer** zuerst mit einem Stich in Anschlussrichtung, auch wenn
+//!   das erste Teilstück quer dazu gewählt ist (Maus-Befund M27); die Knickrichtung betrifft die Teilstücke danach.
 //! - Die Regeln aus `leitung_route.rs` bleiben: läuft der Weg trotzdem an einem Ende in das Symbol (Ziel genau
 //!   hinter dem Anschluss, Zielanschluss von der falschen Seite), wird er mit Stichen und Z über die Mitte gelegt.
 //!
@@ -41,7 +43,15 @@ pub fn zugweg(a: P, da: Option<P>, b: P, db: Option<P>, erst: Richtung, s: f32) 
             let c = P::new(b.x + d.x * skalar(a1.sub(b), d), b.y + d.y * skalar(a1.sub(b), d));
             bereinigen(vec![a, a1, c, b])
         }
-        _ => bereinigen(knick(a, b, Some(erst))),
+        // quer zur Anschlussrichtung (Maus-Befund M27): trotzdem erst den Stich aus dem Anschluss heraus, die
+        // Knickrichtung gilt für die Teilstücke danach (Stich-Regel des Originals)
+        Some(d) => {
+            let a1 = P::new(a.x + d.x * s, a.y + d.y * s);
+            let mut w = vec![a];
+            w.extend(knick(a1, b, Some(erst)));
+            bereinigen(w)
+        }
+        None => bereinigen(knick(a, b, Some(erst))),
     };
     if laeuft_hinein(&w, da, db) {
         return mit_stichen(a, da, b, db, s);
@@ -142,20 +152,22 @@ mod tests {
     fn vorschau_folgt_stetig_ueber_die_anschlusshoehe() {
         // unterer Anschluss (Richtung unten): Maus erst nach unten, dann nach rechts und über die Höhe des Anschlusses
         // nach oben. Das senkrechte erste Teilstück bleibt (mit Stich nach unten), bis die Maus die Höhe des
-        // Anschlusses erreicht (Länge 0); dort kippt der Knick einmal: waagerecht hinaus, dann hoch zum Ziel.
+        // Anschlusses erreicht (Länge 0); dort kippt der Knick einmal – der Stich bleibt, die Form ist dieselbe.
         let mut f = Fuehrung::neu(p(40.0, 100.0));
         let ecken = [p(40.0, 100.0), p(40.0, 112.0), p(70.0, 112.0), p(70.0, 80.0)];
         let wege = durchspielen(&mut f, &ecken, 0.25, UNTEN);
         assert_eq!(f.richtung, Some(Richtung::Waagerecht));
-        // die Vorschau bewegt sich je Bild höchstens um den Mausschritt – außer beim Kippen, wo nur der Stich entfällt
-        let spruenge: Vec<f32> = wege.windows(2).map(|w| abweichung(&w[0], &w[1])).filter(|d| *d > 0.25 + 1e-3).collect();
-        assert!(spruenge.len() <= 1 && spruenge.iter().all(|d| *d <= STICH + 0.25 + 1e-3), "Sprünge: {spruenge:?}");
-        // nie in das eigene Symbol: das erste Teilstück geht nie nach oben
-        for w in &wege {
-            assert!(w[1].y >= w[0].y, "läuft ins Symbol: {w:?}");
+        // die Vorschau bewegt sich je Bild höchstens um den Mausschritt, auch beim Kippen (Stich in beiden Formen)
+        for (i, w) in wege.windows(2).enumerate() {
+            let d = abweichung(&w[0], &w[1]);
+            assert!(d <= 0.25 + 1e-3, "Bild {i}: Vorschau springt um {d} mm: {:?} → {:?}", w[0], w[1]);
         }
-        // Endform: waagerecht aus dem Anschluss, von unten zum Ziel
-        assert_eq!(wege.last().unwrap(), &vec![p(40.0, 100.0), p(70.0, 100.0), p(70.0, 80.0)]);
+        // nie in das eigene Symbol: das erste Teilstück geht immer nach unten (Stich)
+        for w in &wege {
+            assert!(w[1].y > w[0].y, "läuft ins Symbol: {w:?}");
+        }
+        // Endform: Stich nach unten, quer, von unten zum Ziel
+        assert_eq!(wege.last().unwrap(), &vec![p(40.0, 100.0), p(40.0, 102.5), p(70.0, 102.5), p(70.0, 80.0)]);
     }
 
     #[test]
@@ -180,8 +192,8 @@ mod tests {
         let mut g = f.clone();
         g.bewegen(p(90.0, 60.0), SCHWELLE);
         assert_eq!(g.zugweg(p(90.0, 60.0), UNTEN, None, STICH), *wege.last().unwrap());
-        // erstes Teilstück waagerecht (quer zur Anschlussrichtung ist erlaubt)
-        assert_eq!(wege.last().unwrap(), &vec![p(40.0, 100.0), p(90.0, 100.0), p(90.0, 60.0)]);
+        // Knick waagerecht (erste Bewegung), aber zuerst der Stich aus dem unteren Anschluss (M27)
+        assert_eq!(wege.last().unwrap(), &vec![p(40.0, 100.0), p(40.0, 102.5), p(90.0, 102.5), p(90.0, 60.0)]);
     }
 
     #[test]
