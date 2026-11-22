@@ -12,6 +12,8 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 Behoben (kleinere offene Punkte):
 - Einfügen (Strg+V) speichert die eingefügten Objekte mit neuen Kennungen; bisher standen OBJ/VBG/VSY-Kennungen der
   Vorlage doppelt in der .epr-Datei
+- Schriftfeld „Geändert“: Blätter ohne Änderungsdatum (z. B. die Klemmpläne in W2) zeigen „---------“ wie das
+  Original statt des Projektdatums
 
 Behoben (Maustest 22.11.2026):
 - Leitung ziehen: führt aus dem Anschluss in dessen Richtung heraus und tritt am Ziel von außen ein (Z-Führung

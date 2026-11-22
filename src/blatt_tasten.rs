@@ -81,6 +81,19 @@ pub fn mit_heute<R>(aktiv: bool, f: impl FnOnce() -> R) -> R {
     r
 }
 
+/// %Geändert ohne Änderungsdatum des Blattes (BLT @120 = 0, z. B. alle Klemmpläne in W2): das Original greift nicht
+/// auf das Projektdatum zurück, sondern zeigt diese Striche (0x4876d8 Fall 8).
+pub const OHNE_DATUM: &str = "---------";
+
+/// Datum für %Geändert: BLT @120 des Blattes, sonst `OHNE_DATUM`.
+pub fn geaendert_datum(sheet: &Sheet) -> String {
+    if sheet.geaendert.trim().is_empty() {
+        OHNE_DATUM.into()
+    } else {
+        sheet.geaendert.clone()
+    }
+}
+
 /// Wert für %Geändert: „Heute“ beim Bildschirm-Zeichnen eines in dieser Sitzung geänderten Blattes, sonst das Datum.
 pub fn geaendert_text(datum: String) -> String {
     if HEUTE.with(|h| h.get()) {
@@ -200,6 +213,11 @@ mod tests {
 
     #[test]
     fn heute_nur_innerhalb() {
+        let mut s = Sheet::new(1);
+        s.geaendert.clear();
+        assert_eq!(geaendert_datum(&s), "---------");
+        s.geaendert = "03.04.2025".into();
+        assert_eq!(geaendert_datum(&s), "03.04.2025");
         assert_eq!(geaendert_text("01.02.2026".into()), "01.02.2026");
         assert_eq!(mit_heute(true, || geaendert_text("01.02.2026".into())), "Heute");
         assert_eq!(geaendert_text("01.02.2026".into()), "01.02.2026");
