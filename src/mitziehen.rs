@@ -1,8 +1,12 @@
 //! Leitungen beim Verschieben von Symbolen und Klemmstellen mitziehen.
 //!
 //! Endet eine (nicht markierte) Leitung auf einem Anschluss eines verschobenen Objekts, folgt ihr Endpunkt dem
-//! Anschluss. War das Endstück waagerecht bzw. senkrecht, bleibt es das: der Nachbarpunkt wird quer mitgeführt
-//! oder es entsteht ein Eckpunkt.
+//! Anschluss. Die Form bleibt nach dem Profil-Verfahren (leitung_profil.rs, Vorbild QElectroTech): Längenänderung
+//! je Achse auf die Teilstücke dieser Achse verteilt, Knicke und Rechtwinkligkeit bleiben. Liegt das Ziel danach in
+//! einem anderen Quadranten oder liefe die Leitung in ein Symbol hinein, wird sie mit Stich + Z neu geführt
+//! (leitung_route.rs). Gerade Leitungen, schräge Endstücke und Leitungen mit fremden Anschlüssen im Innern
+//! (T-Abzweig, Knoten) folgen wie bisher nur mit dem Endstück: war es waagerecht bzw. senkrecht, bleibt es das –
+//! der Nachbarpunkt wird quer mitgeführt oder es entsteht ein Eckpunkt.
 
 use crate::app::App;
 use crate::canvas;
@@ -13,12 +17,16 @@ use crate::symbols::SymDef;
 pub const PIN_TOL: f32 = 0.05;
 const EPS: f32 = 1e-3;
 
-/// Mitgezogene Leitung: Kennung, Punkte vor dem Verschieben, welche Enden (Anfang, Ende) folgen.
+/// Mitgezogene Leitung: Kennung, Punkte vor dem Verschieben, welche Enden (Anfang, Ende) folgen, Richtung nach
+/// außen an den Enden (Symbolanschluss bzw. Klemmstelle, für die Neuführung) und ob das Profil gilt (keine fremden
+/// Anschlüsse im Innern der Leitung).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mitzieh {
     pub id: u64,
     pub pts: Vec<P>,
     pub ends: [bool; 2],
+    pub dirs: [Option<P>; 2],
+    pub profil: bool,
 }
 
 fn waagerecht(a: P, b: P) -> bool {
@@ -43,9 +51,15 @@ fn bereinigen(pts: Vec<P>) -> Vec<P> {
     out
 }
 
-/// Neue Punkte einer Leitung, deren Enden `ends` (Anfang, Ende) um `d` verschoben werden. `rund` legt neu
-/// entstehende Zwischenpunkte auf das Raster (z. B. `App::snap`).
+/// Neue Punkte einer Leitung, deren Enden `ends` (Anfang, Ende) um `d` verschoben werden (Profil, ohne
+/// Anschlussrichtungen). `rund` legt neu entstehende Zwischenpunkte auf das Raster (z. B. `App::snap`).
 pub fn follow_wire(pts: &[P], ends: [bool; 2], d: P, rund: &dyn Fn(P) -> P) -> Vec<P> {
+    folgen(pts, ends, d, [None, None], true, 0.0, rund)
+}
+
+/// Wie `follow_wire`, mit Richtung nach außen an den Enden (`dirs`, für Neuführung und die Prüfung „läuft in das
+/// Symbol“), Profil an/aus und Stichlänge `stich` der Neuführung.
+pub fn folgen(pts: &[P], ends: [bool; 2], d: P, dirs: [Option<P>; 2], profil: bool, stich: f32, rund: &dyn Fn(P) -> P) -> Vec<P> {
     if pts.len() < 2 || !(ends[0] || ends[1]) {
         return pts.to_vec();
     }
@@ -55,11 +69,35 @@ pub fn follow_wire(pts: &[P], ends: [bool; 2], d: P, rund: &dyn Fn(P) -> P) -> V
     }
     if ends[1] {
         let rev: Vec<P> = pts.iter().rev().copied().collect();
-        let mut out = follow_start(&rev, d, rund);
+        let mut out = folgen_anfang(&rev, d, [dirs[1], dirs[0]], profil, stich, rund);
         out.reverse();
         return out;
     }
-    follow_start(pts, d, rund)
+    folgen_anfang(pts, d, dirs, profil, stich, rund)
+}
+
+/// Anfang um `d` verschieben: Profil, sonst Neuführung bzw. Endstück (siehe Modulkommentar).
+fn folgen_anfang(pts: &[P], d: P, dirs: [Option<P>; 2], profil: bool, stich: f32, rund: &dyn Fn(P) -> P) -> Vec<P> {
+    use crate::leitung_profil::{nachfuehren, Ergebnis};
+    use crate::leitung_route::{laeuft_hinein, mit_stichen};
+    // doppelte Punkte (in W2 z. B. am Anfang) würden das Endstück verdecken
+    let pts = &bereinigen(pts.to_vec());
+    let neu = pts[0].add(d);
+    let ende = pts[pts.len() - 1];
+    if !profil {
+        return follow_start(pts, d, rund);
+    }
+    let neu_fuehren = || mit_stichen(neu, dirs[0], ende, dirs[1], stich);
+    let out = match nachfuehren(pts, neu, rund) {
+        Ergebnis::Form(p) => p,
+        Ergebnis::Neufuehren => return neu_fuehren(),
+        Ergebnis::Unpassend => follow_start(pts, d, rund),
+    };
+    // lief die Leitung vorher sauber aus den Anschlüssen heraus, jetzt aber hinein (Stück auf 0 geschrumpft): neu
+    if laeuft_hinein(&out, dirs[0], dirs[1]) && !laeuft_hinein(pts, dirs[0], dirs[1]) {
+        return neu_fuehren();
+    }
+    out
 }
 
 /// Anfangspunkt um `d` verschieben, Endstück möglichst rechtwinklig halten.
@@ -114,7 +152,14 @@ pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u
     if pins.is_empty() {
         return vec![];
     }
-    let am_pin = |p: P| pins.iter().any(|(q, t)| q.dist(p) <= *t);
+    let am_pin = |p: P| pins.iter().position(|(q, t)| q.dist(p) <= *t);
+    // fremde Anschlusspunkte: Enden anderer Leitungen und Symbolanschlüsse (Abzweig/Knoten im Innern einer Leitung)
+    let anker: Vec<(u64, P)> = sheet
+        .objects
+        .iter()
+        .filter(|o| matches!(o.kind, Kind::Wire { .. } | Kind::Symbol { .. }))
+        .flat_map(|o| canvas::obj_pins(o, lib).into_iter().map(move |q| (o.id, q)))
+        .collect();
     sheet
         .objects
         .iter()
@@ -124,10 +169,56 @@ pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u
             if pts.len() < 2 {
                 return None;
             }
-            let ends = [am_pin(pts[0]), am_pin(pts[pts.len() - 1])];
-            (ends[0] || ends[1]).then(|| Mitzieh { id: o.id, pts: pts.clone(), ends })
+            let (a, e) = (pts[0], pts[pts.len() - 1]);
+            let (ia, ie) = (am_pin(a), am_pin(e));
+            let mut ends = [ia.is_some(), ie.is_some()];
+            // sehr kurze Leitung mit beiden Enden im Kreis derselben Klemme (W2: 0,3 mm von der Klemme zur Schiene):
+            // nur das Ende am Kreis (0,8 mm vor dem Mittelpunkt, wie es das Original speichert) hängt an der Klemme
+            if let (Some(i), Some(j)) = (ia, ie) {
+                if i == j {
+                    let r = crate::klemme_leitung::KLEMME_R;
+                    let naeher_anfang = (pins[i].0.dist(a) - r).abs() <= (pins[i].0.dist(e) - r).abs();
+                    ends = [naeher_anfang, !naeher_anfang];
+                }
+            }
+            if !(ends[0] || ends[1]) {
+                return None;
+            }
+            let innen = |q: P| q.dist(a) > PIN_TOL && q.dist(e) > PIN_TOL && pts.windows(2).any(|w| seg_dist(q, w[0], w[1]) <= PIN_TOL);
+            let profil = !anker.iter().any(|(id, q)| *id != o.id && innen(*q));
+            // Nachbarpunkt = erster vom Ende verschiedene Punkt (doppelte Punkte überspringen)
+            let nb = |mut it: Box<dyn Iterator<Item = &P> + '_>, p: P| it.find(|q| q.dist(p) >= EPS).copied().unwrap_or(p);
+            let dirs = [ende_richtung(sheet, lib, a, nb(Box::new(pts.iter()), a)), ende_richtung(sheet, lib, e, nb(Box::new(pts.iter().rev()), e))];
+            Some(Mitzieh { id: o.id, pts: pts.clone(), ends, dirs, profil })
         })
         .collect()
+}
+
+/// Richtung nach außen am Leitungsende `p` (Nachbarpunkt `nb`): am Symbolanschluss dessen Richtung, sonst die
+/// Richtung des Endstücks (an einer Klemmstelle tritt die Leitung so wieder in derselben Flucht an die Klemme, an
+/// einer anderen Leitung bleibt der Abzweig erhalten); schräges Endstück: keine.
+fn ende_richtung(sheet: &Sheet, lib: &[SymDef], p: P, nb: P) -> Option<P> {
+    if let Some(r) = crate::leitung_route::anschluss_richtung(sheet, lib, p) {
+        return Some(r);
+    }
+    let (dx, dy) = (nb.x - p.x, nb.y - p.y);
+    if dy.abs() < EPS && dx.abs() >= EPS {
+        Some(P::new(dx.signum(), 0.0))
+    } else if dx.abs() < EPS && dy.abs() >= EPS {
+        Some(P::new(0.0, dy.signum()))
+    } else {
+        None
+    }
+}
+
+/// Kennung einer in eine Leitung eingesetzten Klemmstelle, deren Kreis `p` berührt (Mittelpunkt oder eines der
+/// Leitungsenden 0,8 mm davor): Klemme und beide Teilleitungen verhalten sich beim Greifen wie eine Einheit.
+pub fn eingesetzte_klemme_bei(sheet: &Sheet, p: P) -> Option<u64> {
+    let tol = crate::klemme_leitung::KLEMME_R + PIN_TOL;
+    sheet.objects.iter().find_map(|o| match &o.kind {
+        Kind::Terminal { pos, .. } if pos.dist(p) <= tol && eingesetzte_klemme(sheet, *pos) => Some(o.id),
+        _ => None,
+    })
 }
 
 /// Liegt bei `p` eine in eine Leitung eingesetzte Klemmstelle (mindestens zwei Leitungsenden am Klemmenkreis)?
@@ -163,7 +254,10 @@ impl App {
         if f.is_empty() {
             return;
         }
-        let neu: Vec<(u64, Vec<P>, bool)> = f.iter().map(|w| (w.id, follow_wire(&w.pts, w.ends, d, &|p| self.snap(p)), w.ends[0] && w.ends[1])).collect();
+        // Stich der Neuführung wie beim Zeichnen ein halbes Raster (leitung_route.rs)
+        let stich = self.raster() / 2.0;
+        let neu: Vec<(u64, Vec<P>, bool)> =
+            f.iter().map(|w| (w.id, folgen(&w.pts, w.ends, d, w.dirs, w.profil, stich, &|p| self.snap(p)), w.ends[0] && w.ends[1])).collect();
         self.with_sheet(|s, _| {
             for (id, pts, ganz) in neu {
                 if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
@@ -282,5 +376,144 @@ mod tests_klemme {
         let f = find_followers(&s, &[], &[3], &[3], false);
         assert_eq!(f.len(), 2);
         assert!(f.iter().all(|m| m.ends[0] != m.ends[1]));
+    }
+}
+
+#[cfg(test)]
+mod tests_profil {
+    use super::*;
+
+    fn eq(a: &[P], b: &[P]) -> bool {
+        a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.dist(*y) < 1e-4)
+    }
+
+    fn rechtwinklig(p: &[P]) -> bool {
+        crate::leitung_profil::profil(p).is_some()
+    }
+
+    fn wire(id: u64, pts: Vec<P>) -> Obj {
+        Obj { id, kind: Kind::Wire { pts, leitung: 0, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    fn schliesser(id: u64, pos: P) -> Obj {
+        Obj { id, kind: Kind::Symbol { key: "builtin:schliesser".into(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk: String::new(), value: String::new(), scale: 1.0, option: 0, title: None, flags: 0, ext: Default::default() }, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    fn klemme(id: u64, pos: P) -> Obj {
+        Obj { id, kind: Kind::Terminal { pos, leiste: "X1".into(), nr: 1, level: 0, text_off: None, tpl: String::new(), opt: Default::default() }, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    /// Objekte `moved` um `d` verschieben und die Leitungen wie beim Ziehen mitführen; Rückgabe: Leitungspunkte je Id.
+    fn ziehen(s: &mut Sheet, lib: &[SymDef], moved: &[u64], d: P) -> Vec<(u64, Vec<P>)> {
+        let f = find_followers(s, lib, moved, moved, false);
+        s.objects.iter_mut().filter(|o| moved.contains(&o.id)).for_each(|o| o.kind.translate(d));
+        let mut out = vec![];
+        for w in &f {
+            let neu = folgen(&w.pts, w.ends, d, w.dirs, w.profil, 2.5, &|p| p);
+            if let Some(Obj { kind: Kind::Wire { pts, .. }, .. }) = s.objects.iter_mut().find(|o| o.id == w.id) {
+                *pts = neu.clone();
+            }
+            out.push((w.id, neu));
+        }
+        out
+    }
+
+    // Z-Leitung vom unteren Anschluss (50, 107) des Schließers bei (50, 100)
+    fn z_blatt() -> Sheet {
+        let mut s = Sheet::new(1);
+        s.objects.push(schliesser(1, P::new(50.0, 100.0)));
+        s.objects.push(wire(2, vec![P::new(50.0, 107.0), P::new(50.0, 117.0), P::new(70.0, 117.0), P::new(70.0, 130.0), P::new(110.0, 130.0), P::new(110.0, 150.0)]));
+        s
+    }
+
+    #[test]
+    fn symbol_waagerecht_verschoben_knicke_bleiben() {
+        let lib = crate::symbols::builtin();
+        let mut s = z_blatt();
+        let r = ziehen(&mut s, &lib, &[1], P::new(10.0, 0.0));
+        // Breite 60 → 50: beide waagerechten Stücke (20, 40) je −5; senkrechte unverändert
+        let soll = [P::new(60.0, 107.0), P::new(60.0, 117.0), P::new(75.0, 117.0), P::new(75.0, 130.0), P::new(110.0, 130.0), P::new(110.0, 150.0)];
+        assert!(eq(&r[0].1, &soll), "{:?}", r[0].1);
+    }
+
+    #[test]
+    fn symbol_senkrecht_verschoben_laengen_verteilt() {
+        let lib = crate::symbols::builtin();
+        let mut s = z_blatt();
+        let r = ziehen(&mut s, &lib, &[1], P::new(0.0, -6.0));
+        // Höhe 43 → 49: drei senkrechte Stücke (10, 13, 20) je +2
+        let soll = [P::new(50.0, 101.0), P::new(50.0, 113.0), P::new(70.0, 113.0), P::new(70.0, 128.0), P::new(110.0, 128.0), P::new(110.0, 150.0)];
+        assert!(eq(&r[0].1, &soll), "{:?}", r[0].1);
+    }
+
+    #[test]
+    fn quadrantenwechsel_fuehrt_neu_mit_stich() {
+        let lib = crate::symbols::builtin();
+        let mut s = z_blatt();
+        // Symbol rechts über das Ziel hinaus: Profil passt nicht mehr → Stich nach unten, dann Z zum Ziel
+        let r = &ziehen(&mut s, &lib, &[1], P::new(80.0, 0.0))[0].1;
+        assert_eq!(r[0], P::new(130.0, 107.0));
+        assert_eq!(r[1], P::new(130.0, 109.5), "{r:?}");
+        assert_eq!(*r.last().unwrap(), P::new(110.0, 150.0));
+        assert!(rechtwinklig(r), "{r:?}");
+    }
+
+    #[test]
+    fn abzweig_im_innern_nur_endstueck() {
+        let lib = crate::symbols::builtin();
+        let mut s = z_blatt();
+        // T-Abzweig: fremde Leitung endet im Innern → Profil aus, Verhalten wie bisher (nur Endstück)
+        s.objects.push(wire(3, vec![P::new(90.0, 130.0), P::new(90.0, 160.0)]));
+        let f = find_followers(&s, &lib, &[1], &[1], false);
+        assert_eq!(f.len(), 1);
+        assert!(!f[0].profil);
+        let r = ziehen(&mut s, &lib, &[1], P::new(10.0, 0.0));
+        let soll = [P::new(60.0, 107.0), P::new(60.0, 117.0), P::new(70.0, 117.0), P::new(70.0, 130.0), P::new(110.0, 130.0), P::new(110.0, 150.0)];
+        assert!(eq(&r[0].1, &soll), "{:?}", r[0].1);
+    }
+
+    fn klemme_in_leitung() -> Sheet {
+        // L-Leitung (10, 50) → (60, 50) → (60, 80), Klemmstelle bei (30, 50) eingesetzt
+        let mut s = Sheet::new(1);
+        let (p1, p2) = crate::klemme_leitung::teilen(&[P::new(10.0, 50.0), P::new(60.0, 50.0), P::new(60.0, 80.0)], 0, P::new(30.0, 50.0));
+        s.objects.push(wire(1, p1));
+        s.objects.push(wire(2, p2));
+        s.objects.push(klemme(3, P::new(30.0, 50.0)));
+        s
+    }
+
+    #[test]
+    fn klemme_in_leitung_beide_teile_folgen_ohne_luecke() {
+        for d in [P::new(0.0, 10.0), P::new(5.0, -10.0), P::new(-15.0, 0.0), P::new(40.0, 5.0)] {
+            let mut s = klemme_in_leitung();
+            let r = ziehen(&mut s, &[], &[3], d);
+            assert_eq!(r.len(), 2);
+            let k = P::new(30.0, 50.0).add(d);
+            let a = r.iter().find(|(id, _)| *id == 1).unwrap().1.clone();
+            let b = r.iter().find(|(id, _)| *id == 2).unwrap().1.clone();
+            // beide Teile enden weiter 0,8 mm vor der Klemme, waagerecht in derselben Flucht
+            assert!(a.last().unwrap().dist(P::new(k.x - 0.8, k.y)) < 1e-4, "{d:?} {a:?}");
+            assert!(b[0].dist(P::new(k.x + 0.8, k.y)) < 1e-4, "{d:?} {b:?}");
+            assert!((a[a.len() - 2].y - k.y).abs() < 1e-4 && (b[1].y - k.y).abs() < 1e-4, "{d:?} {a:?} {b:?}");
+            // ferne Enden bleiben
+            assert_eq!(a[0], P::new(10.0, 50.0));
+            assert_eq!(*b.last().unwrap(), P::new(60.0, 80.0));
+            assert!(rechtwinklig(&a) && rechtwinklig(&b), "{d:?} {a:?} {b:?}");
+            assert!(eingesetzte_klemme(&s, k));
+        }
+    }
+
+    #[test]
+    fn klemme_greifen_auch_an_den_teilenden() {
+        let s = klemme_in_leitung();
+        for p in [P::new(30.0, 50.0), P::new(29.2, 50.0), P::new(30.8, 50.0)] {
+            assert_eq!(eingesetzte_klemme_bei(&s, p), Some(3), "{p:?}");
+        }
+        assert_eq!(eingesetzte_klemme_bei(&s, P::new(10.0, 50.0)), None);
+        // freie Klemme (nur eine Leitung) zählt nicht
+        let mut s = Sheet::new(1);
+        s.objects.push(klemme(3, P::new(30.0, 50.0)));
+        s.objects.push(wire(1, vec![P::new(10.0, 50.0), P::new(29.2, 50.0)]));
+        assert_eq!(eingesetzte_klemme_bei(&s, P::new(29.2, 50.0)), None);
     }
 }

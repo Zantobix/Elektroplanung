@@ -1507,18 +1507,16 @@ impl App {
                     // mit Strg zählt ein Anschluss nicht (wie im Original): Klick markiert bzw. verschiebt das Symbol
                     // eine in eine Leitung eingesetzte Klemmstelle wird gezogen statt eine neue Leitung zu beginnen;
                     // die Leitungsteile wandern mit (mitziehen.rs, Maus-Befund M4)
-                    let eingesetzt = |p: P| self.sheet().is_some_and(|s| crate::mitziehen::eingesetzte_klemme(s, p));
-                    if let Some(pin) = self.pin_near(m, tol, &[]).filter(|p| !ctrl && eingesetzt(*p)) {
-                        let kid = self.sheet().and_then(|s| s.objects.iter().find(|o| matches!(&o.kind, Kind::Terminal { pos, .. } if pos.dist(pin) <= crate::mitziehen::PIN_TOL)).map(|o| o.id));
-                        if let Some(kid) = kid {
-                            if !self.selection.contains(&kid) {
-                                self.selection = vec![kid];
-                            }
-                            self.drag = Drag::Move { start: self.snap(m), applied: P::default(), moved: false };
-                            return;
+                    // – auch an den Enden der Teilleitungen am Klemmenkreis (Einheit, todo „Griffe nach Klemmstelle“)
+                    let klemme_bei = |p: P| self.sheet().and_then(|s| crate::mitziehen::eingesetzte_klemme_bei(s, p));
+                    if let Some(kid) = self.pin_near(m, tol, &[]).filter(|_| !ctrl).and_then(klemme_bei) {
+                        if !self.selection.contains(&kid) {
+                            self.selection = vec![kid];
                         }
+                        self.drag = Drag::Move { start: self.snap(m), applied: P::default(), moved: false };
+                        return;
                     }
-                    if let Some(pin) = self.pin_near(m, tol, &[]).filter(|p| !ctrl && !eingesetzt(*p)) {
+                    if let Some(pin) = self.pin_near(m, tol, &[]).filter(|p| !ctrl && klemme_bei(*p).is_none()) {
                         let on_selected = self.selected_objs().iter().any(|o| canvas::hit(o, m, tol, &self.lib));
                         if !on_selected {
                             self.drag = Drag::Wire { f: crate::leitung_fuehrung::Fuehrung::neu(pin) };

@@ -29,6 +29,18 @@ Leitung ziehen – Führung folgt von Anfang an der Maus (nach KiCad):
 - Bewusste Erweiterung: Leertaste oder „/“ kippt während des Ziehens die Knickrichtung (wie „posture“ in KiCad);
   im Klickbetrieb wechselt die Leertaste weiter wie im Original zum vorigen Blatt.
 
+Leitungen beim Verschieben in ihrer Form mitführen (Profil nach dem Vorbild von QElectroTech):
+- Wird ein Symbol oder eine Klemmstelle verschoben, behält eine angeschlossene Leitung ihre Knicke: die
+  Längenänderung je Achse verteilt sich gleichmäßig auf die waagerechten bzw. senkrechten Teilstücke, ein Teilstück,
+  das umkehren würde, entfällt. Neue Lagen innerer Teilstücke kommen auf das Raster. Vorher folgte nur das Endstück.
+- Liegt das Ziel danach in einem anderen Quadranten oder liefe die Leitung in das Symbol hinein, wird sie wie beim
+  Zeichnen mit Stich in Anschlussrichtung und Z-Führung neu gelegt
+- Gerade Leitungen, schräge Endstücke und Leitungen mit Abzweig im Innern folgen wie bisher nur mit dem Endstück
+- Klemmstelle in einer Leitung: Klemme und beide Teilleitungen verhalten sich als Einheit – auch das Greifen an den
+  Leitungsenden am Klemmenkreis zieht die Klemme (statt eine neue Leitung zu beginnen); beide Teile bleiben in
+  derselben Flucht 0,8 mm vor der Klemme
+- Das Profil wird zur Laufzeit aus dem Polygonzug abgeleitet; die .epr bleibt unverändert
+
 Brückenbögen an Kreuzungen (bewusste Erweiterung, das Original zeichnet keine):
 - Kreuzen sich zwei Leitungen, ohne verbunden zu sein, springt die waagerechtere in einem kleinen Halbkreis über
   die andere (Bildschirm, Druck, PDF, Bildexport). Keine Bögen an Verbindungen (Leitungsende oder Klemmstelle im
