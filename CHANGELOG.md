@@ -24,6 +24,8 @@ Leitung ziehen – Führung folgt von Anfang an der Maus (nach KiCad):
   Knick. Die bisherige Hysterese mit Schwellwerten entfällt, die Vorschau springt bei kleinen Mausbewegungen nicht
   mehr zwischen Führungen. Stich aus dem Anschluss, Sammelschienen, Klickbetrieb und Eckanschlüsse bleiben wie
   bisher.
+- Die Leitung verlässt einen Anschluss immer zuerst mit dem Stich in Anschlussrichtung, auch wenn die erste
+  Mausbewegung quer dazu geht (vorher z. B. seitlich aus einem oberen Anschluss).
 - Bewusste Erweiterung: Leertaste oder „/“ kippt während des Ziehens die Knickrichtung (wie „posture“ in KiCad);
   im Klickbetrieb wechselt die Leertaste weiter wie im Original zum vorigen Blatt.
 

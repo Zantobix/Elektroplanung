@@ -183,11 +183,29 @@ mod tests {
         let v = bahn(&mut f, &[p(40.0, 100.0), p(40.0, 120.0), p(80.0, 125.0)], UNTEN);
         assert_eq!(wechsel(&v), 0);
         assert_eq!(v.last().unwrap().1, vec![p(40.0, 100.0), p(40.0, 125.0), p(80.0, 125.0)]);
-        // Maus über die Höhe des Anschlusses nach oben: dort kippt der Knick (waagerecht hinaus, dann hoch) –
+        // Maus über die Höhe des Anschlusses nach oben: dort kippt der Knick (Stich nach unten, quer, dann hoch) –
         // nicht in das Symbol, kein Z über die Mitte
         let v = bahn(&mut f, &[p(80.0, 125.0), p(80.0, 70.0)], UNTEN);
         assert_eq!(wechsel(&v), 1);
-        assert_eq!(v.last().unwrap().1, vec![p(40.0, 100.0), p(80.0, 100.0), p(80.0, 70.0)]);
+        assert_eq!(v.last().unwrap().1, vec![p(40.0, 100.0), p(40.0, 102.5), p(80.0, 102.5), p(80.0, 70.0)]);
+    }
+
+    #[test]
+    fn oberer_anschluss_erst_quer_dann_runter_mit_stich() {
+        // Maus-Befund M27: oberer Anschluss (zeigt nach oben), Maus erst 4 Raster nach rechts, dann weit nach unten.
+        // Knick waagerecht (erste Bewegung), aber die Leitung verlässt den Anschluss zuerst mit dem Stich nach oben.
+        let oben = Some(P { x: 0.0, y: -1.0 });
+        let mut f = Fuehrung::neu(p(40.0, 100.0));
+        let v = bahn(&mut f, &[p(40.0, 100.0), p(60.0, 100.0), p(60.0, 140.0)], oben);
+        assert_eq!(f.richtung, Some(Richtung::Waagerecht));
+        for (_, w) in v.iter().filter(|x| x.1.len() >= 2 && x.1[0].dist(*x.1.last().unwrap()) > 0.01) {
+            assert!(w[1].y < w[0].y, "nicht zuerst nach oben: {w:?}");
+        }
+        assert_eq!(v.last().unwrap().1, vec![p(40.0, 100.0), p(40.0, 97.5), p(60.0, 97.5), p(60.0, 140.0)]);
+        // Umschalten: senkrecht zuerst → Stich nach oben, dann seitlich und von oben herunter (J-Form wie bisher)
+        assert!(f.umschalten());
+        let w = f.zugweg(p(60.0, 140.0), oben, None, STICH);
+        assert!(w[1].y < w[0].y && !crate::leitung_route::laeuft_hinein(&w, oben, None), "{w:?}");
     }
 
     #[test]
