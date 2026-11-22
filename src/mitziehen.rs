@@ -310,6 +310,10 @@ pub fn hindernisse(umrisse: &[crate::leitung_hindernis::Umriss], w: &Mitzieh, d:
     crate::leitung_hindernis::wirksam(&crate::leitung_hindernis::hindernisse(umrisse, &[], &[]), enden[0], enden[1])
 }
 
+fn strecken_ohne(st: &[(u64, P, P)], id: u64) -> Vec<(P, P)> {
+    st.iter().filter(|(i, _, _)| *i != id).map(|(_, a, b)| (*a, *b)).collect()
+}
+
 /// Kennung einer in eine Leitung eingesetzten Klemmstelle, deren Kreis `p` berührt (Mittelpunkt oder eines der
 /// Leitungsenden 0,8 mm davor): Klemme und beide Teilleitungen verhalten sich beim Greifen wie eine Einheit.
 pub fn eingesetzte_klemme_bei(sheet: &Sheet, p: P) -> Option<u64> {
@@ -360,6 +364,20 @@ impl App {
         // Symbole als Hindernisse der Neuführung (M29); die Symbole sind schon verschoben
         let umrisse = self.sheet().map(|s| crate::leitung_hindernis::umrisse(s, &self.lib)).unwrap_or_default();
         let (f2, f): (Vec<&Mitzieh>, Vec<&Mitzieh>) = f.iter().partition(|w| w.wirt.is_some());
+        // Strecken aller Leitungen und Schienen (für Kreuzungen/Überdeckung der kurzen Neuführung)
+        let strecken: Vec<(u64, P, P)> = self
+            .sheet()
+            .map(|s| {
+                s.objects
+                    .iter()
+                    .flat_map(|o| match &o.kind {
+                        Kind::Wire { pts, .. } => pts.windows(2).map(|v| (o.id, v[0], v[1])).collect::<Vec<_>>(),
+                        Kind::Busbar { a, x2, .. } => vec![(o.id, *a, P::new(*x2, a.y))],
+                        _ => vec![],
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut neu: Vec<(u64, Vec<P>, bool)> = f
             .iter()
             .map(|w| {
@@ -368,7 +386,14 @@ impl App {
                 let gerade = crate::schiene_halten::gerade_zum_gleis(w.id, &w.pts, w.ends, d, w.dirs, &gl)
                     .filter(|g| crate::leitung_hindernis::kreuzungen(g, &hind) == 0);
                 let pts = gerade.unwrap_or_else(|| {
-                    crate::schiene_halten::abgreifen(&folgen_um(&w.pts, w.ends, d, w.dirs, w.profil, stich, &hind, &|p| self.snap(p)), &sch)
+                    let form = crate::schiene_halten::abgreifen(&folgen_um(&w.pts, w.ends, d, w.dirs, w.profil, stich, &hind, &|p| self.snap(p)), &sch);
+                    // nur ein Ende bewegt: einfacher Weg mit weniger Knicken, wenn er nichts verschlechtert (leitung_kurz.rs)
+                    if w.ends[0] != w.ends[1] {
+                        let andere = strecken_ohne(&strecken, w.id);
+                        crate::leitung_kurz::kuerzer(&form, w.dirs[0], w.dirs[1], stich, &hind, &andere).unwrap_or(form)
+                    } else {
+                        form
+                    }
                 });
                 (w.id, pts, w.ends[0] && w.ends[1])
             })

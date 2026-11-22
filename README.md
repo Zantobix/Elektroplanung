@@ -193,6 +193,11 @@ nicht. Gemessen werden stattdessen:
 - Bewusste Erweiterungen gegenüber dem Original (bleiben, auch wenn das Original sie nicht hat):
   - Rasterweite je Projekt: Die gewählte Weite wird je Datei gemerkt; ist keine gemerkt, stellt das Öffnen die
     Weite ein, in der das Projekt gezeichnet ist (`src/raster.rs`, `raster_erkennen`).
+  - Leitungsführung: gezogene Leitungen folgen dem Mausweg (`leitung_bahn.rs`); beim Mitziehen ersetzt ein einfacher
+    Weg mit weniger Knicken die formerhaltende Führung (`leitung_kurz.rs`); übereinanderliegende Leitungen werden
+    vereinigt (`leitung_vereinigen.rs`); eine Leitung kann überall an einer anderen enden, ein freier Überstand wird
+    gekürzt (`leitung_anschluss.rs`); verschobene Objekte und gezogene Teilstücke rücken auf das Raster bzw. auf die
+    Flucht anderer Leitungen.
   - Eine markierte und als Ganzes verschobene Leitung bleibt an nicht verschobenen Schienen, Klemmstellen und
     Anschlüssen hängen (`src/schiene_halten.rs`).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem

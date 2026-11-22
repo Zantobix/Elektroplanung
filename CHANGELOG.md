@@ -15,6 +15,9 @@ Leitungsführung nach Nutzerwünschen (Runde 12):
 - Das Leitungsende bleibt in der Flucht des Anfangs bzw. letzten Knicks, solange die Maus weniger als ein halbes Raster
   daneben liegt. Bisher sprang es bei Anschlüssen neben dem Raster seitlich auf das Raster, und die Leitung lief
   zuerst in die falsche Richtung.
+- Mitziehen: Wird nur ein Ende einer Leitung bewegt, nimmt sie einen einfachen Weg (gerade, L oder Z mit Stich), wenn
+  er weniger Knicke hat, kein Symbol durchquert, auf keiner Leitung liegt, nicht mehr Leitungen kreuzt und die
+  Anschlüsse in ihrer Richtung verlässt bzw. erreicht (`leitung_kurz.rs`).
 - Verschobene Symbole und Klemmstellen rücken wieder auf das Raster (erster Anschluss), auch wenn sie vorher daneben
   lagen (bewusste Abweichung: das Original behält den Rest).
 
