@@ -37,6 +37,8 @@ Behoben (Maustest 22.11.2026):
 - Textbox-Eigenschaften: Felder Oben/Links schrumpfen nicht mehr („2100“ war abgeschnitten)
 - Bewusste Abweichung: Blattreiter mit gleicher Beschriftung aus verschiedenen Anlagen (z. B. zweimal „[1] Blatt 1“)
   tragen die Anlagen-Kurzform bzw. den Anlagennamen davor; das Original unterscheidet sie nicht
+- Rahmenauswahl wie im Original: markiert werden Objekte, deren Anfangs-/Einfügepunkt im Rahmen liegt (bisher nur
+  ganz enthaltene Objekte)
 - Blattrahmen (mit Strompfadleiste, Schriftfeld und Zeichenfläche) kommt aus den Blatträndern der Anlage statt aus
   festen Maßen und folgt einer Änderung in den Anlagen-Eigenschaften sofort; im Querformat ist „Links“ der obere
   Rand (Heftrand). Neue Anlagen und Projekte haben wie im Original Links 20 mm (bisher 10 mm)

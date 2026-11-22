@@ -1662,10 +1662,8 @@ impl App {
                                 .objects
                                 .iter()
                                 .filter(|o| self.selectable(o))
-                                .filter(|o| {
-                                    let (a, b) = canvas::obj_bounds(o, &self.lib);
-                                    a.x >= mn.x && a.y >= mn.y && b.x <= mx.x && b.y <= mx.y
-                                })
+                                // wie im Original: Bezugspunkt im Rahmen (rahmenauswahl.rs)
+                                .filter(|o| crate::rahmenauswahl::im_rahmen(&o.kind, mn, mx))
                                 .map(|o| o.id)
                                 .collect();
                             for id in ids {
