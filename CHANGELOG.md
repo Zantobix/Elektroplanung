@@ -22,6 +22,8 @@ Leitungen um Symbole herum:
 - Wird eine Leitung beim Verschieben eines Symbols neu geführt, läuft sie nicht mehr quer durch andere Symbole:
   das Mittelstück bzw. ein Knick weicht um die kleinste freie Rasterweite aus. Beim Zeichnen gilt dasselbe, ohne
   die gewählte Zugrichtung (Leertaste) zu ändern.
+- Auch das Symbol, an dem die Leitung endet, gilt als Hindernis: Nach dem Verschieben eines Relais läuft die
+  Leitung zu A2 nicht mehr durch die Spule, sondern daneben vorbei.
 - Der Zeiger über Punkten von Zeichenobjekten zeigt in der Mitte eine Raute wie im Original.
 
 Leitungsmechanik nach KiCad/QElectroTech:

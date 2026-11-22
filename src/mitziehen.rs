@@ -304,7 +304,10 @@ fn ende_richtung(sheet: &Sheet, lib: &[SymDef], p: P, nb: P) -> Option<P> {
 pub fn hindernisse(umrisse: &[crate::leitung_hindernis::Umriss], w: &Mitzieh, d: P) -> Vec<crate::leitung_hindernis::Rechteck> {
     let n = w.pts.len();
     let enden = [if w.ends[0] { w.pts[0].add(d) } else { w.pts[0] }, if w.ends[1] { w.pts[n - 1].add(d) } else { w.pts[n - 1] }];
-    crate::leitung_hindernis::hindernisse(umrisse, &[], &enden)
+    // auch die Symbole, an denen die Leitung endet, sind Hindernisse (Maustest Runde 10: Leitung zu A2 lief nach
+    // dem Verschieben des Relais senkrecht durch die Spule); aus dem Anschluss am Rand heraus bleibt erlaubt,
+    // Umrisse mit einem Ende im Innern zählen nicht (`wirksam`)
+    crate::leitung_hindernis::wirksam(&crate::leitung_hindernis::hindernisse(umrisse, &[], &[]), enden[0], enden[1])
 }
 
 /// Kennung einer in eine Leitung eingesetzten Klemmstelle, deren Kreis `p` berührt (Mittelpunkt oder eines der
