@@ -173,7 +173,7 @@ pub fn waehlen(z: &Zustand) -> Zeigerwahl {
         Ziel::Verweis { .. } if z.strg => Zeigerwahl::nur(CursorIcon::PointingHand),
         Ziel::Verweis { text: true, .. } => Zeigerwahl::pfeil(Text),
         Ziel::Verweis { .. } => Zeigerwahl::pfeil(Anschluss),
-        Ziel::Objekt { art: Objektart::Verschiebbar, .. } => Zeigerwahl::pfeil(Verschieben),
+        Ziel::Objekt { art: Objektart::Verschiebbar, .. } | Ziel::Leitung { .. } => Zeigerwahl::pfeil(Verschieben),
         Ziel::Objekt { art: Objektart::Anschluss, .. } => Zeigerwahl::pfeil(Anschluss),
         Ziel::Objekt { art: Objektart::Schlicht, .. } => Zeigerwahl::nur(CursorIcon::Default),
     }

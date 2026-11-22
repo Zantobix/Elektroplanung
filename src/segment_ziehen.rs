@@ -96,7 +96,9 @@ impl App {
         if !moved {
             self.checkpoint();
         }
-        let neu = verschieben(&orig, idx, d);
+        // Abgriff an der Sammelschiene wandert mit (keine Leitung auf der Schiene, schiene_halten.rs)
+        let sch = self.sheet().map(|s| crate::schiene_halten::schienen(s, &[])).unwrap_or_default();
+        let neu = crate::schiene_halten::abgreifen(&verschieben(&orig, idx, d), &sch);
         self.with_sheet(|s, _| {
             if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
                 *pts = neu;

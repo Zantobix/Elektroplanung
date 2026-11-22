@@ -1630,12 +1630,16 @@ impl App {
                     self.checkpoint();
                     // angeschlossene Leitungen im Zustand vor dem Verschieben merken
                     self.move_follow = self.wire_followers(&movable);
+                    self.move_halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &movable)).unwrap_or_default();
                 }
                 self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| movable.contains(&o.id)).for_each(|o| o.kind.translate(d)));
                 // Leitungsenden folgen den Anschlüssen (gleicher Rückgängig-Schritt, aus der Gesamtverschiebung)
                 let follow = std::mem::take(&mut self.move_follow);
                 self.apply_followers(&follow, total);
                 self.move_follow = follow;
+                let halt = std::mem::take(&mut self.move_halt);
+                self.schienen_halten(&halt, total);
+                self.move_halt = halt;
                 self.drag = Drag::Move { start, applied: total, moved: true };
             }
         }
@@ -2223,9 +2227,11 @@ impl App {
             self.checkpoint();
             let sel: Vec<u64> = self.selected_objs().iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
             let follow = self.wire_followers(&sel);
+            let halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &sel)).unwrap_or_default();
             self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| sel.contains(&o.id)).for_each(|o| o.kind.translate(d)));
-            // angeschlossene Leitungen mitziehen
+            // angeschlossene Leitungen mitziehen, markierte Leitungen bleiben an ihren Schienen
             self.apply_followers(&follow, d);
+            self.schienen_halten(&halt, d);
             // mit gehaltener Taste A wie im Original: freie Anschlüsse nach dem Schritt automatisch verbinden
             if self.hold_a {
                 if let Some(p) = self.hold_press[1].as_mut() {

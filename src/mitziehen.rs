@@ -256,8 +256,12 @@ impl App {
         }
         // Stich der Neuführung wie beim Zeichnen ein halbes Raster (leitung_route.rs)
         let stich = self.raster() / 2.0;
-        let neu: Vec<(u64, Vec<P>, bool)> =
-            f.iter().map(|w| (w.id, folgen(&w.pts, w.ends, d, w.dirs, w.profil, stich, &|p| self.snap(p)), w.ends[0] && w.ends[1])).collect();
+        // Abgriff an einer Sammelschiene wandert mit (schiene_halten.rs)
+        let sch = self.sheet().map(|s| crate::schiene_halten::schienen(s, &[])).unwrap_or_default();
+        let neu: Vec<(u64, Vec<P>, bool)> = f
+            .iter()
+            .map(|w| (w.id, crate::schiene_halten::abgreifen(&folgen(&w.pts, w.ends, d, w.dirs, w.profil, stich, &|p| self.snap(p)), &sch), w.ends[0] && w.ends[1]))
+            .collect();
         self.with_sheet(|s, _| {
             for (id, pts, ganz) in neu {
                 if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {

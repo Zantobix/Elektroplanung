@@ -36,7 +36,10 @@ pub enum Ziel {
     Verweis { id: u64, mn: P, mx: P, text: bool },
     /// Text auf dem Blatt
     Text { id: u64, mn: P, mx: P },
-    /// jedes andere Objekt (Symbol, Leitung, Linie …)
+    /// Leitung: Pfeilkreuz, aber ohne gestricheltes Rechteck (Nutzerwunsch 22.11.2026: Vormarkierung nur bei
+    /// „wirklichen“ Objekten – bewusste Abweichung)
+    Leitung { id: u64 },
+    /// jedes andere Objekt (Symbol, Linie …)
     Objekt { id: u64, mn: P, mx: P, art: Objektart },
 }
 
@@ -91,6 +94,7 @@ impl App {
             _ if self.sym_edit.is_some() => Ziel::Objekt { id, mn, mx, art: Objektart::Verschiebbar },
             // Sonderobjekte Art 0–2 (Klemmstelle, Sammelschiene, Verweis): Leitungszeiger (Original 0x415e9e)
             Kind::Busbar { .. } | Kind::Terminal { .. } => Ziel::Objekt { id, mn, mx, art: Objektart::Anschluss },
+            Kind::Wire { .. } => Ziel::Leitung { id },
             Kind::Spiegel { .. } => Ziel::Objekt { id, mn, mx, art: Objektart::Schlicht },
             _ => Ziel::Objekt { id, mn, mx, art: Objektart::Verschiebbar },
         })
@@ -132,6 +136,7 @@ mod tests {
         let r = (P::default(), P::new(1.0, 1.0));
         let objekt = Ziel::Objekt { id: 1, mn: r.0, mx: r.1, art: Objektart::Verschiebbar };
         assert!(Ziel::Anschluss.umriss().is_none() && Ziel::Griff(1).umriss().is_none() && objekt.umriss() == Some(r));
+        assert!(Ziel::Leitung { id: 1 }.umriss().is_none());
         assert_eq!(Ziel::Verweis { id: 1, mn: r.0, mx: r.1, text: true }.umriss(), Some(r));
     }
 }

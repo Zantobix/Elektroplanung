@@ -346,7 +346,7 @@ pub fn objekt_text(p: &Project, lib: &[SymDef], r: SheetRef, ziel: &Ziel) -> Opt
             };
             Some(format!("{art}{lage}"))
         }
-        Ziel::Verweis { id, .. } | Ziel::Text { id, .. } | Ziel::Objekt { id, .. } => {
+        Ziel::Verweis { id, .. } | Ziel::Text { id, .. } | Ziel::Objekt { id, .. } | Ziel::Leitung { id } => {
             let o = obj(id)?;
             Some(match &o.kind {
                 Kind::Symbol { key, pos, option, .. } => {
@@ -396,7 +396,7 @@ fn objekt_schluessel(z: &Ziel) -> Option<(u64, u8)> {
         Ziel::Griff(_) | Ziel::Ecke => None,
         Ziel::Anschluss => Some((0, 1)),
         Ziel::Beschriftung { id, wert, .. } => Some((id, 2 + wert as u8)),
-        Ziel::Verweis { id, .. } | Ziel::Text { id, .. } | Ziel::Objekt { id, .. } => Some((id, 0)),
+        Ziel::Verweis { id, .. } | Ziel::Text { id, .. } | Ziel::Objekt { id, .. } | Ziel::Leitung { id } => Some((id, 0)),
     }
 }
 

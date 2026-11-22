@@ -73,6 +73,7 @@ pub mod schriftlage;
 pub mod schriftmass;
 pub mod rahmenauswahl;
 pub mod schiene_platzieren;
+pub mod schiene_halten;
 pub mod schiene_leitung;
 pub mod schriftfeld_editor;
 pub mod segment_ziehen;
