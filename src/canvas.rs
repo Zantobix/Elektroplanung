@@ -1038,53 +1038,7 @@ pub fn draw_symbol_full(p: &egui::Painter, xf: Xf, def: &SymDef, pos: P, rot: u8
     }
 }
 
-/// Verbindungspunkte: Leitungsenden, die auf einer anderen Leitung liegen, oder Treffpunkte von ≥ 3 Enden.
+/// Verbindungspunkte nach der Knotenregel in `knoten::punkte` (≥ 3 Richtungen an einem Leitungsende, Abgriffe).
 pub fn junctions(sheet: &Sheet) -> Vec<P> {
-    let wires: Vec<&Vec<P>> = sheet
-        .objects
-        .iter()
-        .filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts) } else { None })
-        .collect();
-    let mut out: Vec<P> = vec![];
-    let mut ends: Vec<P> = vec![];
-    for w in &wires {
-        if let (Some(f), Some(l)) = (w.first(), w.last()) {
-            ends.push(*f);
-            ends.push(*l);
-        }
-    }
-    for (i, w) in wires.iter().enumerate() {
-        for e in [w.first(), w.last()].into_iter().flatten() {
-            for (j, o) in wires.iter().enumerate() {
-                if i == j {
-                    continue;
-                }
-                let on_mid = o.windows(2).any(|s| seg_dist(*e, s[0], s[1]) < 0.05)
-                    && o.first().map(|f| f.dist(*e) > 0.05).unwrap_or(true)
-                    && o.last().map(|l| l.dist(*e) > 0.05).unwrap_or(true);
-                if on_mid && !out.iter().any(|q| q.dist(*e) < 0.05) {
-                    out.push(*e);
-                }
-            }
-        }
-    }
-    for e in &ends {
-        let n = ends.iter().filter(|q| q.dist(*e) < 0.05).count();
-        if n >= 3 && !out.iter().any(|q| q.dist(*e) < 0.05) {
-            out.push(*e);
-        }
-    }
-    // Abgriffe an Sammelschienen: das Original zeichnet beim Zeichnen der Schiene an jedem angeschlossenen Leiter
-    // einen Punkt (Routine 0x438b94, Ellipse je Verbindung; Bildschirmfoto docs/reference/original_main.png).
-    // Leiter, die eine Schiene nur kreuzen, bekommen keinen Punkt.
-    for o in &sheet.objects {
-        let Kind::Busbar { a, x2, .. } = &o.kind else { continue };
-        let (x1, x2) = (a.x.min(*x2), a.x.max(*x2));
-        for e in &ends {
-            if (e.y - a.y).abs() < 0.05 && e.x >= x1 - 0.05 && e.x <= x2 + 0.05 && !out.iter().any(|q| q.dist(*e) < 0.05) {
-                out.push(*e);
-            }
-        }
-    }
-    out
+    crate::knoten::punkte(sheet)
 }

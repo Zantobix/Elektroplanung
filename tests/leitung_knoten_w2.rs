@@ -155,3 +155,22 @@ fn neue_leitung_auf_leitung_und_von_schiene() {
     assert_eq!(b2.i32(8), -1);
     let _ = (w1, w2);
 }
+
+/// Knotenregel nach Richtungen (knoten::punkte, KiCad `AnalyzePoint`): W2 zeigt dieselben 615 Punkte wie vor der
+/// Umstellung (453 Enden der Art 3 und die Abgriffe an Sammelschienen); keine reine Kreuzung bekommt einen Punkt.
+#[test]
+fn w2_knotenzahl_unveraendert() {
+    let Some(path) = sample() else { return };
+    let project = epr::import(&path).unwrap();
+    let mut n = 0;
+    for a in &project.anlagen {
+        for s in &a.sheets {
+            let enden: Vec<P> = s.objects.iter().filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { Some([pts[0], *pts.last().unwrap()]) } else { None }).flatten().collect();
+            for j in canvas::junctions(s) {
+                assert!(enden.iter().any(|e| e.dist(j) < 0.05), "Punkt nur an einem Leitungsende");
+                n += 1;
+            }
+        }
+    }
+    assert_eq!(n, 615);
+}

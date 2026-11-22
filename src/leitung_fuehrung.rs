@@ -51,21 +51,35 @@ pub fn knick(a: P, b: P, erst: Option<Richtung>) -> Vec<P> {
     vec![a, corner, b]
 }
 
-/// Doppelte Punkte und Zwischenpunkte auf einer Geraden entfernen.
+/// Doppelte Punkte und Zwischenpunkte auf einer Geraden entfernen. Läuft ein Teilstück auf dem vorigen zurück,
+/// verschmelzen beide (nach KiCad `simplifyWireList`/`MergeOverlap`); fällt dabei ein Punkt auf seinen Vorgänger,
+/// wird erneut geprüft, bis nichts mehr zu verschmelzen ist. Anfang und Ende bleiben an ihrer Stelle.
 pub fn bereinigen(pts: Vec<P>) -> Vec<P> {
-    let mut out: Vec<P> = Vec::with_capacity(pts.len());
-    for p in pts {
-        if out.last().map(|l| l.dist(p) < 0.01).unwrap_or(false) {
-            continue;
-        }
-        if out.len() >= 2 {
-            let (u, v) = (out[out.len() - 2], out[out.len() - 1]);
-            let gerade = ((u.x - v.x).abs() < 0.01 && (v.x - p.x).abs() < 0.01) || ((u.y - v.y).abs() < 0.01 && (v.y - p.y).abs() < 0.01);
-            if gerade {
-                out.pop();
+    let gleich = |a: P, b: P| a.dist(b) < 0.01;
+    let gerade = |u: P, v: P, p: P| ((u.x - v.x).abs() < 0.01 && (v.x - p.x).abs() < 0.01) || ((u.y - v.y).abs() < 0.01 && (v.y - p.y).abs() < 0.01);
+    let n = pts.len();
+    let mut out: Vec<P> = Vec::with_capacity(n);
+    for (i, p) in pts.into_iter().enumerate() {
+        loop {
+            match out.len() {
+                0 => break,
+                // gleicher Punkt: das Ende ersetzt seinen Vorgänger (gleiche Lage), sonst entfällt der neue Punkt
+                l if gleich(out[l - 1], p) => {
+                    if i + 1 == n && l >= 2 {
+                        out.pop();
+                    } else {
+                        break;
+                    }
+                }
+                l if l >= 2 && gerade(out[l - 2], out[l - 1], p) => {
+                    out.pop();
+                }
+                _ => break,
             }
         }
-        out.push(p);
+        if out.last().is_none_or(|l| !gleich(*l, p)) {
+            out.push(p);
+        }
     }
     out
 }
