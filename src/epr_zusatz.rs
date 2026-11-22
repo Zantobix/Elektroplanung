@@ -6,7 +6,8 @@
 //!   aus Gruppen.tfi, 0 = „Keine Zuordnung“, im Nachbau „Projekt“), 0x10 Hersteller (u64, Kennung aus Gruppen.tfi), 0x18 frei, 0x20/0x24/0x28
 //!   Breite/Höhe/Tiefe in mm (Vorgabe 500/800/700), 0x2C Name, 0x54 Typ, 0x7C Artikel-Nr., 0xA4 interne Nr.
 //!   (je 40 Zeichen), 0xD0 Kennung des Symbols und 0xD8 Bild (Darstellung), 0xE0 Erstellungszeit (Delphi-Datum).
-//! - **Bauteilzuordnung**: VSY › IDL bzw. OBJ (Klemmstelle) › IDL, je 8 Byte = Kennung des Bauteils (Liste, VSY+0xBC).
+//! - **Bauteilzuordnung**: VSY › IDL bzw. OBJ (Klemmstelle) › IDL, je 8 Byte = Kennung des Bauteils (Liste, VSY+0xBC):
+//!   ein IDL je Bauteil der Bauteilliste, in Listenreihenfolge (bauteilliste.rs).
 //! - **Platzhaltergruppen** (PRJ › ERS, 12 Byte Name) mit Einträgen TLI (8 Byte Suchtext) › STR (Ersetzungstext),
 //!   Dialog TSTextListe (Spalten „Suchtext“, „Ersetzungstext“).
 //! - **Verbindungsoptionen** (VBG Feld 14 = Wort bei 0x38: Bit 0x40 Zielführung links/oben, 0x80 rechts/unten,
@@ -227,11 +228,18 @@ pub fn import(prj: &Block, p: &mut Project) {
         p.bauteile = btl.iter().map(|b| bauteil_aus(b)).collect();
         let ids: Vec<u64> = btl.iter().map(|b| id_at(&b.data, 0)).collect();
         p.part_of.clear();
+        p.weitere_bauteile.clear();
+        let mut listen: Vec<(u64, Vec<usize>)> = vec![];
         for o in p.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects) {
             let Some(r) = o.raw.as_deref() else { continue };
-            if let Some(i) = r.block.kid("IDL").and_then(|l| ids.iter().position(|id| *id == id_at(&l.data, 0))) {
-                p.part_of.insert(o.id, i);
+            // alle IDL des Objekts (Bauteilliste); Zuordnungen auf unbekannte Bauteile entfallen im Modell
+            let teile: Vec<usize> = r.block.kids_of("IDL").filter_map(|l| ids.iter().position(|id| *id == id_at(&l.data, 0))).collect();
+            if !teile.is_empty() {
+                listen.push((o.id, teile));
             }
+        }
+        for (obj, teile) in listen {
+            crate::bauteilliste::setzen(p, obj, &teile);
         }
     }
     let ers: Vec<Platzhalter> = prj.kids_of("ERS").map(platzhalter_aus).collect();
@@ -445,23 +453,24 @@ pub fn objekt(project: &Project, o: &Obj, b: &mut Block) {
 }
 
 fn zuordnung(project: &Project, o: &Obj, b: &mut Block) {
-    let (soll, bekannt) = PLAN.with(|p| {
+    let ist: Vec<u64> = b.kids_of("IDL").map(|l| id_at(&l.data, 0)).collect();
+    let (soll, ist_bekannt) = PLAN.with(|p| {
         let p = p.borrow();
-        let soll = project.part_of.get(&o.id).and_then(|&i| p.btl_ids.get(i).copied());
-        let ist = b.kid("IDL").map(|l| id_at(&l.data, 0));
-        (soll, ist.map(|id| p.alle_ids.contains(&id) || p.btl_ids.contains(&id)).unwrap_or(true))
+        let soll: Vec<u64> = crate::bauteilliste::liste(project, o.id).into_iter().filter_map(|i| p.btl_ids.get(i).copied()).collect();
+        let bekannt: Vec<u64> = ist.iter().copied().filter(|id| p.alle_ids.contains(id) || p.btl_ids.contains(id)).collect();
+        (soll, bekannt)
     });
-    let ist = b.kid("IDL").map(|l| id_at(&l.data, 0));
-    // Zuordnung auf ein Bauteil, das der Nachbau nicht kennt: unverändert lassen
-    if soll == ist || (soll.is_none() && !bekannt) {
+    // Zuordnungen auf Bauteile, die der Nachbau nicht kennt, bleiben unverändert, solange sich die bekannten nicht
+    // ändern (beim Lesen entfallen sie im Modell)
+    if soll == ist || soll == ist_bekannt {
         return;
     }
+    // ein IDL je Bauteil; Reihenfolge wie im Original: VSY … FKT, IDL…; OBJ … FKT, IDL…, TIT
+    let at = b.kids.iter().position(|k| k.is("IDL")).unwrap_or_else(|| if b.is("OBJ") { b.kids.iter().position(|k| k.is("TIT")).unwrap_or(b.kids.len()) } else { b.kids.len() });
+    // vor `at` steht kein IDL (erstes IDL bzw. Einfügestelle)
     b.kids.retain(|k| !k.is("IDL"));
-    if let Some(id) = soll {
-        let idl = Block::new("IDL", id.to_le_bytes().to_vec());
-        // Reihenfolge wie im Original: VSY … FKT, IDL; OBJ … FKT, IDL, TIT
-        let at = if b.is("OBJ") { b.kids.iter().position(|k| k.is("TIT")).unwrap_or(b.kids.len()) } else { b.kids.len() };
-        b.kids.insert(at, idl);
+    for (n, id) in soll.iter().enumerate() {
+        b.kids.insert(at + n, Block::new("IDL", id.to_le_bytes().to_vec()));
     }
 }
 
