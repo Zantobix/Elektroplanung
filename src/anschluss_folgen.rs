@@ -59,6 +59,20 @@ impl Abbild {
 
 /// Neue Punkte der angeschlossenen Leitungen `f` (aus `mitziehen::find_followers` vor der Änderung) nach der
 /// Änderung der Objekte `alt` auf dem Blatt `sheet`: (Kennung, Punkte, Verschiebung der ganzen Leitung).
+/// Strecken aller Leitungen und Schienen außer der Leitung `id`.
+fn strecken_ohne(sheet: &Sheet, id: u64) -> Vec<(P, P)> {
+    sheet
+        .objects
+        .iter()
+        .filter(|o| o.id != id)
+        .flat_map(|o| match &o.kind {
+            crate::model::Kind::Wire { pts, .. } => pts.windows(2).map(|v| (v[0], v[1])).collect::<Vec<_>>(),
+            crate::model::Kind::Busbar { a, x2, .. } => vec![(*a, P::new(*x2, a.y))],
+            _ => vec![],
+        })
+        .collect()
+}
+
 pub fn nachgefuehrt(sheet: &Sheet, lib: &[SymDef], alt: &[Obj], f: &[Mitzieh], stich: f32, rund: &dyn Fn(P) -> P) -> Vec<(u64, Vec<P>, Option<P>)> {
     use crate::leitung_hindernis as lh;
     let abb = Abbild::neu(alt, sheet, lib);
@@ -90,8 +104,16 @@ pub fn nachgefuehrt(sheet: &Sheet, lib: &[SymDef], alt: &[Obj], f: &[Mitzieh], s
         let hind = lh::wirksam(&alle, a, b);
         let (pts, ganz) = if gedreht {
             // Richtung eines Anschlusses gedreht: Stich + Z neu, um Symbole herum
-            let weg = crate::leitung_route::mit_stichen(a, dirs[0], b, dirs[1], stich);
-            (lh::umgehen(&weg, dirs[0], dirs[1], &hind, 2.0 * stich, false), None)
+            // zuerst ein einfacher Weg, der auf keiner Leitung/Schiene liegt (Maustest Runde 12: nach dem Drehen lief
+            // die Zuleitung ein Stück auf der Schiene N)
+            let andere = strecken_ohne(sheet, w.id);
+            match crate::leitung_kurz::bester(a, dirs[0], b, dirs[1], stich, &hind, &andere) {
+                Some(p) => (p, None),
+                None => {
+                    let weg = crate::leitung_route::mit_stichen(a, dirs[0], b, dirs[1], stich);
+                    (lh::umgehen(&weg, dirs[0], dirs[1], &hind, 2.0 * stich, false), None)
+                }
+            }
         } else if ziel[0].is_some() && ziel[1].is_some() && d[0].dist(d[1]) < EPS {
             (w.pts.iter().map(|p| p.add(d[0])).collect(), Some(d[0]))
         } else {
@@ -103,7 +125,15 @@ pub fn nachgefuehrt(sheet: &Sheet, lib: &[SymDef], alt: &[Obj], f: &[Mitzieh], s
             }
             (p, None)
         };
-        neu.push((w.id, crate::schiene_halten::abgreifen(&pts, &sch), ganz));
+        let pts = crate::schiene_halten::abgreifen(&pts, &sch);
+        // nicht ganz verschoben: einfacher Weg mit weniger Knicken, wenn er nichts verschlechtert (leitung_kurz.rs)
+        let pts = if ganz.is_none() {
+            let andere = strecken_ohne(sheet, w.id);
+            crate::leitung_kurz::kuerzer(&pts, dirs[0], dirs[1], stich, &hind, &andere).unwrap_or(pts)
+        } else {
+            pts
+        };
+        neu.push((w.id, pts, ganz));
     }
     // zweite Stufe: Abzweige auf umgeformten Leitungen folgen ihrem Wirt (wie mitziehen::apply_followers)
     for w in f2 {

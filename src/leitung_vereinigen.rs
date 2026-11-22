@@ -333,7 +333,90 @@ impl crate::app::App {
             _ => return,
         };
         self.leitungen_vereinigen(&ids);
+        self.ueberstaende_kuerzen();
     }
+
+    /// Leitungsenden, die vor dem Ziehen verbunden waren und jetzt frei sind (Maustest Runde 12: Teilstück auf eine
+    /// andere Leitung gezogen, die angeschlossene Zuleitung hing danach mit einem Stück frei unter dem Abzweig):
+    /// bis zum nächsten Punkt kürzen, an dem die Leitung verbunden ist. Ohne solchen Punkt bleibt sie.
+    pub fn ueberstaende_kuerzen(&mut self) {
+        let (Some(r), Some(s)) = (self.cur(), self.sheet()) else { return };
+        if self.sym_edit.is_some() {
+            return;
+        }
+        let Some(alt) = self.undo.last().and_then(|p| p.sheet(r)) else { return };
+        let lib = &self.lib;
+        let mut neu: Vec<(u64, Vec<P>)> = vec![];
+        for o in &s.objects {
+            let Kind::Wire { pts, .. } = &o.kind else { continue };
+            let Some(Kind::Wire { pts: q, .. }) = alt.objects.iter().find(|x| x.id == o.id).map(|x| &x.kind) else { continue };
+            if pts.len() < 2 || q.len() < 2 {
+                continue;
+            }
+            let mut p = pts.clone();
+            for anfang in [true, false] {
+                let (e, e_alt) = if anfang { (p[0], q[0]) } else { (p[p.len() - 1], q[q.len() - 1]) };
+                let war = !crate::leitung_anschluss::freies_ende(alt, lib, o.id, e_alt);
+                if !war || !crate::leitung_anschluss::freies_ende(s, lib, o.id, e) {
+                    continue;
+                }
+                let mut zug = p.clone();
+                if !anfang {
+                    zug.reverse();
+                }
+                if let Some(k) = gekuerzt_bis_anschluss(s, lib, o.id, &zug) {
+                    p = if anfang { k } else { k.into_iter().rev().collect() };
+                }
+            }
+            if p != *pts && p.len() >= 2 {
+                neu.push((o.id, p));
+            }
+        }
+        if neu.is_empty() {
+            return;
+        }
+        self.with_sheet(|s, _| {
+            for (id, p) in neu {
+                if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
+                    *pts = p;
+                }
+            }
+        });
+    }
+}
+
+/// Zug `zug` (freies Ende vorn) bis zum ersten Punkt kürzen, an dem ein anderes Objekt anliegt (Ende einer anderen
+/// Leitung, Anschluss, Klemmstelle, Schiene); `None`, wenn es keinen gibt oder er am anderen Ende liegt.
+fn gekuerzt_bis_anschluss(s: &Sheet, lib: &[crate::symbols::SymDef], id: u64, zug: &[P]) -> Option<Vec<P>> {
+    let tol = crate::mitziehen::PIN_TOL;
+    let mut punkte: Vec<P> = vec![];
+    for o in s.objects.iter().filter(|o| o.id != id) {
+        match &o.kind {
+            Kind::Wire { pts, .. } if pts.len() >= 2 => {
+                punkte.push(pts[0]);
+                punkte.push(pts[pts.len() - 1]);
+            }
+            Kind::Terminal { pos, .. } => punkte.push(*pos),
+            _ => punkte.extend(crate::canvas::obj_pins(o, lib)),
+        }
+    }
+    for i in 0..zug.len() - 1 {
+        let (a, b) = (zug[i], zug[i + 1]);
+        let treffer = punkte
+            .iter()
+            .filter(|q| crate::model::seg_dist(**q, a, b) <= tol && q.dist(zug[0]) > tol)
+            .min_by(|x, y| x.dist(a).total_cmp(&y.dist(a)))
+            .copied();
+        if let Some(t) = treffer {
+            if i + 2 == zug.len() && t.dist(b) <= tol {
+                return None;
+            }
+            let mut out = vec![t];
+            out.extend_from_slice(&zug[i + 1..]);
+            return Some(crate::leitung_fuehrung::bereinigen(out));
+        }
+    }
+    None
 }
 
 #[cfg(test)]

@@ -18,6 +18,10 @@ Leitungsführung nach Nutzerwünschen (Runde 12):
 - Mitziehen: Wird nur ein Ende einer Leitung bewegt, nimmt sie einen einfachen Weg (gerade, L oder Z mit Stich), wenn
   er weniger Knicke hat, kein Symbol durchquert, auf keiner Leitung liegt, nicht mehr Leitungen kreuzt und die
   Anschlüsse in ihrer Richtung verlässt bzw. erreicht (`leitung_kurz.rs`).
+- Nach dem Drehen/Spiegeln/Skalieren eines verdrahteten Symbols bekommen die Leitungen einen einfachen Weg, der
+  auf keiner Leitung bzw. Schiene liegt (bisher lief die Zuleitung nach dem Drehen ein Stück auf der Schiene N).
+- Wird beim Ziehen ein vorher verbundenes Leitungsende frei, wird die Leitung bis zum nächsten Verbindungspunkt
+  gekürzt (kein frei hängender Überstand).
 - Verschobene Symbole und Klemmstellen rücken wieder auf das Raster (erster Anschluss), auch wenn sie vorher daneben
   lagen (bewusste Abweichung: das Original behält den Rest).
 

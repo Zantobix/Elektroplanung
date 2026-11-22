@@ -79,6 +79,46 @@ fn in_richtung(w: &[P], da: Option<P>, db: Option<P>) -> bool {
     da.is_none_or(|d| s(r(w[0], w[1]), d) > 0.5) && db.is_none_or(|d| s(r(w[n - 2], w[n - 1]), d) < -0.5)
 }
 
+/// Bester einfacher Weg von `a` nach `b` (wenigste Knicke, dann kürzester) nach den Regeln im Modulkopf, ohne
+/// Vergleich mit einem vorhandenen Weg (Neuführung nach Drehen/Spiegeln).
+pub fn bester(a: P, da: Option<P>, b: P, db: Option<P>, s: f32, hind: &[Rechteck], andere: &[(P, P)]) -> Option<Vec<P>> {
+    kandidaten(a, da, b, db, s)
+        .into_iter()
+        .filter(|w| !laeuft_hinein(w, da, db) && in_richtung(w, da, db))
+        .filter(|w| kreuzungen(w, hind) == 0)
+        .filter(|w| !ueberlappt(w, andere))
+        .min_by(|x, y| knicke(x).cmp(&knicke(y)).then(kreuzungen_mit(x, andere).cmp(&kreuzungen_mit(y, andere))).then(laenge(x).total_cmp(&laenge(y))))
+}
+
+fn kandidaten(a: P, da: Option<P>, b: P, db: Option<P>, s: f32) -> Vec<Vec<P>> {
+    let a1 = da.map(|d| P::new(a.x + d.x * s, a.y + d.y * s)).unwrap_or(a);
+    let b1 = db.map(|d| P::new(b.x + d.x * s, b.y + d.y * s)).unwrap_or(b);
+    let mut kand: Vec<Vec<P>> = vec![vec![a, b], mit_stichen(a, da, b, db, s)];
+    for (p, q) in [(a, b), (a1, b1), (a, b1), (a1, b)] {
+        kand.push(vec![a, p, P::new(p.x, q.y), q, b]);
+        kand.push(vec![a, p, P::new(q.x, p.y), q, b]);
+    }
+    // Z mit dem Mittelstück auf weiteren Lagen (Mitte und Stichschritte um die Stiche herum), damit ein Weg um ein
+    // Symbol bzw. neben einer Schiene vorbei gefunden wird
+    let mut lagen_y = vec![(a1.y + b1.y) / 2.0];
+    let mut lagen_x = vec![(a1.x + b1.x) / 2.0];
+    for k in 1..=8 {
+        let d = k as f32 * s;
+        lagen_y.extend([a1.y + d, a1.y - d, b1.y + d, b1.y - d]);
+        lagen_x.extend([a1.x + d, a1.x - d, b1.x + d, b1.x - d]);
+    }
+    for m in lagen_y {
+        kand.push(vec![a, a1, P::new(a1.x, m), P::new(b1.x, m), b1, b]);
+    }
+    for m in lagen_x {
+        kand.push(vec![a, a1, P::new(m, a1.y), P::new(m, b1.y), b1, b]);
+    }
+    kand.into_iter()
+        .map(bereinigen)
+        .filter(|w| w.len() >= 2 && w.windows(2).all(|v| (v[0].x - v[1].x).abs() < T || (v[0].y - v[1].y).abs() < T))
+        .collect()
+}
+
 /// Einfacher Weg statt `form` (formerhaltend nachgeführt, Enden schon an der neuen Lage), falls einer die Regeln
 /// im Modulkopf erfüllt. `da`/`db` = Richtungen nach außen an Anfang/Ende, `s` = Stich, `hind` = Symbol-Umrisse,
 /// `andere` = Strecken anderer Leitungen und Schienen.
@@ -92,18 +132,10 @@ pub fn kuerzer(form: &[P], da: Option<P>, db: Option<P>, s: f32, hind: &[Rechtec
     if form.windows(2).any(|v| (v[0].x - v[1].x).abs() >= T && (v[0].y - v[1].y).abs() >= T) {
         return None;
     }
-    let a1 = da.map(|d| P::new(a.x + d.x * s, a.y + d.y * s)).unwrap_or(a);
-    let b1 = db.map(|d| P::new(b.x + d.x * s, b.y + d.y * s)).unwrap_or(b);
-    let mut kand: Vec<Vec<P>> = vec![vec![a, b], mit_stichen(a, da, b, db, s)];
-    for (p, q) in [(a, b), (a1, b1), (a, b1), (a1, b)] {
-        kand.push(vec![a, p, P::new(p.x, q.y), q, b]);
-        kand.push(vec![a, p, P::new(q.x, p.y), q, b]);
-    }
     let k_form = knicke(&form);
     let x_form = kreuzungen_mit(&form, andere);
-    kand.into_iter()
-        .map(bereinigen)
-        .filter(|w| w.len() >= 2 && w.windows(2).all(|v| (v[0].x - v[1].x).abs() < T || (v[0].y - v[1].y).abs() < T))
+    kandidaten(a, da, b, db, s)
+        .into_iter()
         .filter(|w| knicke(w) < k_form)
         .filter(|w| !laeuft_hinein(w, da, db) && in_richtung(w, da, db))
         .filter(|w| kreuzungen(w, hind) == 0)
