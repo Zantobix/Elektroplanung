@@ -917,7 +917,7 @@ impl App {
             let c = counters.entry(tpl.clone()).or_insert(0);
             *c += 1;
             let num = self.project.anlagen[ai].sheets[si].number;
-            let new = symbols::expand_bmk(&tpl, *c, num);
+            let new = symbols::bmk_vorlage(&tpl, *c, num);
             if let Some(o) = self.project.anlagen[ai].sheets[si].objects.iter_mut().find(|o| o.id == id) {
                 if let Kind::Symbol { bmk, .. } = &mut o.kind {
                     *bmk = new;

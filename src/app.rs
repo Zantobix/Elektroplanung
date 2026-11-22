@@ -585,15 +585,15 @@ impl App {
             .filter_map(|o| if let Kind::Symbol { bmk, .. } = &o.kind { Some(bmk.clone()) } else { None })
             .collect();
         if !tpl.contains("%C") {
-            return symbols::expand_bmk(&tpl, 1, sheet_no);
+            return symbols::bmk_vorlage(&tpl, 1, sheet_no);
         }
         for c in 1..10000 {
-            let b = symbols::expand_bmk(&tpl, c, sheet_no);
+            let b = symbols::bmk_vorlage(&tpl, c, sheet_no);
             if !used.contains(&b) {
                 return b;
             }
         }
-        symbols::expand_bmk(&tpl, 1, sheet_no)
+        symbols::bmk_vorlage(&tpl, 1, sheet_no)
     }
 
     /// Gewählte Rasterweite (mm), auch bei ausgeschaltetem Rasterfang.

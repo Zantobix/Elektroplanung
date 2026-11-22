@@ -194,6 +194,8 @@ nicht. Gemessen werden stattdessen:
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).
+  - BMK mit leerem Ortskennzeichen ohne hängendes „+“ („-E1“ statt „-E1+“); gespeichert wird wie im Original
+    „-E1+%P“.
   - Leitung verschieben: Das Ziehen an einem Teilstück ändert die Führung, die Enden bleiben angeschlossen (das
     Original verhindert das Verschieben angeschlossener Leitungen).
 - Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",

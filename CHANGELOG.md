@@ -9,6 +9,11 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+BMK neuer Symbole wie im Original:
+- Neue Symbole speichern die BMK mit Ortsplatzhalter („-E1+%P“ wie in W2), so dass ein später eingetragenes
+  Ortskennzeichen erscheint („-E1+W2“); bisher wurde „-E1“ fest geschrieben. Bewusste Abweichung: Bei leerem Ort
+  zeigt der Nachbau kein hängendes „+“ (Original: „-E1+“).
+
 Anschlusskreise wie im Original:
 - An jedem Symbolanschluss ein kleiner hellgrauer Kreis (Ø 1,6 mm), auch an angeschlossenen – nur auf dem
   Bildschirm, nicht im Druck/PDF/Bildexport (Gegenprobe Original unter Wine und Original-Ausdruck).

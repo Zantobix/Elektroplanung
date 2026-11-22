@@ -409,7 +409,7 @@ impl Server {
                 let pos = P::new(arg_f32(a, "x").ok_or("x fehlt")?, arg_f32(a, "y").ok_or("y fehlt")?);
                 let sheet_no = self.project.sheet(r).unwrap().number;
                 let n = self.project.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects).filter(|o| matches!(&o.kind, Kind::Symbol { key: k, .. } if *k == def.key)).count() as u32 + 1;
-                let bmk = arg_str(a, "bmk").map(String::from).unwrap_or_else(|| symbols::expand_bmk(&def.bmk, n, sheet_no));
+                let bmk = arg_str(a, "bmk").map(String::from).unwrap_or_else(|| symbols::bmk_vorlage(&def.bmk, n, sheet_no));
                 if !self.project.symdefs.iter().any(|d| d.key == def.key) {
                     self.project.symdefs.push(def.clone());
                 }

@@ -312,14 +312,17 @@ pub fn display_bmk(tpl: &str, counter: i32, ctx: &BmkCtx) -> String {
     if counter > 0 {
         s = s.replace("%C", &counter.to_string());
     }
-    s.trim().to_string()
+    // Bewusste Abweichung: Bei leerem Ort/Anlage zeigt das Original ein hängendes „+“ („-E1+“), der Nachbau nicht
+    while s.contains("++") {
+        s = s.replace("++", "+");
+    }
+    s.trim().trim_end_matches('+').trim().to_string()
 }
 
-/// BMK aus der Vorlage bilden: %S → "-", %R → Blattnummer, %C → Zähler, Ortsangaben (+%P, +%A, +%Ort) entfallen.
-pub fn expand_bmk(tpl: &str, counter: u32, sheet: u32) -> String {
-    let mut s = tpl.replace("+%Ort", "").replace("%Ort", "").replace("+%P", "").replace("%P", "").replace("+%A", "").replace("%A", "");
-    s = s.replace("%S", "-").replace("%R", &sheet.to_string()).replace("%C", &counter.to_string());
-    s.trim().to_string()
+/// BMK einer neuen Instanz wie im Original: %S → "-", %R → Blattnummer, %C → Zähler; Ortsangaben (%P, %A, %Ort)
+/// bleiben als Platzhalter stehen (W2: „-E1.1+%P“) und werden erst beim Zeichnen aufgelöst (`display_bmk`).
+pub fn bmk_vorlage(tpl: &str, counter: u32, sheet: u32) -> String {
+    tpl.replace("%S", "-").replace("%R", &sheet.to_string()).replace("%C", &counter.to_string()).trim().to_string()
 }
 
 // ---------------------------------------------------------------- Datenbank lesen
@@ -1032,5 +1035,20 @@ impl SymDef {
             pens: vec![],
             versatz: Versatz::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod bmk_tests {
+    use super::*;
+
+    #[test]
+    fn neue_bmk_behaelt_ortsplatzhalter() {
+        assert_eq!(bmk_vorlage("%SE%R.%C+%P", 2, 3), "-E3.2+%P");
+        let ctx = BmkCtx { sheet: 1, ort: String::new(), anlage: String::new() };
+        assert_eq!(display_bmk("-E1+%P", 0, &ctx), "-E1");
+        assert_eq!(display_bmk("-E1+%A+%P", 0, &ctx), "-E1");
+        let ctx = BmkCtx { sheet: 1, ort: "W2".into(), anlage: String::new() };
+        assert_eq!(display_bmk("-E1+%P", 0, &ctx), "-E1+W2");
     }
 }
