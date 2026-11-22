@@ -128,10 +128,11 @@ impl Ring {
 /// Umriss (min, max) eines Bildes einschließlich der Textfelder (Anschlussnummern u. ä.), damit das Bild
 /// um seine sichtbare Mitte zentriert wird (nicht um den Ursprung/Pin 0).
 pub fn umriss(def: &SymDef, opt: u16) -> (P, P) {
-    let (mut a, mut b) = symbols::bounds_opt(def, opt);
-    for (i, pr) in def.prims.iter().enumerate() {
-        if let symbols::Prim::TextBox(p, q, s, _) = pr {
-            if s.is_empty() || !symbols::visible(opt, def.vis.get(i)) {
+    // wie gezeichnet: ohne Zusatzoptionen (z. B. Hilfskontakt rechts neben den Polen des Leistungskontakts)
+    let (mut a, mut b) = symbols::bounds_ext(def, opt, Some(0));
+    for i in 0..def.prims.len() {
+        if let symbols::Prim::TextBox(p, q, s, _) = &*symbols::prim_lage(def, i, opt) {
+            if s.is_empty() || !symbols::visible(opt, def.vis.get(i)) || !symbols::flag_visible(0, def.flag.get(i)) {
                 continue;
             }
             for r in [p, q] {

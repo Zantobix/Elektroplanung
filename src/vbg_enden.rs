@@ -6,7 +6,8 @@
 //! (Feld 4 bzw. 8). Abgeleitet aus allen 1754 Enden in W2 (tests/vbg_enden_w2.rs):
 //! - Art 1 Symbol: Ziel = VSY-Kennung (Byte 96), Anschluss = **Feld 4 des Anschlusselements** (Typ 7) in den
 //!   Zeichenelementen des Projektsymbols (SYM › GRD › GRS) – nicht der Index; z. B. „SPD“ 1, 2, 5, 6, 7. Die Lage
-//!   des Anschlusses verschiebt sich je Option um Feld 13 (0,1 mm) waagerecht (mehrpolige Leistungskontakte und
+//!   des Anschlusses verschiebt sich je Option um Feld 13/14 (0,1 mm), wie das ganze Symbol
+//!   (`symbols::anschluss_lagen`, dieselbe Lage wie gezeichnet und gefangen; mehrpolige Leistungskontakte und
 //!   Sicherungen: Option 2 → zweimal −3,5 mm). Bei Anschlüssen mit Kreis (Verteilerbox) endet die Leitung wie an
 //!   Klemmstellen 0,8 mm vor dem Anschluss.
 //! - Art 2 Sammelschiene: Ziel = OBJ-Kennung der Schiene (Feld 0/1), Anschluss 0; 1 nur am Leitungsende, wenn es am
@@ -80,7 +81,7 @@ fn elemente(project: &Project, def: &SymDef) -> Vec<u8> {
 
 thread_local! {
     /// Anschlüsse je Symbol für den laufenden Speichervorgang (Grundlage, Schlüssel, Anzahl Anschlüsse)
-    static ANSCHLUESSE: RefCell<HashMap<(usize, String, usize), Vec<(i32, f32)>>> = RefCell::new(HashMap::new());
+    static ANSCHLUESSE: RefCell<HashMap<(usize, String, usize), Vec<i32>>> = RefCell::new(HashMap::new());
 }
 
 /// Zu Beginn des Speicherns: zwischengespeicherte Anschlüsse verwerfen (Symbole können geändert worden sein).
@@ -88,9 +89,9 @@ pub fn beginnen() {
     ANSCHLUESSE.with(|a| a.borrow_mut().clear());
 }
 
-/// Anschlüsse eines Symbols in der Reihenfolge von `def.pins`: Nummer (Element Typ 7, Feld 4) und waagerechter
-/// Versatz je Option in mm (Feld 13). Ausgelassen wie beim Lesen (`symbols::parse_elements`): Seite < 0 oder > 32.
-pub fn anschluesse(project: &Project, def: &SymDef) -> Vec<(i32, f32)> {
+/// Nummern der Anschlüsse eines Symbols in der Reihenfolge von `def.pins` (Element Typ 7, Feld 4). Ausgelassen wie
+/// beim Lesen (`symbols::parse_elements`): Seite < 0 oder > 32.
+pub fn anschluesse(project: &Project, def: &SymDef) -> Vec<i32> {
     let schluessel = (project.raw.as_deref().map(|r| r as *const _ as usize).unwrap_or(0), def.key.clone(), def.pins.len());
     if let Some(v) = ANSCHLUESSE.with(|a| a.borrow().get(&schluessel).cloned()) {
         return v;
@@ -100,18 +101,14 @@ pub fn anschluesse(project: &Project, def: &SymDef) -> Vec<(i32, f32)> {
     v
 }
 
-fn anschluesse_neu(project: &Project, def: &SymDef) -> Vec<(i32, f32)> {
+fn anschluesse_neu(project: &Project, def: &SymDef) -> Vec<i32> {
     let els = elemente(project, def);
-    let v: Vec<(i32, f32)> = els
-        .chunks_exact(0x50)
-        .filter(|e| e[0x3c] == 7 && (0..=32).contains(&i32_at(e, 0x48)))
-        .map(|e| (i32_at(e, 16), i32_at(e, 0x34) as f32 / 10.0))
-        .collect();
+    let v: Vec<i32> = els.chunks_exact(0x50).filter(|e| e[0x3c] == 7 && (0..=32).contains(&i32_at(e, 0x48))).map(|e| i32_at(e, 16)).collect();
     if v.len() == def.pins.len() {
         v
     } else {
         // passt nicht zur Definition (sollte nicht vorkommen): fortlaufend ab 1 wie `epr_write::encode_elements`
-        (1..=def.pins.len() as i32).map(|n| (n, 0.0)).collect()
+        (1..=def.pins.len() as i32).collect()
     }
 }
 
@@ -120,15 +117,7 @@ pub fn symbol_anschluesse(project: &Project, o: &Obj) -> Vec<(P, i32)> {
     let Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, flags, .. } = &o.kind else { return vec![] };
     let Some(def) = symbols::find(&project.symdefs, key) else { return vec![] };
     let nrn = anschluesse(project, def);
-    def.pins
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| symbols::visible(*option, def.pin_vis.get(*i)) && symbols::flag_visible(*flags, def.pin_info.get(*i).map(|x| &x.1)))
-        .map(|(i, q)| {
-            let (nr, versatz) = nrn[i];
-            (sym_xf(P::new(q.x + versatz * *option as f32, q.y), *pos, *rot, *mirror_h, *mirror_v, *scale), nr)
-        })
-        .collect()
+    symbols::anschluss_lagen(def, *option, *flags).into_iter().map(|(i, q)| (sym_xf(q, *pos, *rot, *mirror_h, *mirror_v, *scale), nrn[i])).collect()
 }
 
 /// Liegt `p` auf der Sammelschiene?

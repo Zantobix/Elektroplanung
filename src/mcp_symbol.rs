@@ -292,8 +292,7 @@ impl Server {
                     if k >= d.pins.len() {
                         return Err(format!("Anschluss {k} gibt es nicht"));
                     }
-                    d.pins.remove(k);
-                    d.pin_vis.remove(k);
+                    d.remove_pin(k);
                     d.raw.clear();
                 } else {
                     d.remove_prim(int(a, "index").ok_or("Parameter 'index' oder 'pin' fehlt")? as usize)?;

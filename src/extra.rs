@@ -67,6 +67,9 @@ pub struct SymEdit {
     pub bezeichner_pick: Option<u64>,
     /// Stiftauswahl des Hauptfensters beim Öffnen (der Editor benutzt `App::pen` für die Symbolstifte)
     pub haupt_pen: usize,
+    /// Versatz je Option (Element Feld 13/14, `symbols::Versatz`) je Objekt, Titel/Wert unter ihren Kennungen;
+    /// bleibt beim Speichern erhalten (der Editor zeigt die Elemente in der Lage für Option 0)
+    pub versatz: HashMap<u64, P>,
 }
 
 impl SymEdit {
@@ -193,6 +196,7 @@ impl App {
             fill: vec![],
             pens: vec![],
                 options: vec!["Standard".into()],
+                versatz: Default::default(),
             }
         });
         let mut sheet = Sheet::new(0);
@@ -202,6 +206,9 @@ impl App {
         let mut flags: HashMap<u64, u32> = HashMap::new();
         let mut text_idx: HashMap<u64, u32> = HashMap::new();
         let mut modes: HashMap<u64, (u8, bool)> = HashMap::new();
+        let mut versatz: HashMap<u64, P> = HashMap::new();
+        versatz.insert(EDIT_TITLE_ID, def.versatz.title);
+        versatz.insert(EDIT_VALUE_ID, def.versatz.value);
         let mut id: u64 = 1;
         let e = |p: P| P::new(EDIT_C.x + p.x * EDIT_K, EDIT_C.y + p.y * EDIT_K);
         for (i, pr) in def.prims.iter().enumerate() {
@@ -223,6 +230,9 @@ impl App {
                         if let Some(v) = def.vis.get(i) {
                             vis.insert(id, *v);
                         }
+                        if let Some(v) = def.versatz.prims.get(i) {
+                            versatz.insert(id, *v);
+                        }
                         id += 1;
                     }
                     continue;
@@ -242,6 +252,9 @@ impl App {
             if let Some(v) = def.vis.get(i) {
                 vis.insert(id, *v);
             }
+            if let Some(v) = def.versatz.prims.get(i) {
+                versatz.insert(id, *v);
+            }
             if let Some(f) = def.flag.get(i).filter(|f| **f > 0) {
                 flags.insert(id, *f);
             }
@@ -255,6 +268,9 @@ impl App {
             sheet.objects.push(Obj { id, kind: Kind::Terminal { pos: e(*p), leiste: "Anschluss".into(), nr: i as u32 + 1, level: 0, text_off: None, tpl: String::new(), opt: Default::default() }, pen: 0, fixed: false, group: None, raw: None });
             if let Some(v) = def.pin_vis.get(i) {
                 vis.insert(id, *v);
+            }
+            if let Some(v) = def.versatz.pins.get(i) {
+                versatz.insert(id, *v);
             }
             id += 1;
         }
@@ -315,6 +331,7 @@ impl App {
             pin_text: HashMap::new(),
             bezeichner_pick: None,
             haupt_pen: self.pen,
+            versatz,
         });
         self.selection.clear();
         self.tool = Tool::Select;
@@ -357,6 +374,10 @@ impl App {
         let mut pins = vec![];
         let mut pin_vis = vec![];
         let mut pin_info: Vec<(u32, u32)> = vec![];
+        let mut vs = crate::symbols::Versatz::default();
+        let vo = |id: u64| e.versatz.get(&id).copied().unwrap_or_default();
+        vs.title = vo(EDIT_TITLE_ID);
+        vs.value = vo(EDIT_VALUE_ID);
         // freie Textnummern ab der höchsten vergebenen
         let mut next_text = e.text_idx.values().copied().max().unwrap_or(1).max(1) + 1;
         // Stiftnummer des Elements (0–3 eingebaut, ab 4 Stift des Symbols)
@@ -398,6 +419,7 @@ impl App {
                 Kind::Wire { pts, .. } => {
                     for w in pts.windows(2) {
                         prims.push(Prim::Line(b(w[0]), b(w[1]), 0));
+                        vs.prims.push(vo(o.id));
                         pvis.push(v);
                         pflag.push(e.flags.get(&o.id).copied().unwrap_or(0));
                         ptext.push(0);
@@ -410,6 +432,7 @@ impl App {
                 }
                 Kind::Terminal { pos, nr, .. } => {
                     pins.push(b(*pos));
+                    vs.pins.push(vo(o.id));
                     pin_vis.push(v);
                     // Anschlussbezeichnung (Textnummer) des bisherigen Anschlusses beibehalten bzw. die per
                     // „Bezeichner setzen“ gewählte
@@ -432,6 +455,7 @@ impl App {
                     0
                 };
                 prims.push(pr);
+                vs.prims.push(vo(o.id));
                 pvis.push(v);
                 pflag.push(e.flags.get(&o.id).copied().unwrap_or(0));
                 ptext.push(t);
@@ -465,6 +489,7 @@ impl App {
             text_mode: pmode,
             fill: pfill,
             pens: e.pens.clone(),
+            versatz: if vs.ist_leer() { Default::default() } else { vs },
         };
         self.checkpoint();
         if let Some(d) = self.lib.iter_mut().find(|d| d.key == def.key) {

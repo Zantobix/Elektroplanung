@@ -198,15 +198,9 @@ pub fn triangle_pts(a: P, b: P) -> [P; 3] {
 /// Weltkoordinaten der Anschlüsse eines Objekts.
 pub fn obj_pins(o: &Obj, lib: &[SymDef]) -> Vec<P> {
     match &o.kind {
+        // Lage je Option (Versatz Feld 13/14, symbols::anschluss_lagen): alle Pole mehrpoliger Symbole
         Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, flags, .. } => symbols::find(lib, key)
-            .map(|d| {
-                d.pins
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, _)| symbols::visible(*option, d.pin_vis.get(*i)) && symbols::flag_visible(*flags, d.pin_info.get(*i).map(|x| &x.1)))
-                    .map(|(_, q)| sym_xf(*q, *pos, *rot, *mirror_h, *mirror_v, *scale))
-                    .collect()
-            })
+            .map(|d| symbols::anschluss_lagen(d, *option, *flags).into_iter().map(|(_, q)| sym_xf(q, *pos, *rot, *mirror_h, *mirror_v, *scale)).collect())
             .unwrap_or_default(),
         // Verweis: Anschluss an der Pfeilspitze (im Original lassen sich Leitungen anschließen)
         Kind::Terminal { pos, .. } | Kind::Verweis { pos, .. } => vec![*pos],
@@ -239,9 +233,10 @@ pub fn obj_bounds(o: &Obj, lib: &[SymDef]) -> (P, P) {
         Kind::Text { pos, text, size, align, vertical, style } => crate::textmass::text_umriss(*pos, text, *size, *align, *vertical, style),
         Kind::Poly { pts } => pts_bounds(pts),
         Kind::Symbol { pos, ext: SymExt { bounds: Some((a, b)), .. }, .. } => (pos.add(*a), pos.add(*b)),
-        Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, .. } => match symbols::find(lib, key) {
+        Kind::Symbol { key, pos, rot, mirror_h, mirror_v, scale, option, flags, .. } => match symbols::find(lib, key) {
             Some(d) => {
-                let (mn, mx) = symbols::bounds_opt(d, *option);
+                // Elemente der gewählten Zusatzoptionen (W2: Leistungskontakt mit Hilfskontakt, siehe Test)
+                let (mn, mx) = symbols::bounds_ext(d, *option, Some(*flags));
                 let c = [P::new(mn.x, mn.y), P::new(mx.x, mn.y), P::new(mx.x, mx.y), P::new(mn.x, mx.y)];
                 let pts: Vec<P> = c.iter().map(|q| sym_xf(*q, *pos, *rot, *mirror_h, *mirror_v, *scale)).collect();
                 pts_bounds(&pts)
@@ -785,7 +780,7 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                     }
                 } else {
                     // BMK links vom Symbol (bzw. am Titelanker der Bibliothek, wenn ungedreht)
-                    let anchor = match (def.title, rot % 4 == 0 && !mirror_h && !mirror_v) {
+                    let anchor = match (symbols::title_lage(def, *option), rot % 4 == 0 && !mirror_h && !mirror_v) {
                         (Some(t), true) => P::new(pos.x + (t.x * scale).min(mn.x - pos.x - 0.8), pos.y + t.y * scale),
                         _ => P::new(mn.x - 1.0, (mn.y + mx.y) / 2.0),
                     };
@@ -922,10 +917,13 @@ pub fn draw_symbol_full(p: &egui::Painter, xf: Xf, def: &SymDef, pos: P, rot: u8
     let alt_set = if alt > 0 { def.alt_sets.get(alt as usize - 1) } else { None };
     let t = |q: P| xf.s(sym_xf(q, pos, rot, mh, mv, scale));
     let z = xf.z * scale;
-    for (i, pr) in def.prims.iter().enumerate() {
+    for i in 0..def.prims.len() {
         if !symbols::visible(option, def.vis.get(i)) || !symbols::flag_visible(flags, def.flag.get(i)) {
             continue;
         }
+        // Lage je Option: Versatz Feld 13/14 × Option (mehrpolige Kontakte, Sicherungen)
+        let pr_lage = symbols::prim_lage(def, i, option);
+        let pr = &*pr_lage;
         // Stift des Elements: eingebaute Stiftart oder eigener Stift des Symbols (Breite, Art, Farbe)
         let (stroke, art) = match pr {
             Prim::Line(.., st) | Prim::Poly(_, st) | Prim::Bezier(.., st) | Prim::Ellipse(.., st) => crate::symbol_stifte::strich(def, *st, stroke, xf.z),

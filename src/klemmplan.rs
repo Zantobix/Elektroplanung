@@ -166,11 +166,8 @@ impl<'a> Netz<'a> {
                     let Some(def) = symbols::find(lib, key) else { continue };
                     let kennung = crate::eigentuemer::anzeige_in(anlagen, o, &ctx);
                     let pf = pfad(sheet, pos.x);
-                    for (i, q) in def.pins.iter().enumerate() {
-                        if !symbols::visible(*option, def.pin_vis.get(i)) || !symbols::flag_visible(*flags, def.pin_info.get(i).map(|x| &x.1)) {
-                            continue;
-                        }
-                        let at = sym_xf(*q, *pos, *rot, *mirror_h, *mirror_v, *scale);
+                    for (i, q) in symbols::anschluss_lagen(def, *option, *flags) {
+                        let at = sym_xf(q, *pos, *rot, *mirror_h, *mirror_v, *scale);
                         n.pins.push((at, Ziel { kennung: kennung.clone(), kl: pin_name(def, i, ext, *option), pfad: pf.clone() }));
                     }
                 }

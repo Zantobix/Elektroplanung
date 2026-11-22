@@ -726,5 +726,6 @@ pub fn symdef_from_block(s: &Block) -> Option<SymDef> {
         fill: el.fill,
         pens: crate::symbol_stifte::aus_grd(grd),
         options,
+        versatz: el.versatz,
     })
 }
