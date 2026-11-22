@@ -247,7 +247,8 @@ impl App {
             orig: name.into(),
             name: name.into(),
             set,
-            pots: self.project.potentiale.clone(),
+            // erster Eintrag „Keine Zuordnung“ wie im Original (leeres Potential)
+            pots: std::iter::once("Keine Zuordnung".to_string()).chain(self.project.potentiale.iter().cloned()).collect(),
             stifte: self.project.stifte.iter().map(|s| s.name.clone()).collect(),
         });
     }
@@ -410,9 +411,9 @@ impl App {
                     field(ui, 70.0, "Kürzel", &mut set.kurz, 180.0);
                     ui.horizontal(|ui| {
                         lbl(ui, 86.0, "Potential");
-                        let mut i = pots.iter().position(|p| *p == set.potential).unwrap_or(0);
+                        let mut i = if set.potential.is_empty() { 0 } else { pots.iter().skip(1).position(|p| *p == set.potential).map(|i| i + 1).unwrap_or(0) };
                         if combo(ui, "spot", pots, &mut i, 150.0) {
-                            set.potential = pots[i].clone();
+                            set.potential = if i == 0 { String::new() } else { pots[i].clone() };
                         }
                     });
                     ui.horizontal(|ui| {

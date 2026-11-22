@@ -1222,6 +1222,8 @@ impl App {
         }
         let name = format!("Schiene {n}");
         anl.sammelschienen.push(name.clone());
+        // Vorgaben des Original-Dialogs: Kürzel „L<n>“, keine Zuordnung, Querverweise an, Pfeile aus
+        anl.schienen.insert(name.clone(), SchieneSet { kurz: format!("L{n}"), pfeile: false, ..Default::default() });
         self.tree_open.insert(format!("prj/a{a}/ss"));
         self.open_schiene_dialog(a, &name);
     }

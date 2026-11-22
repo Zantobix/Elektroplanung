@@ -21,6 +21,8 @@ Behoben (Maustest 22.11.2026):
 - Neue Sammelschiene (Menü und Werkzeugleiste) wie im Original: nur im Projektbaum anlegen („Schiene n“) und den
   Eigenschaftendialog öffnen; per Ziehen aus dem Baum kommt sie als echtes Sammelschienen-Objekt auf das Blatt
   (oben gestapelt wie in W2). Bisher entstand eine Leitung mit Text, und Ziehen aus dem Baum ging nicht
+- Sammelschienen-Dialog: Potential „Keine Zuordnung“ wählbar und Vorgabe; neue Schienen mit Kürzel „L<n>“, ohne Pfeile
+  (Vorgaben des Originals)
 - Doppelklick auf eine Anlage im Projektbaum öffnet ihre Eigenschaften (wie im Original) statt sie zuzuklappen
 
 ## [0.2.0]
