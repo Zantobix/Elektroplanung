@@ -149,10 +149,23 @@ pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u
             canvas::obj_pins(o, lib).into_iter().map(move |q| (q, tol))
         })
         .collect();
-    if pins.is_empty() {
+    // mitverschobene Leitungen: Abzweige (Leitungsende auf einem ihrer Stücke) wandern mit, statt abzureißen
+    // (Maustest Runde 10: Klemmenreihe samt Leitungen verschoben, Zuleitung von -F2.L blieb frei stehen)
+    let bewegte: Vec<(P, P)> = sheet
+        .objects
+        .iter()
+        .filter(|o| moved.contains(&o.id))
+        .filter_map(|o| match &o.kind {
+            Kind::Wire { pts, .. } => Some(pts.windows(2).map(|w| (w[0], w[1])).collect::<Vec<_>>()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    if pins.is_empty() && bewegte.is_empty() {
         return vec![];
     }
     let am_pin = |p: P| pins.iter().position(|(q, t)| q.dist(p) <= *t);
+    let auf_bewegter = |p: P| bewegte.iter().any(|(a, b)| seg_dist(p, *a, *b) <= PIN_TOL);
     // fremde Anschlusspunkte: Enden anderer Leitungen und Symbolanschlüsse (Abzweig/Knoten im Innern einer Leitung)
     let anker: Vec<(u64, P)> = sheet
         .objects
@@ -171,7 +184,7 @@ pub fn find_followers(sheet: &Sheet, lib: &[SymDef], moved: &[u64], exclude: &[u
             }
             let (a, e) = (pts[0], pts[pts.len() - 1]);
             let (ia, ie) = (am_pin(a), am_pin(e));
-            let mut ends = [ia.is_some(), ie.is_some()];
+            let mut ends = [ia.is_some() || auf_bewegter(a), ie.is_some() || auf_bewegter(e)];
             // sehr kurze Leitung mit beiden Enden im Kreis derselben Klemme (W2: 0,3 mm von der Klemme zur Schiene):
             // nur das Ende am Kreis (0,8 mm vor dem Mittelpunkt, wie es das Original speichert) hängt an der Klemme
             if let (Some(i), Some(j)) = (ia, ie) {
@@ -257,10 +270,15 @@ impl App {
         // Stich der Neuführung wie beim Zeichnen ein halbes Raster (leitung_route.rs)
         let stich = self.raster() / 2.0;
         // Abgriff an einer Sammelschiene wandert mit (schiene_halten.rs)
-        let sch = self.sheet().map(|s| crate::schiene_halten::schienen(s, &[])).unwrap_or_default();
+        // Abzweig auf einer Schiene bzw. Leitung: gerade auf das Gleis, der Abgriff wandert mit (schiene_halten.rs)
+        let (sch, gl) = self.sheet().map(|s| (crate::schiene_halten::schienen(s, &[]), crate::schiene_halten::gleise(s))).unwrap_or_default();
         let neu: Vec<(u64, Vec<P>, bool)> = f
             .iter()
-            .map(|w| (w.id, crate::schiene_halten::abgreifen(&folgen(&w.pts, w.ends, d, w.dirs, w.profil, stich, &|p| self.snap(p)), &sch), w.ends[0] && w.ends[1]))
+            .map(|w| {
+                let pts = crate::schiene_halten::gerade_zum_gleis(w.id, &w.pts, w.ends, d, w.dirs, &gl)
+                    .unwrap_or_else(|| crate::schiene_halten::abgreifen(&folgen(&w.pts, w.ends, d, w.dirs, w.profil, stich, &|p| self.snap(p)), &sch));
+                (w.id, pts, w.ends[0] && w.ends[1])
+            })
             .collect();
         self.with_sheet(|s, _| {
             for (id, pts, ganz) in neu {

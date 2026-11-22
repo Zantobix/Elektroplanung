@@ -19,6 +19,11 @@ Sammelschienen und Vormarkierung:
   mit; es liegt keine Leitung mehr auf der Schiene.
 - Markierte Leitungen reißen beim Verschieben einer großen Markierung nicht mehr von der Sammelschiene ab.
 - Über Leitungen erscheint kein gestricheltes Vormarkierungs-Rechteck mehr.
+- Abzweige auf Leitungen (z. B. auf „-F2.L“/„-F2.N“) wandern wie an Sammelschienen mit: Wird das Symbol am anderen
+  Ende verschoben, geht die Leitung gerade auf ihr Gleis, statt zum alten Abgriff zurück und über andere Leitungen
+  zu laufen.
+- Wird eine Leitung mitverschoben, folgen Leitungen, die als Abzweig auf ihr enden (vorher blieb ihr Ende frei
+  stehen).
 
 BMK neuer Symbole wie im Original:
 - Neue Symbole speichern die BMK mit Ortsplatzhalter („-E1+%P“ wie in W2), so dass ein später eingetragenes

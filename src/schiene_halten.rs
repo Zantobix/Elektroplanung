@@ -117,6 +117,92 @@ pub fn verschoben(h: &Halt, d: P, alle: &[Schiene]) -> Vec<P> {
     abgreifen(&v, alle)
 }
 
+/// Achsengerades Gleis, auf dem ein Abgriff wandern darf: Sammelschiene oder gerades Stück einer Leitung
+/// (Leitung als „Schiene“, z. B. die Ausgänge „-F2.L“/„-F2.N“ in W2, an denen Abzweige mit Knoten hängen).
+#[derive(Clone, Copy, Debug)]
+pub struct Gleis {
+    pub id: u64,
+    pub a: P,
+    pub b: P,
+    pub schiene: bool,
+}
+
+/// Alle Gleise des Blattes: Sammelschienen und achsengerade Stücke aller Leitungen.
+pub fn gleise(sheet: &Sheet) -> Vec<Gleis> {
+    let mut v = vec![];
+    for o in &sheet.objects {
+        match &o.kind {
+            Kind::Busbar { a, x2, .. } => v.push(Gleis { id: o.id, a: P::new(a.x.min(*x2), a.y), b: P::new(a.x.max(*x2), a.y), schiene: true }),
+            Kind::Wire { pts, .. } => {
+                for w in pts.windows(2) {
+                    if (w[0].x - w[1].x).abs() < EPS || (w[0].y - w[1].y).abs() < EPS {
+                        v.push(Gleis { id: o.id, a: w[0], b: w[1], schiene: false });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    v
+}
+
+fn waag(g: &Gleis) -> bool {
+    (g.a.y - g.b.y).abs() < EPS
+}
+
+/// Liegt `p` auf dem Gleis? Bei Leitungen nur im Innern des Stücks (an einem Ende/Knick hängt dort sonst eine
+/// Verbindung, die beim Wandern verloren ginge).
+fn auf_gleis(p: P, g: &Gleis, rand: f32) -> bool {
+    let r = if g.schiene { -EPS } else { rand };
+    if waag(g) {
+        (p.y - g.a.y).abs() < EPS && p.x > g.a.x.min(g.b.x) + r && p.x < g.a.x.max(g.b.x) - r
+    } else {
+        (p.x - g.a.x).abs() < EPS && p.y > g.a.y.min(g.b.y) + r && p.y < g.a.y.max(g.b.y) - r
+    }
+}
+
+/// Überdeckt die Strecke `a`–`b` (achsengerade) ein Stück eines Gleises der Länge > 0,5 mm?
+fn ueberdeckt(a: P, b: P, g: &Gleis) -> bool {
+    let ov = |p0: f32, p1: f32, q0: f32, q1: f32| p0.max(p1).min(q0.max(q1)) - p0.min(p1).max(q0.min(q1));
+    if (a.x - b.x).abs() < EPS && !waag(g) && (a.x - g.a.x).abs() < EPS {
+        ov(a.y, b.y, g.a.y, g.b.y) > 0.5
+    } else if (a.y - b.y).abs() < EPS && waag(g) && (a.y - g.a.y).abs() < EPS {
+        ov(a.x, b.x, g.a.x, g.b.x) > 0.5
+    } else {
+        false
+    }
+}
+
+/// Abgriff wandert mit (Nutzer 22.11.2026): Wird das Symbol am einen Ende einer Leitung verschoben und hängt das
+/// andere Ende als Abzweig auf einer Schiene oder einer anderen Leitung, die quer zur Anschlussrichtung liegt, wird
+/// die Leitung zur geraden Verbindung vom Anschluss auf das Gleis – der Abgriff (Knoten) wandert mit, statt dass
+/// die Leitung zum alten Abgriff zurück- und dabei über andere Leitungen läuft. `None`, wenn das nicht geht
+/// (Anschluss zeigt nicht auf das Gleis, Lotpunkt außerhalb, gerade Strecke läge auf einer anderen Leitung).
+pub fn gerade_zum_gleis(id: u64, pts: &[P], ends: [bool; 2], d: P, dirs: [Option<P>; 2], gl: &[Gleis]) -> Option<Vec<P>> {
+    if pts.len() < 2 || ends[0] == ends[1] {
+        return None;
+    }
+    let k = if ends[0] { 0 } else { 1 };
+    let (p, q) = if k == 0 { (pts[0].add(d), pts[pts.len() - 1]) } else { (pts[pts.len() - 1].add(d), pts[0]) };
+    let dir = dirs[k]?;
+    let g = gl.iter().find(|g| g.id != id && auf_gleis(q, g, 0.5))?;
+    let ziel = if waag(g) {
+        if dir.x.abs() > EPS || (g.a.y - p.y) * dir.y <= EPS {
+            return None;
+        }
+        P::new(p.x, g.a.y)
+    } else {
+        if dir.y.abs() > EPS || (g.a.x - p.x) * dir.x <= EPS {
+            return None;
+        }
+        P::new(g.a.x, p.y)
+    };
+    if !auf_gleis(ziel, g, 0.5) || gl.iter().any(|h| h.id != id && ueberdeckt(p, ziel, h)) {
+        return None;
+    }
+    Some(if k == 0 { vec![p, ziel] } else { vec![ziel, p] })
+}
+
 impl crate::app::App {
     /// Markierte Leitungen nach dem Verschieben um `d` (gesamt seit `finden`) wieder an ihre Schienen binden.
     pub fn schienen_halten(&mut self, halt: &[Halt], d: P) {
@@ -202,5 +288,24 @@ mod tests {
         assert_eq!(v[0], p(300.0, 20.0));
         assert!(v.windows(2).all(|w| (w[0].x - w[1].x).abs() < EPS || (w[0].y - w[1].y).abs() < EPS), "{v:?}");
         assert_eq!(*v.last().unwrap(), p(320.0, 110.0));
+    }
+
+    #[test]
+    fn abzweig_auf_leitung_wandert_mit() {
+        // W2 „Sicherungen -F10, -F1 und -F2“: -F2:L (97.5,97.5) → Abzweig auf -F2.L (y=102); -F2 um 29.5 mm nach rechts
+        let schiene = Gleis { id: 9, a: p(60.0, 102.0), b: p(200.0, 102.0), schiene: false };
+        let n = Gleis { id: 8, a: p(60.0, 107.0), b: p(200.0, 107.0), schiene: false };
+        let pts = [p(97.5, 97.5), p(97.5, 102.0), p(102.5, 102.0)];
+        let dirs = [Some(p(0.0, 1.0)), Some(p(1.0, 0.0))];
+        let r = gerade_zum_gleis(1, &pts, [true, false], p(29.5, 0.0), dirs, &[schiene, n]);
+        assert_eq!(r, Some(vec![p(127.0, 97.5), p(127.0, 102.0)]));
+        // Anschluss zeigt vom Gleis weg → nichts
+        assert_eq!(gerade_zum_gleis(1, &pts, [true, false], p(29.5, 0.0), [Some(p(0.0, -1.0)), None], &[schiene]), None);
+        // Abgriff am Ende der anderen Leitung (Eckverbindung) → nichts
+        let eck = Gleis { id: 9, a: p(102.5, 102.0), b: p(200.0, 102.0), schiene: false };
+        assert_eq!(gerade_zum_gleis(1, &pts, [true, false], p(29.5, 0.0), dirs, &[eck]), None);
+        // gerade Strecke läge auf einer anderen Leitung → nichts
+        let senk = Gleis { id: 5, a: p(127.0, 90.0), b: p(127.0, 110.0), schiene: false };
+        assert_eq!(gerade_zum_gleis(1, &pts, [true, false], p(29.5, 0.0), dirs, &[schiene, senk]), None);
     }
 }
