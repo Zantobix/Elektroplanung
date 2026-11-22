@@ -77,6 +77,10 @@ impl App {
         if let Some(f) = self.cur().filter(|_| self.sym_edit.is_none()).and_then(|r| crate::verweise::busbar_text_at(&self.project, r, m, tol)) {
             return Some(Ziel::Verweis { id: f.quelle, mn: f.mn, mx: f.mx, text: true });
         }
+        // Punkt eines Zeichenobjekts: Pfeil mit vier Pfeilspitzen wie beim Eckpunkt (Original Zeiger 5, zeichen_punkt.rs)
+        if self.zeichenpunkt_unter(m, tol).is_some() {
+            return Some(Ziel::Ecke);
+        }
         let id = self.hit_top(m, tol)?;
         let o = self.sheet()?.objects.iter().find(|o| o.id == id)?;
         let (mn, mx) = canvas::obj_bounds(o, &self.lib);
@@ -85,8 +89,9 @@ impl App {
             Kind::Text { .. } => Ziel::Text { id, mn, mx },
             // im Symboleditor sind alle Objekte Zeichenelemente
             _ if self.sym_edit.is_some() => Ziel::Objekt { id, mn, mx, art: Objektart::Verschiebbar },
-            Kind::Busbar { .. } => Ziel::Objekt { id, mn, mx, art: Objektart::Anschluss },
-            Kind::Terminal { .. } | Kind::Spiegel { .. } => Ziel::Objekt { id, mn, mx, art: Objektart::Schlicht },
+            // Sonderobjekte Art 0–2 (Klemmstelle, Sammelschiene, Verweis): Leitungszeiger (Original 0x415e9e)
+            Kind::Busbar { .. } | Kind::Terminal { .. } => Ziel::Objekt { id, mn, mx, art: Objektart::Anschluss },
+            Kind::Spiegel { .. } => Ziel::Objekt { id, mn, mx, art: Objektart::Schlicht },
             _ => Ziel::Objekt { id, mn, mx, art: Objektart::Verschiebbar },
         })
     }

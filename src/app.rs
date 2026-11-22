@@ -56,6 +56,8 @@ pub enum Drag {
     /// Griff (0 Anfang, 1/2 Kontrollpunkte, 3 Ende) einer markierten Kurve ziehen
     KurvenGriff { id: u64, griff: usize },
     Resize { id: u64, corner: usize },
+    /// Punkt eines Zeichenobjekts ziehen (zeichen_punkt.rs); `ab` = Maus beim Drücken, bis sie sich bewegt
+    Zeichenpunkt { id: u64, punkt: crate::zeichen_punkt::Punkt, ab: Option<P> },
     /// Rahmen zur Größenänderung um die ganze Markierung: Griff 0–7 (links oben im Uhrzeigersinn),
     /// Umriss und Objekte beim Beginn des Ziehens
     Scale { handle: usize, start: (P, P), orig: Vec<Obj> },
