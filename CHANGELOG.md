@@ -25,6 +25,10 @@ Leitungsführung nach Nutzerwünschen (Runde 12):
 - Einfügen: Klemmstellen bekommen die nächste freie Nummer ihrer Leiste (bisher doppelt „X1.1“). Symbole mit fester
   Kennungsvorlage ohne Zähler (z. B. Lampe „-E1+%P“) bekommen beim Einfügen und Platzieren die nächste freie Zahl
   („-E2“); das Original vergibt die Kennung dann doppelt.
+- Ziehen einer Markierung: liegt unter der Maus ein markiertes Objekt, greift sie nicht mehr die Beschriftung eines
+  anderen, darunterliegenden Symbols.
+- Text vom Textwerkzeug im Eigenschaftendialog geändert: Bleiben die Abmessungen unverändert, behält er keine feste
+  Box und wird nicht mehr an der vorgeschlagenen Breite abgeschnitten.
 - Verschobene Symbole und Klemmstellen rücken wieder auf das Raster (erster Anschluss), auch wenn sie vorher daneben
   lagen (bewusste Abweichung: das Original behält den Rest).
 

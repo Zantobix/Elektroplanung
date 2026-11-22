@@ -223,6 +223,11 @@ impl App {
     /// es das noch nicht ist. true = behandelt.
     pub fn beschriftung_greifen(&mut self, m: P, tol: f32) -> bool {
         let Some((id, wert, orig, _)) = self.beschriftung_unter(m, tol * 0.4) else { return false };
+        // liegt unter der Maus ein markiertes Objekt, gehört das Ziehen der Markierung – nicht der Beschriftung eines
+        // anderen, nicht markierten Symbols (Maustest Runde 12: eingefügte Kopie lag unter „-Q2“ des Nachbarn)
+        if !self.selection.contains(&id) && self.selected_objs().iter().any(|o| crate::canvas::hit(o, m, tol, &self.lib)) {
+            return false;
+        }
         self.checkpoint();
         if !self.selection.contains(&id) {
             self.selection = vec![id];

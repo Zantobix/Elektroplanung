@@ -61,6 +61,9 @@ pub struct TextProps {
     pub color: [u8; 3],
     pub font: String,
     pub font_dlg: Option<FontDlg>,
+    /// Text ohne feste Box (vom Textwerkzeug): Abmessungen beim Öffnen; bleiben sie unverändert, bleibt der Text
+    /// ohne Box und wächst mit (Maustest Runde 12: längerer Text wurde an der vorgeschlagenen Breite abgeschnitten)
+    pub frei: Option<[String; 4]>,
 }
 
 #[derive(Clone)]
@@ -308,6 +311,7 @@ impl App {
                     color: style.color,
                     font: if style.font.is_empty() { "Times New Roman".into() } else { style.font.clone() },
                     font_dlg: None,
+                    frei: style.rect.is_none().then(|| [d01(mn.y), d01(mn.x), d01(mx.y - mn.y), d01(mx.x - mn.x)]),
                 }));
                 true
             }
@@ -600,8 +604,11 @@ impl App {
                             style.color = t.color;
                             style.rotation = rotation;
                             style.font = if t.font == "Times New Roman" { String::new() } else { t.font.clone() };
-                            style.rect = Some((mn, mx));
-                            *pos = crate::epr::text_anchor(mn, mx, t.align, vertical);
+                            let unveraendert = t.frei.as_ref().is_some_and(|f| f == &[t.oben.clone(), t.links.clone(), t.hoehe.clone(), t.breite.clone()]);
+                            if !unveraendert {
+                                style.rect = Some((mn, mx));
+                                *pos = crate::epr::text_anchor(mn, mx, t.align, vertical);
+                            }
                         }
                     }
                 });
