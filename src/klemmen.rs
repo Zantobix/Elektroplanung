@@ -190,18 +190,32 @@ pub fn ensure_ids(p: &mut Project) {
     }
 }
 
-/// Neue Klemmleiste „Klemme n“ mit Kennung anlegen; Rückgabe: Index in `klemmleisten`.
+/// Vorgaben einer neuen Klemmleiste Nr. `n` wie im Original: Name „Klemme n“ (KLM Byte 0–43), Titel „Xn“
+/// (KLM › TIT, %O der Klemmstellen → Bezeichnung „X1.1“; so in W2.epr bei allen noch nicht umbenannten Leisten,
+/// Maus-Befund M5). Kennung 0 = von `ensure_ids` zu vergeben.
+pub fn vorgabe_leiste(n: usize) -> KlemmInfo {
+    KlemmInfo { id: 0, name: format!("X{n}"), nrs: vec![], intern: format!("Klemme {n}"), etagen: 1, titel_off: (0, -50) }
+}
+
+/// Klemmleisten einer neuen Anlage: `klemmleisten` (Titel) und `klemmen` mit der Leiste „Klemme 1“ / „X1“.
+pub fn erste_leiste() -> (Vec<String>, Vec<KlemmInfo>) {
+    let k = vorgabe_leiste(1);
+    (vec![k.name.clone()], vec![k])
+}
+
+/// Neue Klemmleiste „Klemme n“ (Titel „Xn“) mit Kennung anlegen; Rückgabe: Index in `klemmleisten`.
 pub fn new_leiste(p: &mut Project, anlage: usize) -> Option<usize> {
     ensure_ids(p);
     let next = p.anlagen.iter().flat_map(|a| &a.klemmen).map(|k| k.id).max().unwrap_or(0) + 1;
     let a = p.anlagen.get_mut(anlage)?;
     let mut n = a.klemmleisten.len() + 1;
-    while a.klemmleisten.contains(&format!("Klemme {n}")) {
+    let belegt = |a: &Anlage, k: &KlemmInfo| a.klemmleisten.contains(&k.name) || a.klemmen.iter().any(|x| x.name == k.name || x.intern == k.intern);
+    while belegt(a, &vorgabe_leiste(n)) {
         n += 1;
     }
-    let name = format!("Klemme {n}");
-    a.klemmleisten.push(name.clone());
-    a.klemmen.push(KlemmInfo { id: next, name: name.clone(), nrs: vec![], intern: name, etagen: 1, titel_off: (0, -50) });
+    let k = KlemmInfo { id: next, ..vorgabe_leiste(n) };
+    a.klemmleisten.push(k.name.clone());
+    a.klemmen.push(k);
     Some(a.klemmleisten.len() - 1)
 }
 
@@ -529,6 +543,22 @@ pub fn apply_index(p: &mut Project, id: u64, e: &Eingabe) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn neue_leisten_wie_im_original() {
+        // Original: Name „Klemme n“, Titel „Xn“ → Klemmstelle „X1.1“ (W2.epr, Maus-Befund M5)
+        let mut p = Project::new_default();
+        assert_eq!(p.anlagen[0].klemmleisten, vec!["X1".to_string()]);
+        assert_eq!(p.anlagen[0].klemmen[0].intern, "Klemme 1");
+        assert_eq!(label("", "X1", 1, 0, false), "X1.1");
+        let i = new_leiste(&mut p, 0).unwrap();
+        let a = &p.anlagen[0];
+        assert_eq!(a.klemmleisten[i], "X2");
+        assert_eq!(a.klemmen.iter().find(|k| k.name == "X2").map(|k| k.intern.as_str()), Some("Klemme 2"));
+        // Kennungen eindeutig und vergeben
+        let ids: Vec<i32> = a.klemmen.iter().map(|k| k.id).collect();
+        assert!(ids.iter().all(|i| *i > 0) && ids[0] != ids[1], "{ids:?}");
+    }
 
     fn project_with(n: u32) -> (Project, Vec<u64>) {
         let mut p = Project::new_default();

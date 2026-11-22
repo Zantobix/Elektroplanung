@@ -302,7 +302,7 @@ impl Server {
             "add_anlage" => {
                 let n = self.project.anlagen.len() + 1;
                 let name = arg_str(a, "name").map(String::from).unwrap_or_else(|| format!("Anlage {n}"));
-                self.project.anlagen.push(Anlage { name, sheets: vec![Sheet::new(1)], sammelschienen: vec![], klemmleisten: vec!["Klemme 1".into()], klemmen: vec![], schienen: Default::default(), set: Default::default(), raw: None });
+                self.project.anlagen.push(Anlage { name, sheets: vec![Sheet::new(1)], sammelschienen: vec![], klemmleisten: crate::klemmen::erste_leiste().0, klemmen: crate::klemmen::erste_leiste().1, schienen: Default::default(), set: Default::default(), raw: None });
                 self.dirty = true;
                 Ok(json!({ "anlage": n - 1 }))
             }
