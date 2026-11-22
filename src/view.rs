@@ -394,6 +394,7 @@ impl App {
             match &n.action {
                 TAction::Sheet(r) => self.open_sheet(*r),
                 TAction::Bild(i) => self.place_project_image(*i),
+                TAction::None if n.id.strip_prefix("prj/a").is_some_and(|r| !r.is_empty() && r.chars().all(|c| c.is_ascii_digit())) => self.tree_context(&n, "Eigenschaften"),
                 TAction::Symbol(_) | TAction::None => {}
                 _ => self.tree_context(&n, "Eigenschaften"),
             }
@@ -406,6 +407,9 @@ impl App {
         }
         if ev.sym_drag && self.placing.is_some() {
             self.lib_drag = true;
+        }
+        if ev.schiene_drag.is_some() {
+            self.schiene_drag = ev.schiene_drag;
         }
         if let (Some(src), Some(dst)) = (self.tree_drag, ev.drop_on) {
             self.move_sheet(src.anlage, src.sheet, dst.sheet);
@@ -456,7 +460,11 @@ impl App {
             ev.clicked = Some(node.clone());
         }
         if resp.double_clicked() {
-            if crate::baum_klappen::klappt_um(kinder, crate::baum_klappen::Klick::Doppelt) {
+            // Anlage: Doppelklick öffnet wie im Original die Eigenschaften (Maus-Befund M7, Gegenprobe Wine)
+            let anlage = node.id.strip_prefix("prj/a").is_some_and(|r| !r.is_empty() && r.chars().all(|c| c.is_ascii_digit()));
+            if anlage {
+                ev.dbl = Some(node.clone());
+            } else if crate::baum_klappen::klappt_um(kinder, crate::baum_klappen::Klick::Doppelt) {
                 ev.toggled = Some(node.id.clone());
             } else {
                 ev.dbl = Some(node.clone());
@@ -469,6 +477,10 @@ impl App {
         // Symbol auf das Blatt ziehen (Ablegen setzt es, siehe handle_canvas_input)
         if resp.drag_started() && matches!(node.action, TAction::Symbol(_)) {
             ev.sym_drag = true;
+        }
+        // Sammelschiene aus dem Baum auf das Blatt ziehen (schiene_platzieren.rs)
+        if let (true, TAction::Schiene(a, i)) = (resp.drag_started(), &node.action) {
+            ev.schiene_drag = Some((*a, *i));
         }
         // Bauteil in die Bauteilliste eines Symbols ziehen (bauteilliste.rs)
         if let TAction::Bauteil(i) = &node.action {
@@ -1242,6 +1254,16 @@ impl App {
         // Loslassen – Optionen/Bildindex im Kontextmenü ließen sich so nicht wählen)
         let blocked = ui.ctx().any_popup_open() || hover.map(|h| ui.ctx().layer_id_at(h) != Some(ui.layer_id())).unwrap_or(true);
         let inside = !blocked && hover.map(|h| area.contains(h)).unwrap_or(false);
+        // Sammelschiene aus dem Projektbaum ablegen (schiene_platzieren.rs); Loslassen außerhalb bricht ab
+        if let Some((a, i)) = self.schiene_drag {
+            if released_l || !ui.input(|i| i.pointer.any_down()) {
+                self.schiene_drag = None;
+                if inside && released_l {
+                    self.schiene_ablegen(a, i);
+                    return;
+                }
+            }
+        }
         let tol = 5.0 / xf.z;
         // Vormarkierung des vorigen Bildes verwerfen (wird unten neu bestimmt, siehe hover.rs)
         crate::hover::setzen(ui.ctx(), resp, None);
@@ -2369,6 +2391,8 @@ struct TreeEvents {
     drag_start: Option<SheetRef>,
     /// Symbol wird aus der Bibliothek gezogen
     sym_drag: bool,
+    /// Sammelschiene (Anlage, Index) wird aus dem Projektbaum gezogen
+    schiene_drag: Option<(usize, usize)>,
     drop_on: Option<SheetRef>,
     clicked: Option<TNode>,
     dbl: Option<TNode>,

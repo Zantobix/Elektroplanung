@@ -62,6 +62,7 @@ pub mod sammelschiene_lage;
 pub mod schriften;
 pub mod schriftlage;
 pub mod schriftmass;
+pub mod schiene_platzieren;
 pub mod schriftfeld_editor;
 pub mod segment_ziehen;
 pub mod stift_neu;

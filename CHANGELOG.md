@@ -18,8 +18,10 @@ Behoben (Maustest 22.11.2026):
   den nächsten Rasterpunkt zu springen
 - In eine Leitung eingesetzte Klemmstelle lässt sich mit der Maus ziehen; beide Leitungsteile wandern mit (bisher
   begann das Ziehen eine neue Leitung, beim Verschieben mit Strg blieb eine Lücke)
-- „Neue Sammelschiene“ legt ein echtes Sammelschienen-Objekt an (wie in W2: Name darüber, gestapelt) statt einer
-  Leitung mit Text
+- Neue Sammelschiene (Menü und Werkzeugleiste) wie im Original: nur im Projektbaum anlegen („Schiene n“) und den
+  Eigenschaftendialog öffnen; per Ziehen aus dem Baum kommt sie als echtes Sammelschienen-Objekt auf das Blatt
+  (oben gestapelt wie in W2). Bisher entstand eine Leitung mit Text, und Ziehen aus dem Baum ging nicht
+- Doppelklick auf eine Anlage im Projektbaum öffnet ihre Eigenschaften (wie im Original) statt sie zuzuklappen
 
 ## [0.2.0]
 

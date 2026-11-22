@@ -258,6 +258,8 @@ pub struct App {
     pub multi_props: Option<crate::mehrfach::MultiProps>,
     /// Symbol wird aus der Bibliothek auf das Blatt gezogen (Loslassen außerhalb bricht ab)
     pub lib_drag: bool,
+    /// Sammelschiene (Anlage, Index) wird aus dem Projektbaum gezogen (schiene_platzieren.rs)
+    pub schiene_drag: Option<(usize, usize)>,
     /// weitere Dialoge (zusatz.rs: Parameter, Projektgrafik)
     pub zusatz: crate::zusatz::Zusatz,
 }
@@ -369,6 +371,7 @@ impl App {
             multi_props: None,
             zusatz: Default::default(),
             lib_drag: false,
+            schiene_drag: None,
             lib_dir: None,
             lib_info: String::new(),
         }
@@ -1206,31 +1209,21 @@ impl App {
         }
     }
 
-    /// Neue Sammelschiene (Werkzeugleiste, Kontextmenü): echtes Sammelschienen-Objekt wie in W2 (Anfang 8 mm rechts
-    /// vom Rahmen, Ende 21 mm vor dem rechten Rahmen, Name 4 mm darüber), oben unter die vorhandenen Schienen
-    /// gestapelt (5 mm Abstand). Bisher entstand hier eine Leitung mit Text, an der Leiter nicht senkrecht
-    /// anschlossen (Maus-Befund M3).
+    /// Neue Sammelschiene (Hinzufügen-Menü, Werkzeugleiste) wie im Original (Gegenprobe Wine 22.11.2026): nur im
+    /// Projektbaum anlegen (Name „Schiene n“) und ihren Eigenschaftendialog öffnen; aufs Blatt kommt sie durch
+    /// Ziehen aus dem Baum (schiene_platzieren.rs). Bisher entstand eine Leitung mit Text auf dem Blatt.
     pub fn new_busbar(&mut self) {
-        if self.cur().is_none() {
-            return;
-        }
-        let a = self.cur().map(|r| r.anlage).unwrap_or(0);
+        let Some(a) = self.cur().map(|r| r.anlage) else { return };
         self.checkpoint();
         let Some(anl) = self.project.anlagen.get_mut(a) else { return };
-        let n = anl.sammelschienen.len() + 1;
-        let name = format!("Sammelschiene {n}");
-        anl.sammelschienen.push(name.clone());
-        let (fx0, fy0, fx1, _) = self.sheet().map(|s| s.frame()).unwrap_or((FRAME_LEFT, FRAME_TOP, SHEET_W - FRAME_RIGHT, 0.0));
-        let vorhanden: Vec<f32> = self.sheet().map(|s| s.objects.iter().filter_map(|o| if let Kind::Busbar { a, .. } = &o.kind { Some(a.y) } else { None }).collect()).unwrap_or_default();
-        let mut y = fy0 + 12.0;
-        while vorhanden.iter().any(|v| (v - y).abs() < 2.5) {
-            y += 5.0;
+        let mut n = anl.sammelschienen.len() + 1;
+        while anl.sammelschienen.iter().any(|x| *x == format!("Schiene {n}")) {
+            n += 1;
         }
-        let id = self.project.alloc_id();
-        let kind = Kind::Busbar { a: P::new(fx0 + 8.0, y), x2: fx1 - 21.0, name, label: P::new(0.0, -4.0), style: 0, sms: 0, xin: String::new(), xout: String::new(), lage: 0, versatz: 0.0 };
-        self.with_sheet(|s, _| s.objects.push(Obj { id, kind, pen: 0, fixed: false, group: None, raw: None }));
+        let name = format!("Schiene {n}");
+        anl.sammelschienen.push(name.clone());
         self.tree_open.insert(format!("prj/a{a}/ss"));
-        self.selection = vec![id];
+        self.open_schiene_dialog(a, &name);
     }
 
     pub fn save_as(&mut self) {
