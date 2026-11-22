@@ -9,6 +9,17 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Fehler melden und Wünsche äußern:
+- Neu im Menü Hilfe: „Fehler melden…“ und „Wunsch äußern…“. Ein kleines Fenster mit einem Textfeld öffnet ein
+  fertig ausgefülltes Issue auf GitHub (Version und Betriebssystem auf Wunsch angehängt) oder kopiert den Text in
+  die Zwischenablage; ein Bild des aktuellen Blattes kann gespeichert und hineingezogen werden.
+
+Sammelschienen und Vormarkierung:
+- Beim Verschieben eines Teilstücks oder eines angeschlossenen Symbols wandert der Abgriff auf der Sammelschiene
+  mit; es liegt keine Leitung mehr auf der Schiene.
+- Markierte Leitungen reißen beim Verschieben einer großen Markierung nicht mehr von der Sammelschiene ab.
+- Über Leitungen erscheint kein gestricheltes Vormarkierungs-Rechteck mehr.
+
 BMK neuer Symbole wie im Original:
 - Neue Symbole speichern die BMK mit Ortsplatzhalter („-E1+%P“ wie in W2), so dass ein später eingetragenes
   Ortskennzeichen erscheint („-E1+W2“); bisher wurde „-E1“ fest geschrieben. Bewusste Abweichung: Bei leerem Ort

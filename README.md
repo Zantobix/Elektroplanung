@@ -203,6 +203,12 @@ nicht. Gemessen werden stattdessen:
   - Leitung ziehen: Der Knick folgt der Maus ohne Springen (erstes Teilstück behält seine Richtung, bis es Länge 0
     erreicht, nach KiCad); **Leertaste** oder **„/“** kippt die Knickrichtung während des Ziehens
     (`src/leitung_knick.rs`). Im Klickbetrieb gilt die Regel des Originals.
+  - Sammelschiene: Beim Verschieben wandert der Abgriff einer Leitung auf der Schiene mit, so dass keine Leitung
+    auf der Schiene entlangläuft; markierte Leitungen reißen beim Verschieben nicht von der Schiene ab
+    (`src/schiene_halten.rs`).
+  - Vormarkierung (gestricheltes Rechteck beim Überfahren) nur bei Objekten, nicht bei Leitungen.
+  - Hilfe › „Fehler melden…“ / „Wunsch äußern…“: kleines Fenster, öffnet ein ausgefülltes GitHub-Issue im Browser
+    (Systemangaben sichtbar und abwählbar, nie Projektinhalt) oder kopiert den Text (`src/fehlermeldung.rs`).
 - Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",
   Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); Brücken als Ketten in Spuren wie in den
   Original-Ausdrucken (Seiten 12, 13, 20–22, 39; je Anschlussrichtung höchstens eine Brücke), die

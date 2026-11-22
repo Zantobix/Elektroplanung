@@ -2105,6 +2105,14 @@ impl App {
                 }
             });
             ui.menu_button("Hilfe", |ui| {
+                // bewusste Erweiterung: Fehler und Wünsche mit wenig Aufwand melden (fehlermeldung.rs)
+                if ui.button("Fehler melden…").clicked() {
+                    self.meldung = Some(crate::fehlermeldung::Meldung::neu(crate::fehlermeldung::Art::Fehler));
+                }
+                if ui.button("Wunsch äußern…").clicked() {
+                    self.meldung = Some(crate::fehlermeldung::Meldung::neu(crate::fehlermeldung::Art::Wunsch));
+                }
+                ui.separator();
                 if ui.button("Info").clicked() {
                     self.dialog = Some(Dialog::Info);
                 }
@@ -2501,6 +2509,7 @@ impl eframe::App for App {
         self.align_window(&ctx);
         self.optionen_ui(&ctx);
         self.dialoge2_ui(&ctx);
+        self.meldung_ui(&ctx);
         let now = ctx.input(|i| i.time);
         self.retry_library(now);
         self.extra_dialogs(&ctx);

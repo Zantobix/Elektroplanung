@@ -258,6 +258,8 @@ pub struct App {
     pub move_follow: Vec<crate::mitziehen::Mitzieh>,
     /// markierte Leitungen, die beim Verschieben an ihren Sammelschienen bleiben (schiene_halten.rs)
     pub move_halt: Vec<crate::schiene_halten::Halt>,
+    /// offenes Fenster „Fehler melden / Wunsch äußern“ (fehlermeldung.rs)
+    pub meldung: Option<crate::fehlermeldung::Meldung>,
     /// Eigenschaften mehrerer markierter Objekte (Stift, Fixierung, Textgröße/-stil)
     pub multi_props: Option<crate::mehrfach::MultiProps>,
     /// Symbol wird aus der Bibliothek auf das Blatt gezogen (Loslassen außerhalb bricht ab)
@@ -373,6 +375,7 @@ impl App {
             owner_pick: None,
             move_follow: vec![],
             move_halt: vec![],
+            meldung: None,
             multi_props: None,
             zusatz: Default::default(),
             lib_drag: false,

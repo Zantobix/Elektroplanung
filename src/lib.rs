@@ -31,6 +31,7 @@ pub mod eprfile;
 pub mod extra;
 pub mod groesse;
 pub mod hover;
+pub mod fehlermeldung;
 pub mod grafik;
 pub mod icons;
 pub mod inhalt;
