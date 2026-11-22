@@ -9,8 +9,8 @@
 //! die Leitung, Rechtsklick bricht ab.
 //!
 //! Zusätzlich (Nachbau): Ziehen von einem Anschluss zum Ziel legt die Leitung in einem Zug; die erste Mausbewegung
-//! (waagerecht/senkrecht) bestimmt das erste Teilstück. Nahe am Anfang kann eine deutlich andere Bewegung die
-//! Richtung wechseln (Hysterese, stetige Vorschau: `leitung_zug.rs`).
+//! (waagerecht/senkrecht) bestimmt das erste Teilstück, das seine Richtung behält, bis es Länge 0 erreicht
+//! (`leitung_knick.rs`, nach KiCad); Leertaste bzw. „/“ kippt den Knick. Stetige Vorschau: `leitung_zug.rs`.
 
 use crate::model::P;
 
@@ -75,8 +75,12 @@ pub fn bereinigen(pts: Vec<P>) -> Vec<P> {
 pub struct Fuehrung {
     /// Feste Punkte: Anfang (Anschluss) und im Klickbetrieb die gesetzten Eckpunkte
     pub pts: Vec<P>,
-    /// Richtung des ersten Teilstücks beim Ziehen (aus der ersten deutlichen Mausbewegung)
+    /// Richtung des ersten Teilstücks beim Ziehen (aus der ersten deutlichen Mausbewegung, `leitung_knick.rs`)
     pub richtung: Option<Richtung>,
+    /// Knickrichtung mit der Umschalttaste gekippt (gilt auch für spätere Neuentscheidungen)
+    pub gekippt: bool,
+    /// Leitungsende beim letzten `bewegen` (für „Form halten bis Länge 0“)
+    pub zuletzt: Option<P>,
     /// Klickbetrieb wie im Original (nach einem Klick auf den Anschluss ohne Ziehen)
     pub klickbetrieb: bool,
     /// Beginn auf einer Sammelschiene (Höhe, waagerechte Ausdehnung): der Anfang wandert auf der Schiene in die
@@ -86,13 +90,13 @@ pub struct Fuehrung {
 
 impl Fuehrung {
     pub fn neu(start: P) -> Self {
-        Fuehrung { pts: vec![start], richtung: None, klickbetrieb: false, schiene: None }
+        Fuehrung { pts: vec![start], richtung: None, gekippt: false, zuletzt: None, klickbetrieb: false, schiene: None }
     }
 
     /// Leitung, die auf einer Sammelschiene `schiene` (Höhe, x von, x bis) bei `m` beginnt.
     pub fn von_schiene(m: P, schiene: (f32, f32, f32)) -> Self {
         let (y, x1, x2) = schiene;
-        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), klickbetrieb: false, schiene: Some(schiene) }
+        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), gekippt: false, zuletzt: None, klickbetrieb: false, schiene: Some(schiene) }
     }
 
     /// Beginnt die Leitung auf einer Schiene und ist noch kein Eckpunkt gesetzt: Anfang in die Flucht von `ziel`
@@ -112,13 +116,37 @@ impl Fuehrung {
         *self.pts.last().unwrap()
     }
 
-    /// Beim Ziehen die Maus `m` verfolgen: die erste Bewegung legt die Richtung des ersten Teilstücks fest; nahe am
-    /// Anfang wechselt sie nur, wenn die andere Richtung deutlich überwiegt (Hysterese, `leitung_zug::hysterese`).
+    /// Beim Ziehen das Leitungsende `m` verfolgen (ohne Anschlussrichtung), siehe `bewegen_mit`.
     pub fn bewegen(&mut self, m: P, schwelle: f32) {
+        self.bewegen_mit(m, None, schwelle);
+    }
+
+    /// Beim Ziehen das Leitungsende `ende` verfolgen: die erste deutliche Bewegung (über ein Drittel der `schwelle`)
+    /// legt die Richtung des ersten Teilstücks fest, danach bleibt sie, bis das Teilstück Länge 0 erreicht
+    /// (`leitung_knick::naechste`). `da` = Richtung nach außen am Anfangsanschluss (entscheidet bei Gleichstand).
+    pub fn bewegen_mit(&mut self, ende: P, da: Option<P>, schwelle: f32) {
         if self.klickbetrieb || self.schiene.is_some() {
             return;
         }
-        self.richtung = crate::leitung_zug::hysterese(self.richtung, m.sub(self.start()), schwelle);
+        // ohne Bewegung des Endes ändert sich nichts (z. B. nach dem Umschalten oder beim Loslassen)
+        if self.zuletzt.is_some_and(|z| z.dist(ende) < crate::leitung_knick::NULL) {
+            return;
+        }
+        let a = self.start();
+        let vorher = self.zuletzt.map(|z| z.sub(a));
+        self.richtung = crate::leitung_knick::naechste(self.richtung, vorher, ende.sub(a), da, self.gekippt, schwelle / 3.0);
+        self.zuletzt = Some(ende);
+    }
+
+    /// Umschalttaste beim Ziehen (bewusste Erweiterung nach KiCad „posture“): Knickrichtung kippen. Im Klickbetrieb
+    /// und an einer Sammelschiene ohne Wirkung (liefert dann `false`).
+    pub fn umschalten(&mut self) -> bool {
+        if self.klickbetrieb || self.schiene.is_some() {
+            return false;
+        }
+        self.gekippt = !self.gekippt;
+        self.richtung = self.richtung.map(crate::leitung_knick::andere);
+        true
     }
 
     /// Leitungsverlauf bis `ende` (Vorschau und Ergebnis): beim Ziehen ein Knick nach der Zugrichtung, im
@@ -206,7 +234,7 @@ mod tests {
         let mut f = Fuehrung::neu(p(0.0, 0.0));
         f.bewegen(p(5.0, 0.0), 1.0);
         assert_eq!(f.richtung, Some(Richtung::Waagerecht));
-        // zurück zum Anschluss: die Richtung bleibt (Hysterese), deutlich nach oben wechselt sie
+        // zurück zum Anschluss: die Richtung bleibt (Länge > 0), auf der Flucht des Anfangs nach oben wechselt sie
         f.bewegen(p(0.3, 0.2), 1.0);
         assert_eq!(f.richtung, Some(Richtung::Waagerecht));
         f.bewegen(p(0.0, -2.5), 1.0);

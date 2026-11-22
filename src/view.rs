@@ -1587,8 +1587,13 @@ impl App {
             let p = self.snap(m);
             self.kurven_griff_ziehen(id, griff, p);
         }
-        if let Drag::Wire { f } = &mut self.drag {
-            f.bewegen(m, 6.0 / xf.z);
+        // Knickrichtung nach dem gezeichneten Ende (gefangen) verfolgen: Form halten bis Länge 0 (leitung_knick.rs)
+        if let Drag::Wire { f } = &self.drag {
+            let ende = self.leitungsende(f, m, xf.z);
+            let da = self.sheet().and_then(|s| crate::leitung_route::anschluss_richtung(s, &self.lib, f.start()));
+            if let Drag::Wire { f } = &mut self.drag {
+                f.bewegen_mit(ende, da, 6.0 / xf.z);
+            }
         }
         if matches!(self.drag, Drag::Teilstueck { .. }) {
             self.teilstueck_ziehen(m);
@@ -2172,7 +2177,7 @@ impl App {
         // Bedienelement den Tastaturfokus hat (dort löst sie es aus)
         let fokus = ctx.memory(|m| m.focused().is_some());
         for t in ctx.input(crate::blatt_tasten::tasten) {
-            if !(t == crate::blatt_tasten::Taste::Leertaste && fokus) {
+            if !(matches!(t, crate::blatt_tasten::Taste::Leertaste | crate::blatt_tasten::Taste::Knick) && fokus) {
                 self.blatt_taste(t);
             }
         }

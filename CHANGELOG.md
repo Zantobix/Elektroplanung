@@ -9,6 +9,15 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Leitung ziehen – Führung folgt von Anfang an der Maus (nach KiCad):
+- Das erste Teilstück behält seine Richtung (aus der ersten Bewegung, bei Gleichstand aus der Anschlussrichtung),
+  bis es Länge 0 erreicht, also das Ende auf die Höhe bzw. Flucht des Anschlusses zurückkommt; erst dann kippt der
+  Knick. Die bisherige Hysterese mit Schwellwerten entfällt, die Vorschau springt bei kleinen Mausbewegungen nicht
+  mehr zwischen Führungen. Stich aus dem Anschluss, Sammelschienen, Klickbetrieb und Eckanschlüsse bleiben wie
+  bisher.
+- Bewusste Erweiterung: Leertaste oder „/“ kippt während des Ziehens die Knickrichtung (wie „posture“ in KiCad);
+  im Klickbetrieb wechselt die Leertaste weiter wie im Original zum vorigen Blatt.
+
 Brückenbögen an Kreuzungen (bewusste Erweiterung, das Original zeichnet keine):
 - Kreuzen sich zwei Leitungen, ohne verbunden zu sein, springt die waagerechtere in einem kleinen Halbkreis über
   die andere (Bildschirm, Druck, PDF, Bildexport). Keine Bögen an Verbindungen (Leitungsende oder Klemmstelle im

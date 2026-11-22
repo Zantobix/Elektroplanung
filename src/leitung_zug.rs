@@ -5,9 +5,9 @@
 //! einfache Knick in das eigene Symbol lief, kam schlagartig die Z-Führung über die Mitte.
 //!
 //! Hier gilt:
-//! - **Hysterese** für die Richtung des ersten Teilstücks (`hysterese`): einmal bestimmt, wechselt sie nur noch in
-//!   der Nähe des Anfangs (`ZONE` × Schwelle) und nur, wenn die andere Richtung deutlich überwiegt
-//!   (`VERHAELTNIS`). Weiter draußen bleibt sie (die erste Zugrichtung bestimmt den Knick wie bisher).
+//! - **Form halten bis Länge 0** für die Richtung des ersten Teilstücks (`leitung_knick.rs`, nach KiCad): einmal
+//!   bestimmt, kippt sie erst, wenn das erste Teilstück Länge 0 erreicht; die Umschalttaste kippt sie von Hand.
+//!   (Vorher: Hysterese mit Schwellwerten, die nahe am Anfang trotzdem springen konnte.)
 //! - **Stetige Form** (`zugweg`): Verläuft das erste Teilstück in Anschlussrichtung, geht es mindestens einen Stich
 //!   nach außen und biegt dann zum Ziel ab (J-Form). Liegt das Ziel jenseits des Stichs, ist das der einfache Knick;
 //!   liegt es dahinter, wächst das Rückstück stetig aus dem Stich heraus. Damit ändert sich die Vorschau bei
@@ -18,46 +18,9 @@
 //! Vorschau und Ergebnis beim Loslassen kommen aus derselben Funktion; der Klickbetrieb (Regel des Originals) und
 //! der Beginn auf einer Sammelschiene sind unverändert.
 
-use crate::leitung_fuehrung::{bereinigen, knick, vorherrschend, Fuehrung, Richtung};
+use crate::leitung_fuehrung::{bereinigen, knick, Fuehrung, Richtung};
 use crate::leitung_route::{laeuft_hinein, mit_stichen};
 use crate::model::P;
-
-/// Bereich um den Anfang (Vielfache der Schwelle), in dem die Richtung noch wechseln kann.
-pub const ZONE: f32 = 3.0;
-/// So viel stärker muss die andere Richtung überwiegen, damit die Richtung wechselt.
-pub const VERHAELTNIS: f32 = 2.0;
-/// Erste Entscheidung schon nach einem Drittel der Schwelle (2 Bildpunkte), damit die Vorschau nicht vorher mit
-/// jeder Bewegung über die Diagonale den Knick wechselt.
-pub const ENTSCHEIDUNG: f32 = 1.0 / 3.0;
-
-fn andere(r: Richtung) -> Richtung {
-    match r {
-        Richtung::Waagerecht => Richtung::Senkrecht,
-        Richtung::Senkrecht => Richtung::Waagerecht,
-    }
-}
-
-/// Richtung des ersten Teilstücks nach der Mausbewegung `d` (vom Anfang aus, mm) mit Hysterese.
-/// Ohne bisherige Richtung entscheidet die erste Bewegung über `ENTSCHEIDUNG` × `schwelle` hinaus (vorherrschende
-/// Richtung); danach wechselt sie nur nahe am Anfang und nur bei deutlich überwiegender anderer Richtung.
-pub fn hysterese(bisher: Option<Richtung>, d: P, schwelle: f32) -> Option<Richtung> {
-    let (ax, ay) = (d.x.abs(), d.y.abs());
-    let Some(r) = bisher else {
-        return (ax.max(ay) > ENTSCHEIDUNG * schwelle).then(|| vorherrschend(d));
-    };
-    if ax.max(ay) > ZONE * schwelle {
-        return Some(r);
-    }
-    let (eigen, fremd) = match r {
-        Richtung::Waagerecht => (ax, ay),
-        Richtung::Senkrecht => (ay, ax),
-    };
-    if fremd > schwelle && fremd > VERHAELTNIS * eigen {
-        Some(andere(r))
-    } else {
-        Some(r)
-    }
-}
 
 fn skalar(a: P, b: P) -> f32 {
     a.x * b.x + a.y * b.y
@@ -90,7 +53,7 @@ impl Fuehrung {
     /// Weg beim Ziehen bis `ende` (Vorschau und Ergebnis); `da`/`db` = Anschlussrichtungen, `s` = Stichlänge.
     pub fn zugweg(&self, ende: P, da: Option<P>, db: Option<P>, s: f32) -> Vec<P> {
         let a = self.start();
-        let erst = self.richtung.unwrap_or_else(|| vorherrschend(ende.sub(a)));
+        let erst = self.richtung.unwrap_or_else(|| crate::leitung_knick::entscheiden(ende.sub(a), da, self.gekippt));
         zugweg(a, da, ende, db, erst, s)
     }
 }
@@ -162,24 +125,6 @@ mod tests {
     }
 
     #[test]
-    fn hysterese_haelt_die_richtung_an_der_diagonale() {
-        // nach rechts entschieden, dann zittert die Maus um die Diagonale: bleibt waagerecht
-        let mut r = hysterese(None, p(4.0, 0.5), SCHWELLE);
-        assert_eq!(r, Some(Richtung::Waagerecht));
-        for (i, d) in [p(5.0, 5.2), p(5.2, 5.0), p(4.8, 5.3), p(5.3, 4.9)].into_iter().enumerate() {
-            r = hysterese(r, d, SCHWELLE);
-            assert_eq!(r, Some(Richtung::Waagerecht), "Schritt {i}");
-        }
-        // deutlich nach unten nahe am Anfang: wechselt
-        r = hysterese(r, p(1.0, 6.0), SCHWELLE);
-        assert_eq!(r, Some(Richtung::Senkrecht));
-        // weit draußen wechselt nichts mehr, auch wenn die andere Richtung stark überwiegt
-        assert_eq!(hysterese(r, p(40.0, 1.0), SCHWELLE), Some(Richtung::Senkrecht));
-        // kleine Bewegungen entscheiden nicht
-        assert_eq!(hysterese(None, p(0.5, -0.8), SCHWELLE), None);
-    }
-
-    #[test]
     fn zittern_am_anfang_springt_nicht_hin_und_her() {
         // Maus kreist dicht um die Diagonale rechts unten vom Anschluss weg: die Form wechselt höchstens einmal
         let mut f = Fuehrung::neu(p(0.0, 0.0));
@@ -196,21 +141,21 @@ mod tests {
     #[test]
     fn vorschau_folgt_stetig_ueber_die_anschlusshoehe() {
         // unterer Anschluss (Richtung unten): Maus erst nach unten, dann nach rechts und über die Höhe des Anschlusses
-        // nach oben. Früher sprang die Vorschau beim Überqueren vom Knick auf die Z-Führung über die Mitte.
+        // nach oben. Das senkrechte erste Teilstück bleibt (mit Stich nach unten), bis die Maus die Höhe des
+        // Anschlusses erreicht (Länge 0); dort kippt der Knick einmal: waagerecht hinaus, dann hoch zum Ziel.
         let mut f = Fuehrung::neu(p(40.0, 100.0));
         let ecken = [p(40.0, 100.0), p(40.0, 112.0), p(70.0, 112.0), p(70.0, 80.0)];
         let wege = durchspielen(&mut f, &ecken, 0.25, UNTEN);
-        assert_eq!(f.richtung, Some(Richtung::Senkrecht));
-        for (i, w) in wege.windows(2).enumerate() {
-            let d = abweichung(&w[0], &w[1]);
-            assert!(d <= 0.25 + 1e-3, "Bild {i}: Vorschau springt um {d} mm: {:?} → {:?}", w[0], w[1]);
-        }
-        // nie in das eigene Symbol: das erste Teilstück geht immer nach unten
+        assert_eq!(f.richtung, Some(Richtung::Waagerecht));
+        // die Vorschau bewegt sich je Bild höchstens um den Mausschritt – außer beim Kippen, wo nur der Stich entfällt
+        let spruenge: Vec<f32> = wege.windows(2).map(|w| abweichung(&w[0], &w[1])).filter(|d| *d > 0.25 + 1e-3).collect();
+        assert!(spruenge.len() <= 1 && spruenge.iter().all(|d| *d <= STICH + 0.25 + 1e-3), "Sprünge: {spruenge:?}");
+        // nie in das eigene Symbol: das erste Teilstück geht nie nach oben
         for w in &wege {
-            assert!(w[1].y > w[0].y, "läuft ins Symbol: {w:?}");
+            assert!(w[1].y >= w[0].y, "läuft ins Symbol: {w:?}");
         }
-        // Endform: Stich nach unten, quer, von unten zum Ziel
-        assert_eq!(wege.last().unwrap(), &vec![p(40.0, 100.0), p(40.0, 102.5), p(70.0, 102.5), p(70.0, 80.0)]);
+        // Endform: waagerecht aus dem Anschluss, von unten zum Ziel
+        assert_eq!(wege.last().unwrap(), &vec![p(40.0, 100.0), p(70.0, 100.0), p(70.0, 80.0)]);
     }
 
     #[test]
