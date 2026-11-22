@@ -198,6 +198,8 @@ nicht. Gemessen werden stattdessen:
     „-E1+%P“.
   - Leitung verschieben: Das Ziehen an einem Teilstück ändert die Führung, die Enden bleiben angeschlossen (das
     Original verhindert das Verschieben angeschlossener Leitungen).
+  - Symbol verschieben: Angeschlossene Leitungen folgen formerhaltend (Profil nach QElectroTech), auch solche mit
+    freiem anderen Ende (das Original zieht diese nicht mit).
   - Leitung ziehen: Der Knick folgt der Maus ohne Springen (erstes Teilstück behält seine Richtung, bis es Länge 0
     erreicht, nach KiCad); **Leertaste** oder **„/“** kippt die Knickrichtung während des Ziehens
     (`src/leitung_knick.rs`). Im Klickbetrieb gilt die Regel des Originals.
