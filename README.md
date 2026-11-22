@@ -198,6 +198,9 @@ nicht. Gemessen werden stattdessen:
     „-E1+%P“.
   - Leitung verschieben: Das Ziehen an einem Teilstück ändert die Führung, die Enden bleiben angeschlossen (das
     Original verhindert das Verschieben angeschlossener Leitungen).
+  - Leitung ziehen: Der Knick folgt der Maus ohne Springen (erstes Teilstück behält seine Richtung, bis es Länge 0
+    erreicht, nach KiCad); **Leertaste** oder **„/“** kippt die Knickrichtung während des Ziehens
+    (`src/leitung_knick.rs`). Im Klickbetrieb gilt die Regel des Originals.
 - Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",
   Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); Brücken als Ketten in Spuren wie in den
   Original-Ausdrucken (Seiten 12, 13, 20–22, 39; je Anschlussrichtung höchstens eine Brücke), die

@@ -12,6 +12,9 @@
 //!   der Maus (statt den Abstand beim Greifen zu behalten), siehe `fang_versatz`.
 //! - Enter: nichts. S/A gehalten, Pfeiltasten, Entf, Strg+A: siehe view.rs/raster.rs.
 //!
+//! Bewusste Erweiterung: Beim Ziehen einer Leitung kippt die Leertaste (oder „/“ wie in KiCad) die Knickrichtung
+//! (`leitung_knick.rs`) statt das Blatt zu wechseln.
+//!
 //! Schriftfeld (Routine 0x4876d8, Fall %Geändert): Auf dem Bildschirm steht „Heute“ statt des Änderungsdatums, wenn
 //! das Blatt in dieser Sitzung geändert wurde (Rückgängig-Liste enthält das Blatt; zusätzlich prüft das Original,
 //! dass das Erstelldatum nicht genau der jetzige Augenblick ist – das speichert der Nachbau nicht); sonst das Datum
@@ -42,6 +45,8 @@ pub enum Taste {
     StrgTab,
     Leertaste,
     StrgZiffer(u8),
+    /// „/“: Knickrichtung der gezogenen Leitung kippen (wie KiCad)
+    Knick,
 }
 
 /// Tasten dieses Bildes (ohne Alt; Strg+Ziffer nur 1–9).
@@ -57,6 +62,9 @@ pub fn tasten(i: &egui::InputState) -> Vec<Taste> {
     }
     if !strg && !m.shift && i.key_pressed(Key::Space) {
         v.push(Taste::Leertaste);
+    }
+    if !strg && i.key_pressed(Key::Slash) {
+        v.push(Taste::Knick);
     }
     if strg && !m.shift {
         let ziffern = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
@@ -132,8 +140,13 @@ impl App {
                     self.selection.clear();
                 }
             }
+            Taste::Knick => {
+                self.knick_umschalten();
+            }
             Taste::Leertaste => {
-                if self.placing.is_some() || self.ring.is_some() || self.lib_drag {
+                if self.knick_umschalten() {
+                    // beim Ziehen einer Leitung: Knick gekippt, kein Blattwechsel
+                } else if self.placing.is_some() || self.ring.is_some() || self.lib_drag {
                     self.bt.drehung = (self.bt.drehung + 1) % 4;
                 } else if let Some(i) = self.bt.vorher.and_then(|v| self.tabs.iter().position(|r| *r == v)) {
                     if i != self.active {
@@ -144,6 +157,16 @@ impl App {
             }
             Taste::StrgZiffer(n) => self.strg_ziffer(n),
         }
+    }
+
+    /// Knickrichtung der gerade gezogenen Leitung kippen (Leertaste, „/“); `false`, wenn keine Leitung gezogen wird.
+    pub fn knick_umschalten(&mut self) -> bool {
+        let crate::app::Drag::Wire { f } = &mut self.drag else { return false };
+        if !f.umschalten() {
+            return false;
+        }
+        self.info = "Leitung: Knickrichtung gekippt (Leertaste oder / kippt zurück)".into();
+        true
     }
 
     /// Strg+Ziffer: Etage der markierten Klemmstellen bzw. Zusatzoption n der markierten Symbole (siehe oben).
@@ -268,6 +291,31 @@ mod tests {
         app.placing = None;
         app.blatt_verfolgen();
         assert_eq!(app.bt.drehung, 0);
+    }
+
+    #[test]
+    fn leertaste_kippt_knick_beim_leitungziehen() {
+        use crate::leitung_fuehrung::{Fuehrung, Richtung};
+        let mut app = app_mit_blaettern(2);
+        app.blatt_verfolgen();
+        app.blatt_taste(Taste::StrgTab);
+        app.blatt_verfolgen();
+        let mut f = Fuehrung::neu(P::new(0.0, 0.0));
+        f.bewegen(P::new(10.0, 0.0), 3.0);
+        app.drag = crate::app::Drag::Wire { f };
+        app.blatt_taste(Taste::Leertaste);
+        let crate::app::Drag::Wire { f } = &app.drag else { panic!("Leitung verloren") };
+        assert_eq!((f.richtung, f.gekippt), (Some(Richtung::Senkrecht), true));
+        assert_eq!(app.active, 1, "kein Blattwechsel beim Ziehen");
+        app.blatt_taste(Taste::Knick);
+        let crate::app::Drag::Wire { f } = &app.drag else { panic!() };
+        assert_eq!((f.richtung, f.gekippt), (Some(Richtung::Waagerecht), false));
+        // im Klickbetrieb wie im Original: Leertaste wechselt das Blatt
+        if let crate::app::Drag::Wire { f } = &mut app.drag {
+            f.klickbetrieb = true;
+        }
+        app.blatt_taste(Taste::Leertaste);
+        assert_eq!(app.active, 0);
     }
 
     #[test]
