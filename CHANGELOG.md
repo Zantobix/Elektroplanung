@@ -33,7 +33,7 @@ Behoben (Maustest 22.11.2026):
   „Klemme 1.1“
 - Sammelschiene auf dem Blatt mit ihrem Kürzel („L1“) beschriftet statt mit dem Namen („Schiene 1“); Name und Kürzel
   werden wie im Original gespeichert (Name in SMS Byte 0, Kürzel im TIT) – bisher ging das Kürzel beim Speichern
-  verloren und das Original beschriftete die Schiene mit dem Namen
+  verloren und das Original beschriftete die Schiene mit dem Namen. Im Projektbaum steht wie im Original der Name
 - Textbox-Eigenschaften: Felder Oben/Links schrumpfen nicht mehr („2100“ war abgeschnitten)
 - Bewusste Abweichung: Blattreiter mit gleicher Beschriftung aus verschiedenen Anlagen (z. B. zweimal „[1] Blatt 1“)
   tragen die Anlagen-Kurzform bzw. den Anlagennamen davor; das Original unterscheidet sie nicht

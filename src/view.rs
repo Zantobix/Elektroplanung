@@ -323,7 +323,16 @@ impl App {
         for (ai, a) in self.project.anlagen.iter().enumerate() {
             let leaf = |id: String, label: String| TNode { id, label, bold: false, icon: 0, action: TAction::None, children: vec![] };
             let mk = |id: String, label: String, action: TAction| TNode { id, label, bold: false, icon: 0, action, children: vec![] };
-            let ss: Vec<TNode> = a.sammelschienen.iter().enumerate().map(|(i, n)| mk(format!("prj/a{ai}/ss/{i}"), n.clone(), TAction::Schiene(ai, i))).collect();
+            // im Baum steht wie im Original der freie Name der Schiene („Schiene 1“), auf dem Blatt das Kürzel
+            let ss: Vec<TNode> = a
+                .sammelschienen
+                .iter()
+                .enumerate()
+                .map(|(i, n)| {
+                    let frei = a.schienen.get(n).map(|s| s.name.trim()).filter(|t| !t.is_empty()).unwrap_or(n);
+                    mk(format!("prj/a{ai}/ss/{i}"), frei.to_string(), TAction::Schiene(ai, i))
+                })
+                .collect();
             let kl: Vec<TNode> = a.klemmleisten.iter().enumerate().map(|(i, n)| mk(format!("prj/a{ai}/kl/{i}"), n.clone(), TAction::Klemmleiste(ai, i))).collect();
             let _ = &leaf;
             let bl: Vec<TNode> = a
