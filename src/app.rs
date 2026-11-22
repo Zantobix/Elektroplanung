@@ -588,31 +588,7 @@ impl App {
     /// Neues BMK aus der Vorlage des Symbols (mit Zähler, eindeutig im Projekt).
     pub fn new_bmk(&self, def: &SymDef) -> String {
         let sheet_no = self.sheet().map(|s| s.number).unwrap_or(1);
-        let tpl = if def.bmk.is_empty() { String::new() } else { def.bmk.clone() };
-        if tpl.is_empty() {
-            return String::new();
-        }
-        let used: HashSet<String> = self
-            .project
-            .anlagen
-            .iter()
-            .flat_map(|a| a.sheets.iter())
-            .flat_map(|s| s.objects.iter())
-            .filter_map(|o| if let Kind::Symbol { bmk, .. } = &o.kind { Some(bmk.clone()) } else { None })
-            .collect();
-        if !tpl.contains("%C") {
-            // Vorlage ohne Zähler (z. B. „-E1+%P“): ist die Kennung schon vergeben, die erste Zahl darin erhöhen
-            // (bewusste Abweichung: das Original vergibt dann dieselbe Kennung doppelt, Gegenprobe Runde 11)
-            let b = symbols::bmk_vorlage(&tpl, 1, sheet_no);
-            return if used.contains(&b) { naechste_freie(&b, &used).unwrap_or(b) } else { b };
-        }
-        for c in 1..10000 {
-            let b = symbols::bmk_vorlage(&tpl, c, sheet_no);
-            if !used.contains(&b) {
-                return b;
-            }
-        }
-        symbols::bmk_vorlage(&tpl, 1, sheet_no)
+        symbols::freie_bmk(&def.bmk, sheet_no, &symbols::vergebene_bmk(&self.project))
     }
 
     /// Gewählte Rasterweite (mm), auch bei ausgeschaltetem Rasterfang.
@@ -2123,12 +2099,4 @@ mod blatt_dialog_tests {
         assert_eq!(app.project.anlagen[0].sheets.len(), vorher);
         assert_eq!(app.redo.len(), redo);
     }
-}
-
-/// Kennung `b` mit erhöhter erster Zahl, bis sie nicht in `used` steht („-E1+%P“ → „-E2+%P“).
-fn naechste_freie(b: &str, used: &HashSet<String>) -> Option<String> {
-    let start = b.find(|c: char| c.is_ascii_digit())?;
-    let ende = b[start..].find(|c: char| !c.is_ascii_digit()).map(|i| start + i).unwrap_or(b.len());
-    let n: u32 = b[start..ende].parse().ok()?;
-    (n + 1..n + 10000).map(|k| format!("{}{}{}", &b[..start], k, &b[ende..])).find(|c| !used.contains(c))
 }

@@ -321,6 +321,38 @@ pub fn display_bmk(tpl: &str, counter: i32, ctx: &BmkCtx) -> String {
 
 /// BMK einer neuen Instanz wie im Original: %S → "-", %R → Blattnummer, %C → Zähler; Ortsangaben (%P, %A, %Ort)
 /// bleiben als Platzhalter stehen (W2: „-E1.1+%P“) und werden erst beim Zeichnen aufgelöst (`display_bmk`).
+/// Alle vergebenen Kennungen (Rohform mit Platzhaltern) im Projekt.
+pub fn vergebene_bmk(p: &crate::model::Project) -> std::collections::HashSet<String> {
+    p.anlagen
+        .iter()
+        .flat_map(|a| a.sheets.iter())
+        .flat_map(|s| s.objects.iter())
+        .filter_map(|o| if let crate::model::Kind::Symbol { bmk, .. } = &o.kind { Some(bmk.clone()) } else { None })
+        .collect()
+}
+
+/// Neue, im Projekt freie Kennung aus der Vorlage `tpl` (Zähler %C, Blatt %R). Vorlage ohne Zähler (z. B.
+/// „-E1+%P“): ist die Kennung vergeben, wird die erste Zahl darin erhöht (bewusste Abweichung: das Original vergibt
+/// dann dieselbe Kennung doppelt, Gegenprobe Runde 11).
+pub fn freie_bmk(tpl: &str, sheet: u32, used: &std::collections::HashSet<String>) -> String {
+    if tpl.is_empty() {
+        return String::new();
+    }
+    if !tpl.contains("%C") {
+        let b = bmk_vorlage(tpl, 1, sheet);
+        return if used.contains(&b) { naechste_freie(&b, used).unwrap_or(b) } else { b };
+    }
+    (1..10000).map(|c| bmk_vorlage(tpl, c, sheet)).find(|b| !used.contains(b)).unwrap_or_else(|| bmk_vorlage(tpl, 1, sheet))
+}
+
+/// Kennung `b` mit erhöhter erster Zahl, bis sie nicht in `used` steht („-E1+%P“ → „-E2+%P“).
+fn naechste_freie(b: &str, used: &std::collections::HashSet<String>) -> Option<String> {
+    let start = b.find(|c: char| c.is_ascii_digit())?;
+    let ende = b[start..].find(|c: char| !c.is_ascii_digit()).map(|i| start + i).unwrap_or(b.len());
+    let n: u32 = b[start..ende].parse().ok()?;
+    (n + 1..n + 10000).map(|k| format!("{}{}{}", &b[..start], k, &b[ende..])).find(|c| !used.contains(c))
+}
+
 pub fn bmk_vorlage(tpl: &str, counter: u32, sheet: u32) -> String {
     tpl.replace("%S", "-").replace("%R", &sheet.to_string()).replace("%C", &counter.to_string()).trim().to_string()
 }
