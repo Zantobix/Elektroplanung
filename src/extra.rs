@@ -1751,8 +1751,13 @@ impl App {
                 }
             }
             ui.add_space(8.0);
-            // Schriftfeld bearbeiten: Übernehmen-Knopf mit dem Hinweis des Originals (0x47689c, Button8 im Modus 'b')
-            let ok_hinweis = matches!(d, XDialog::Title { .. }).then_some(crate::meldungen::SE_SCHRIFTFELD_UEBERNEHMEN);
+            // Schriftfeld bzw. Bauteil bearbeiten: Übernehmen-Knopf mit dem Hinweis des Originals (0x47689c, Button8
+            // im Modus 'b' bzw. 'c')
+            let ok_hinweis = match d {
+                XDialog::Title { .. } => Some(crate::meldungen::SE_SCHRIFTFELD_UEBERNEHMEN),
+                XDialog::Bauteil { .. } => Some(crate::meldungen::SE_BAUTEIL_UEBERNEHMEN),
+                _ => None,
+            };
             ui.horizontal(|ui| {
                 let r = ui.button("    OK    ");
                 let r = match ok_hinweis {

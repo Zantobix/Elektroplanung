@@ -97,6 +97,8 @@ pub const FRAGE_SIND_NOCH: &str = " sind noch ";
 pub const FRAGE_IST_NOCH_1: &str = " ist noch 1 Blatt";
 pub const FB_INHALT: &str = "Es kann kein Folgeblatt für's Inhaltsverzeichnis erstellt werden da die dafür\nbenötigte Seite: ";
 pub const FB_VERGEBEN: &str = " schon vergeben ist!\n";
+pub const FB_NUMMER: &str = "(Blattnummer: 0     Subindex: ";
+pub const SF_KEINE_DATEI: &str = "Keine Datei";
 pub const FRAGE_NOETIG: &str = " nötig.\nSollen alle nötigen Blätter erzeugt werden?";
 
 // ------------------------------------------------------------------ Drucken (Drucken1Click)
@@ -112,6 +114,7 @@ pub const SE_EINSTELLUNGEN: &str = "Einstellungen für das Symbol";
 pub const SE_STIFT_SYMBOL: &str = "Stift für das Symbol ";
 pub const SE_NEUER_KONTAKT: &str = "Neuer Kontakt";
 pub const SE_SCHRIFTFELD_UEBERNEHMEN: &str = "Schriftfeld übernehmen";
+pub const SE_BAUTEIL_UEBERNEHMEN: &str = "Bauteil übernehmen";
 pub const SE_BIBLIOTHEKSSYMBOL: &str = "Bibliothekssymbol '";
 pub const SE_PROJEKTSYMBOL: &str = "Projektsymbol '";
 pub const SE_BEARBEITEN: &str = "' bearbeiten";
@@ -140,7 +143,7 @@ pub const KS_ANDERER_EIGENTUEMER: &str = "Das Referenz-Symbol hat nicht den glei
 pub const L_VERSION: &str = " (Version:";
 pub const L_VOR_600: &str = "Diese Funktion unterstützt keine Projektdateien\n die mit einer Version vor 6.0.0 erzeugt wurden!";
 pub const L_VERSION_FALSCH: &str = "Die Version der Projektdatei wird nicht von der Programmversion unterstützt!";
-pub const L_VOR_500: &str = "Diese Programmversion unterstützt keine Projektdateien\n die mit einer Version vor 5.0.0 abgespeichert wurden!";
+pub const L_VOR_500: &str = "Diese Pogrammversion unterstützt keine Projektdateien\n die mit einer Version vor 5.0.0 abgespeichert wurden!";
 pub const L_FEHLER: &str = "Fehler beim laden der Projekt-Daten";
 pub const O_PRUEFSUMME: &str = "Prüfsumme ist Fehlerhaft. Objekt: ";
 pub const O_STRUKTUR: &str = "Datenstruktur ist Fehlerhaft. Objekt: ";
@@ -961,7 +964,7 @@ mod tests {
     fn weitere_texte() {
         let p = Project::new_default();
         let r = SheetRef { anlage: 0, sheet: 0 };
-        assert_eq!(crate::blattnummer::pruefen(&p, r, "2", "300", 3), Err("Der Subindex darf nicht größer als 255 sein!".to_string()));
+        assert_eq!(crate::blattnummer::pruefen(&p, r, "2", "300", 3, false), Err("Der Subindex darf nicht größer als 255 sein!".to_string()));
         assert_eq!(editor_titel(Some(("db:300:1:Lampe", "Lampe"))), "Bibliothekssymbol 'Lampe' bearbeiten");
         assert_eq!(editor_titel(Some(("epr:00ff", "Taster"))), "Projektsymbol 'Taster' bearbeiten");
         assert_eq!(editor_titel(None), "Projektsymbol 'Neues Symbol' erstellen");

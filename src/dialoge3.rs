@@ -154,6 +154,8 @@ impl App {
                     sliste.push(name.clone());
                 }
                 let sel = sliste.iter().position(|s| s == name).unwrap_or(0);
+                // letzter Eintrag wie im Original: `Neue Schiene "L<n>"` (schiene_neu.rs)
+                sliste.push(crate::schiene_neu::eintrag(anl));
                 let set = anl.schienen.get(name).cloned().unwrap_or_default();
                 // Positionierung aus OBJ Feld 15 (Bit 1 fest = kein Auto, Bit 0 Unten) und Feld 11 (Y Offset)
                 let (auto, unten) = (lage & crate::sammelschiene_lage::FEST == 0, lage & crate::sammelschiene_lage::UNTEN != 0);
@@ -324,7 +326,8 @@ impl App {
             crate::meldungen::warnung(crate::meldungen::T_ACHTUNG, crate::meldungen::SCHRIFTFELD_IN_BEARBEITUNG);
             return;
         }
-        self.dlg3 = Some(Dlg3::NeuesSchriftfeld { anlage: 0, aus_datei: false, pfad: String::new() });
+        // Dateifeld zeigt anfangs „Keine Datei“ wie im Original (TForm10-Konstruktor 0x4ae1b4, In1.Text)
+        self.dlg3 = Some(Dlg3::NeuesSchriftfeld { anlage: 0, aus_datei: false, pfad: crate::meldungen::SF_KEINE_DATEI.into() });
     }
 
     pub fn open_schriftfeld_eigenschaften(&mut self) {
@@ -360,6 +363,9 @@ impl App {
             Dlg3::BlattIndex { .. } => ("Blattnummerierung", [358.0, 200.0]),
             Dlg3::Wahl { .. } => ("Auswahl", [275.0, 307.0]),
             Dlg3::UserDat { .. } => ("Benutzermaße", [180.0, 100.0]),
+            // Überschrift und Höhe je Art wie TTextchange.FormShow 0x4abc10 (Art 1 Symboltitel: Höhe 120 mit Vorschau)
+            Dlg3::TextChange { wert: Some(false), .. } => ("Symboltitel", [285.0, 90.0]),
+            Dlg3::TextChange { wert: Some(true), .. } => ("Symbolwert", [285.0, 63.0]),
             Dlg3::TextChange { .. } => ("Texteigenschaft", [285.0, 63.0]),
             Dlg3::Errliste { .. } => ("Fehler in den Daten", [620.0, 264.0]),
             Dlg3::ListExport { .. } => ("Listen Export", [420.0, 566.0]),
@@ -672,9 +678,11 @@ impl App {
                         combo(ui, "kleb", &strs(&["1", "2", "3", "4"]), ebenen, 50.0);
                     });
                     ui.label(RichText::new("Indexübersicht").font(bold(12.0)));
-                    let mut rows: Vec<Vec<String>> = nrs.iter().map(|n| vec![n.clone()]).collect();
+                    // Spalten wie im Original (0x4830a8): Klemme und „Verwendung auf Blatt“ (nur Anzeige)
+                    let anl = self.project.anlagen.get(*anlage);
+                    let mut rows: Vec<Vec<String>> = nrs.iter().map(|n| vec![n.clone(), anl.map(|a| crate::klemmen_verwendung::verwendung(a, titel, n)).unwrap_or_default()]).collect();
                     let mut sel = 0;
-                    icon_tab(ui, "kidx", &["Nr"], &mut rows, &mut sel, 200.0);
+                    icon_tab(ui, "kidx", &crate::klemmen_verwendung::KOPF, &mut rows, &mut sel, 200.0);
                     *nrs = rows.into_iter().map(|mut r| r.remove(0)).collect();
                 }
                 Dlg3::Pfad { rows, grenze, .. } => {
@@ -843,7 +851,16 @@ impl App {
                         });
                     }
                 }
-                Dlg3::TextChange { text, .. } => field(ui, 40.0, "Text", text, 220.0),
+                Dlg3::TextChange { text, wert, .. } => {
+                    field(ui, 40.0, "Text", text, 220.0);
+                    // Symboltitel: Label mit den Textvariablen als Platzhalter (Edit1Change 0x4abe54, textvariablen.rs)
+                    if *wert == Some(false) {
+                        ui.horizontal(|ui| {
+                            ui.add_space(40.0);
+                            ui.label(RichText::new(crate::textvariablen::platzhalter(text)).font(bold(13.0)));
+                        });
+                    }
+                }
                 Dlg3::Errliste { lines } => {
                     egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                         for l in lines.iter() {
@@ -889,9 +906,15 @@ impl App {
             let idx = self.project.part_of.get(&obj).copied().unwrap_or(0);
             self.xdlg = Some(crate::extra::XDialog::PartAssign { obj, idx });
         }
-        if let Some(name) = rail_edit {
+        if let Some(mut name) = rail_edit {
             if let Some(r) = self.cur() {
+                let obj = if let Dlg3::BusbarObj { id, .. } = &d { Some(*id) } else { None };
                 let _ = self.apply_dlg3(d);
+                // für den Eintrag „Neue Schiene …“ die eben angelegte Schiene des Objekts bearbeiten
+                if crate::schiene_neu::ist_neu(&name) {
+                    let neu = self.project.sheet(r).and_then(|s| s.objects.iter().find(|o| Some(o.id) == obj)).and_then(|o| if let Kind::Busbar { name, .. } = &o.kind { Some(name.clone()) } else { None });
+                    name = neu.unwrap_or_default();
+                }
                 self.open_schiene_dialog(r.anlage, &name);
                 return;
             }
@@ -953,7 +976,14 @@ impl App {
         let r = self.cur();
         match d {
             Dlg3::BusbarObj { id, sliste, sel, einsp, auto, unten, offset, tx, ty, px, py, laenge } => {
-                let name = sliste.get(sel).cloned().unwrap_or_default();
+                let mut name = sliste.get(sel).cloned().unwrap_or_default();
+                // `Neue Schiene "L<n>"` gewählt: Schiene anlegen und das Objekt daran hängen (0x405e08)
+                if crate::schiene_neu::ist_neu(&name) {
+                    match r.and_then(|r| self.project.anlagen.get_mut(r.anlage)) {
+                        Some(a) => name = crate::schiene_neu::anlegen(a),
+                        None => return None,
+                    }
+                }
                 // Einspeisung wird im Schienen-Dialog („Bearbeiten“) geändert, hier nur angezeigt
                 let _ = einsp;
                 let off = num(&offset).unwrap_or(0.0);

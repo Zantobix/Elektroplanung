@@ -677,13 +677,21 @@ impl App {
                 // Regeln des Originals für Nummer 0, Subindex 0 und Deckblatt (blattnummer.rs); im Nachbau
                 // angelegte Blätter ohne Art gelten als Schaltplan
                 let art = s.art as u8;
-                let (n, sub) = match crate::blattnummer::pruefen(&self.project, s.r, &s.nummer, &s.subindex, art) {
+                let (mut n, mut sub) = match crate::blattnummer::pruefen(&self.project, s.r, &s.nummer, &s.subindex, art, s.neu) {
                     Ok(v) => v,
                     Err(m) => {
                         self.dialog = Some(crate::app::Dialog::Message(m));
                         return;
                     }
                 };
+                // vorhandenes Blatt auf eine belegte Nummer: Meldung von 0x461234, Nummer bleibt, Rest gilt
+                let alt = self.project.sheet(s.r).map(|sh| (sh.number, sh.subindex));
+                if let Some(alt) = alt.filter(|a| *a != (n, sub) && !s.neu) {
+                    if let Some(m) = crate::blattnummer::verschiebung_belegt(&self.project, s.r, n, sub) {
+                        crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, &m);
+                        (n, sub) = alt;
+                    }
+                }
                 if let Some(sh) = self.project.sheet_mut(s.r) {
                     sh.name = s.name;
                     sh.ort = s.ort;

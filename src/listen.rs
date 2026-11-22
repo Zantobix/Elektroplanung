@@ -1,7 +1,7 @@
 //! Listen Export (TListExport des Originals): Auswahl der Liste, Vorschau als Tabelle, Export als Textdatei.
 //! Listen wie im Original: „Stückliste“, „Betriebsmittelkennzeichnung“, „Klemmenbezeichnung“; Dateiformate
 //! „Tabulator“, „Trennzeichen(;)“, „Trennzeichen(#)“ (*.txt).
-//! Die Spalten der Stückliste sind die der Artikelliste des Originals (Texte der Exe); die der beiden anderen
+//! Die Spalten der Stückliste sind die des Originals (0x49b014); die der beiden anderen
 //! Listen sind nicht belegt und so gewählt, dass sie zum Beschriften taugen: je Zeile ein Betriebsmittel bzw. eine
 //! Klemme.
 
@@ -11,22 +11,28 @@ use eframe::egui::{self, RichText};
 
 pub const LISTEN: &[&str] = &["Stückliste", "Betriebsmittelkennzeichnung", "Klemmenbezeichnung"];
 pub const FORMATE: &[&str] = &["Tabulator", "Trennzeichen(;)", "Trennzeichen(#)"];
+/// Spalten der Stückliste im Listen Export (0x49b014, Kopfzeile).
+pub const STUECKLISTE: [&str; 9] = ["Betriebsmittel", "Anzahl", "Typ", "Interne Nr", "Bestellnummer", "Firma", "Breite", "Höhe", "Tiefe"];
 
 /// Kopfzeile und Zeilen einer Liste.
 pub fn liste(p: &Project, art: usize) -> (Vec<&'static str>, Vec<Vec<String>>) {
     match art {
-        // Summenliste der zugeordneten Bauteile (Spalten wie die Artikelliste des Originals)
+        // Summenliste der zugeordneten Bauteile über alle Anlagen mit den Spalten des Originals (0x49b014 mit Art 1,
+        // Aufruf aus TListExport.Auswahl1Change 0x4b9d38): Name des Bauteils, Anzahl der Verwendungen, Typ,
+        // interne Nummer, Bestellnummer, Firma, Breite, Höhe, Tiefe; sortiert nach dem Namen
         0 => {
-            let mut rows: Vec<Vec<String>> = vec![];
-            for a in &p.anlagen {
-                for r in crate::berechnet::artikel_rows(p, a) {
-                    match rows.iter_mut().find(|x| x[1..] == r[1..]) {
-                        Some(x) => x[0] = (x[0].parse::<usize>().unwrap_or(0) + r[0].parse::<usize>().unwrap_or(0)).to_string(),
-                        None => rows.push(r),
-                    }
+            let mut n: std::collections::BTreeMap<usize, usize> = Default::default();
+            for o in p.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects) {
+                for i in crate::bauteilliste::liste(p, o.id) {
+                    *n.entry(i).or_default() += 1;
                 }
             }
-            (vec!["Menge", "Bezeichnung", "Typnummer", "Hersteller", "Bestellnummer"], rows)
+            let mut rows: Vec<Vec<String>> = n
+                .into_iter()
+                .filter_map(|(i, c)| p.bauteile.get(i).map(|b| vec![b.name.clone(), c.to_string(), b.typ.clone(), b.nummer.clone(), b.artikel.clone(), b.firma.clone(), b.breite.clone(), b.hoehe.clone(), b.tiefe.clone()]))
+                .collect();
+            rows.sort_by_key(|r| natural_key(&r[0]));
+            (STUECKLISTE.to_vec(), rows)
         }
         // je Betriebsmittel (aufgelöste BMK) eine Zeile, erste Fundstelle
         1 => {
@@ -147,5 +153,24 @@ mod tests {
         assert_eq!(h.len(), 4);
         assert_eq!(rows, vec![vec!["Anlage 1", "X1", "X1.1", "Licht"], vec!["Anlage 1", "X1", "X1.2", ""]]);
         assert_eq!(text(&h, &rows[..1], 1), "Anlage;Klemmleiste;Klemme;Funktion\r\nAnlage 1;X1;X1.1;Licht\r\n");
+    }
+
+    /// Stückliste mit den Spalten des Originals: je Bauteil eine Zeile, Anzahl = Verwendungen über alle Anlagen.
+    #[test]
+    fn stueckliste_spalten_wie_original() {
+        let Some(f) = std::env::var_os("EP_SAMPLE") else { return };
+        let mut p = crate::epr::import(std::path::Path::new(&f)).unwrap();
+        p.bauteile = vec![
+            Bauteil { name: "Schütz".into(), typ: "DILM12".into(), nummer: "7".into(), artikel: "276690".into(), firma: "Eaton".into(), breite: "45".into(), hoehe: "75".into(), tiefe: "90".into(), ..Default::default() },
+            Bauteil { name: "Klemme".into(), typ: "UK5".into(), ..Default::default() },
+        ];
+        let ids: Vec<u64> = p.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects).filter(|o| matches!(o.kind, Kind::Symbol { .. })).map(|o| o.id).take(3).collect();
+        for id in &ids[..2] {
+            crate::bauteilliste::setzen(&mut p, *id, &[0]);
+        }
+        crate::bauteilliste::setzen(&mut p, ids[2], &[0, 1]);
+        let (h, rows) = liste(&p, 0);
+        assert_eq!(h, STUECKLISTE.to_vec());
+        assert_eq!(rows, vec![vec!["Klemme", "1", "UK5", "", "", "", "", "", ""], vec!["Schütz", "3", "DILM12", "7", "276690", "Eaton", "45", "75", "90"]]);
     }
 }

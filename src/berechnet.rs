@@ -284,10 +284,12 @@ pub fn folgeblaetter_anlegen(p: &mut Project, r: SheetRef) -> Result<usize, Stri
     for k in 1..=(noetig - vorhanden) {
         let sub = sub0 as usize + k;
         if sub > 255 || a.sheets.iter().any(|x| x.number == nr && x.subindex as usize == sub) {
-            // Wortlaut des Originals (Blatt1Blatt_AnlageChange 0x4a427e); für Listen sinngemäß
-            use crate::meldungen::{FB_INHALT, FB_VERGEBEN};
+            // Wortlaut des Originals (Blatt1Blatt_AnlageChange 0x4a427e); für Listen sinngemäß. Die Klammer ist im
+            // Original ein fester Text „(Blattnummer: 0     Subindex: “ (0x4a432e, Verzeichnisblätter haben Nummer
+            // 0), danach hängt es „)“ und erst dann die Nummer an; der Nachbau setzt die Nummer in die Klammer.
+            use crate::meldungen::{FB_INHALT, FB_NUMMER, FB_VERGEBEN};
             let kopf = if art == 1 { FB_INHALT.to_string() } else { FB_INHALT.replace("'s Inhaltsverzeichnis", " die Liste") };
-            return Err(format!("{kopf}{nr}.{sub}{FB_VERGEBEN}(Blattnummer: {nr}     Subindex: {sub})"));
+            return Err(format!("{kopf}{nr}.{sub}{FB_VERGEBEN}{FB_NUMMER}{sub})"));
         }
         let mut sh = Sheet::new(nr);
         sh.subindex = sub as u8;

@@ -770,6 +770,10 @@ impl App {
         // nur die Anschlüsse des gewählten Bildes (ohne Zusatzoptionen)
         let wpins: Vec<P> = symbols::anschluss_lagen(&def, option, 0).into_iter().map(|(_, q)| sym_xform(q, pos, rot, false, false)).collect();
         self.insert_into_wire(&wpins);
+        // durchquert danach noch eine Leitung das Symbol ohne passenden Anschluss: Meldung des Originals (0x47bf14)
+        if self.sheet().is_some_and(|s| crate::symbol_in_leitung::nicht_integrierbar(s, &self.lib, id)) {
+            crate::meldungen::warnung(crate::meldungen::T_ACHTUNG_X, crate::symbol_in_leitung::MELDUNG);
+        }
         if self.auto_conn_eff() {
             // gehört zum selben Rückgängig-Schritt wie das Setzen (add_obj hat ihn schon angelegt)
             self.auto_connect_nocp(&[id]);
@@ -1257,15 +1261,9 @@ impl App {
         let Some(a) = self.cur().map(|r| r.anlage) else { return };
         self.checkpoint();
         let Some(anl) = self.project.anlagen.get_mut(a) else { return };
-        let mut n = anl.sammelschienen.len() + 1;
-        while anl.sammelschienen.iter().any(|x| *x == format!("L{n}")) {
-            n += 1;
-        }
         // Vorgaben des Original-Dialogs: Name „Schiene n“, Kürzel „L<n>“ (Schlüssel, TIT), keine Zuordnung,
         // Querverweise an, Pfeile aus
-        let name = format!("L{n}");
-        anl.sammelschienen.push(name.clone());
-        anl.schienen.insert(name.clone(), SchieneSet { name: format!("Schiene {n}"), pfeile: false, ..Default::default() });
+        let name = crate::schiene_neu::anlegen(anl);
         self.tree_open.insert(format!("prj/a{a}/ss"));
         // Original legt die Schiene erst bei OK an: Abbrechen nimmt sie wieder heraus
         self.neu_merken();
