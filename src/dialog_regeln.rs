@@ -9,6 +9,12 @@ pub fn druck_anlage_frei(art: usize, anlagen: usize) -> bool {
     art != 1 && anlagen >= 2
 }
 
+/// Vorwahl der Anlagenliste im Druckdialog (0x49c75c): Eintrag 0 „Alle“ bei keiner oder mehreren Anlagen, bei
+/// genau einer Anlage diese (Eintrag 1).
+pub fn druck_anlage_vorwahl(anlagen: usize) -> usize {
+    usize::from(anlagen == 1)
+}
+
 /// Zahl wie ein numerisches TIn anzeigen (Komma, `stellen` Nachkommastellen); ungültige Eingaben bleiben stehen.
 pub fn zahl_text(s: &str, stellen: usize) -> String {
     match s.trim().replace(',', ".").parse::<f64>() {

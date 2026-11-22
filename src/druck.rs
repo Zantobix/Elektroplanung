@@ -20,9 +20,10 @@ fn content_changed(s: &Sheet) -> bool {
     }
 }
 
-/// Letztes Änderungsdatum des Blattes (Geändert, sonst Erstellt; ungespeicherte Änderung = heute).
+/// Letztes Änderungsdatum des Blattes (Geändert, sonst Erstellt – Drucken1Click 0x45dba1: BLT +0x78, ist es 0,
+/// +0x70; ungespeicherte Änderung = heute).
 pub fn letzte_aenderung(s: &Sheet) -> Option<NaiveDate> {
-    let mut d = [parse_datum(&s.geaendert), parse_datum(&s.erstellt)].into_iter().flatten().max();
+    let mut d = parse_datum(&s.geaendert).or_else(|| parse_datum(&s.erstellt));
     if content_changed(s) {
         d = d.max(parse_datum(&today()));
     }

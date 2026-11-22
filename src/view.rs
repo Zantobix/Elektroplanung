@@ -90,8 +90,9 @@ impl App {
             if tool_button(ui, Icon::SaveProject, "Projekt speichen", self.dirty, false).clicked() {
                 self.save();
             }
+            // ToolButton1: derselbe Handler wie Projekt › Drucken (Drucken1Click, Druckdialog)
             if tool_button(ui, Icon::Print, "Drucken", true, false).clicked() {
-                self.pdf_req = Some((std::env::temp_dir().join("Elektroplanung_Druck.pdf"), true));
+                self.open_druck_dialog();
             }
             sep(ui, 5.0);
             let has_sel = !self.selection.is_empty();
@@ -1976,8 +1977,8 @@ impl App {
                         self.open_pexport();
                     }
                 });
-                // Bitmapexport des Originals: PNG mit wählbarer Auflösung (bildexport.rs)
-                if ui.button("Als Bild exportieren…").on_hover_text("Bitmapexport").clicked() {
+                // Bitmapexport des Originals (BMP/JPG, 480 dpi), dazu Auflösung und PNG (bildexport.rs)
+                if ui.button("Bitmapexport").clicked() {
                     self.open_bild_export();
                 }
                 if ui.button("DXF Import").clicked() {
@@ -2410,13 +2411,38 @@ impl App {
         }
         let Some((path, print)) = self.pdf_req.take() else { return };
         let sel = self.print_sel.take();
-        let (bytes, n) = crate::pdf::render_sheets(ctx, &self.project, &self.lib, &self.images, &|r| sel.as_ref().map(|v| v.contains(&r)).unwrap_or(true));
+        // Drucken: Lage auf dem Druckerpapier mit der Rückfrage „Papierformat zu klein“ (druck_seite)
+        let mut plaetze = vec![];
+        if print {
+            let blaetter: Vec<(SheetRef, &Sheet)> = self
+                .project
+                .anlagen
+                .iter()
+                .enumerate()
+                .flat_map(|(ai, a)| a.sheets.iter().enumerate().map(move |(si, s)| (SheetRef { anlage: ai, sheet: si }, s)))
+                .filter(|(r, _)| sel.as_ref().map(|v| v.contains(r)).unwrap_or(true))
+                .collect();
+            let papier = crate::druck_seite::papier(self.print_printer.as_deref());
+            match crate::druck_seite::einrichten(&blaetter, papier, self.print_skal) {
+                Some(p) => plaetze = p,
+                None => {
+                    self.print_printer = None;
+                    return;
+                }
+            }
+        }
+        let platz = |r: SheetRef| plaetze.iter().find(|(x, _)| *x == r).map(|(_, p)| *p);
+        let (bytes, n) = crate::pdf::render_sheets_platz(ctx, &self.project, &self.lib, &self.images, &|r| sel.as_ref().map(|v| v.contains(&r)).unwrap_or(true), &platz);
         match std::fs::write(&path, bytes) {
             Ok(()) => {
                 if print {
                     let printer = self.print_printer.take();
                     match crate::pdf::print_file_to(&path, printer.as_deref()) {
-                        Ok(()) => self.info = format!("{n} Blätter an den Drucker übergeben"),
+                        Ok(()) => {
+                            // Drucken1Click: Druckdatum des Projekts = jetzt (für „Änderung seit dem letzten Ausdruck“)
+                            self.project.gedruckt = today();
+                            self.info = format!("{n} Blätter an den Drucker übergeben");
+                        }
                         Err(e) => self.dialog = Some(Dialog::Message(format!("Drucken nicht möglich: {e}"))),
                     }
                 } else {

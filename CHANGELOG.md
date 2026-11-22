@@ -17,6 +17,19 @@ Kleinere Angleichungen an das Original:
   begrenzt wie die Bildlaufleisten); danach öffnet sich kein Kontextmenü. Passt das Blatt ins Fenster, bleibt es
   beim Kontextmenü.
 - Sammelschienen mit „Einspeisung“ zeigen am Anfang kein gefülltes Quadrat mehr; das Original zeichnet dort keins.
+- Drucken: Das Blatt wird wie im Original auf das Papier des Druckers gesetzt (Papierformat und bedruckbare Fläche
+  aus CUPS bzw. Windows). Ist die Zeichenfläche größer als die bedruckbare Fläche, kommt die Rückfrage „Das
+  Papierformat des Druckers ist zu klein …“ (Ja verkleinert, Nein druckt 1:1, Abbrechen); „An Papiergröße
+  anpassen“ (jetzt wie im Original nicht vorgewählt) passt das ganze Blatt ohne Rückfrage ein. Ist der Blattrand
+  schmaler als der nicht bedruckbare Rand, rückt das Blatt nach innen.
+- Druckdialog: Die Anlagenliste beginnt wie im Original mit „Alle“ (vorgewählt bei mehreren Anlagen).
+  „Es ist kein Blatt geöffnet!“ gehört zu „Alle offenen Blätter“; das Druckdatum wird erst nach dem Ausdruck
+  gesetzt. Der Druckknopf der Werkzeugleiste öffnet den Druckdialog (wie Projekt › Drucken).
+- Zeiger mit Raute (Punkt verschieben) auch über den Ecken einer Textbox und über den Knicken einer Leitung;
+  Ziehen an einem Knick verschiebt den Eckpunkt, die Nachbarstücke folgen.
+- Datei › „Bitmapexport“ (Name wie im Original): Vorgabe 480 dpi und Windows-Bitmap, dazu JPG und PNG.
+- Sammelschiene mit „Klemmen“ und Einspeisung: Kreis (Ø 1,6 mm) am Anfang der Schiene auf dem Blatt der
+  Einspeisung.
 
 Leitungen um Symbole herum:
 - Wird eine Leitung beim Verschieben eines Symbols neu geführt, läuft sie nicht mehr quer durch andere Symbole:

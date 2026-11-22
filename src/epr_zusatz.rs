@@ -209,6 +209,7 @@ pub fn schiene_lesen(s: &Block, set: &mut SchieneSet) {
     set.pfeile = byte(0x34);
     set.autoende = byte(0x35);
     set.einspeisung = id_at(&s.data, 0x38) != 0;
+    set.einspeisung_blatt = id_at(&s.data, 0x40);
     set.name = crate::symbols::cstr(&s.data[..s.data.len().min(20)]);
 }
 

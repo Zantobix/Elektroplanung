@@ -683,6 +683,11 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             let set = set_ref.cloned().unwrap_or_default();
             let line_style = if set.stift > 0 { dc.project.stifte.get(set.stift).map(|s| s.style).unwrap_or(0) } else if *bs != 0 { *bs } else { style };
             styled_line(p, &sp(&[*a, b]), st, line_style, z);
+            // Einspeisungskreis am Anfang (nur mit „Klemmen“ auf dem Blatt der Einspeisung, einspeisung.rs)
+            let blatt = dc.anlage.and_then(|an| an.sheets.iter().find(|s| s.number == dc.bmk.sheet)).and_then(crate::einspeisung::blatt_kennung);
+            if crate::einspeisung::kreis(&set, blatt) {
+                p.circle_filled(xf.s(*a), crate::einspeisung::RADIUS * z, st.color);
+            }
             // „Einspeisung“ (SMS 0x38 ≠ 0) zeichnet das Original nicht als Quadrat am Anfang: In der Blattzeichnung
             // (0x438b94, Zweig Sammelschiene) gibt es dort nur Kreise (Ellipse 0x548c94) – an den Abgriffen bei
             // „Klemmen“ und für die Einspeisung nur bei „Klemmen“ auf dem Blatt, dessen Kennung in SMS +0x40 steht.

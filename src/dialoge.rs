@@ -41,8 +41,10 @@ impl App {
     }
 
     pub fn open_druck_dialog(&mut self) {
-        let a = self.cur().map(|r| r.anlage).filter(|a| *a < self.project.anlagen.len()).unwrap_or(0);
-        self.dlg2 = Some(Dlg2::Drucken { anlage: a, drucker: 0, drucker_liste: drucker(), art: 0, von: String::new(), bis: String::new(), datum: today(), skal: true });
+        // Anlagenliste wie 0x49c75c: „Alle“ vorn (Index 0), vorgewählt bei mehreren Anlagen, sonst die einzige;
+        // „An Papiergröße anpassen“ ist im Formular nicht gesetzt
+        let a = crate::dialog_regeln::druck_anlage_vorwahl(self.project.anlagen.len());
+        self.dlg2 = Some(Dlg2::Drucken { anlage: a, drucker: 0, drucker_liste: drucker(), art: 0, von: String::new(), bis: String::new(), datum: today(), skal: false });
     }
 
     pub fn open_potential_dialog(&mut self, idx: usize) {
@@ -128,8 +130,9 @@ impl App {
                         // AlleClick 0x4adc78: Anlage gesperrt bei „Aktuelles Blatt“ oder nur einer Anlage
                         let frei = crate::dialog_regeln::druck_anlage_frei(*art, anlagen.len());
                         ui.add_enabled_ui(frei, |ui| {
-                            egui::ComboBox::from_id_salt("danl").width(250.0).selected_text(anlagen.get(*anlage).cloned().unwrap_or_default()).show_ui(ui, |ui| {
-                                for (i, a) in anlagen.iter().enumerate() {
+                            let liste: Vec<String> = std::iter::once("Alle".to_string()).chain(anlagen.iter().cloned()).collect();
+                            egui::ComboBox::from_id_salt("danl").width(250.0).selected_text(liste.get(*anlage).cloned().unwrap_or_default()).show_ui(ui, |ui| {
+                                for (i, a) in liste.iter().enumerate() {
                                     ui.selectable_value(anlage, i, a);
                                 }
                             });
@@ -229,7 +232,7 @@ impl App {
                 }
                 self.dirty = true;
             }
-            Dlg2::Drucken { anlage, drucker, drucker_liste, art, von, bis, datum, .. } => {
+            Dlg2::Drucken { anlage, drucker, drucker_liste, art, von, bis, datum, skal } => {
                 // Blattauswahl wie im Original; "Änderung seit …" nach den Blattdaten (druck.rs)
                 let gedruckt = self.project.gedruckt.clone();
                 // Meldungen des Originals (Drucken1Click)
@@ -237,14 +240,20 @@ impl App {
                     crate::meldungen::hinweis(crate::meldungen::T_HINWEIS, crate::meldungen::DRUCK_NIE_GEDRUCKT);
                     return;
                 }
-                if art == 1 && self.cur().is_none() {
+                // „Alle offenen Blätter“ ohne Blattreiter (Drucken1Click, Radioknopf AlleO)
+                if art == 3 && self.tabs.is_empty() {
                     crate::meldungen::hinweis(crate::meldungen::T_HINWEIS, crate::meldungen::DRUCK_KEIN_BLATT);
                     return;
                 }
                 let mut sel: Vec<SheetRef> = vec![];
-                // „Aktuelles Blatt“: Anlagenwahl gesperrt, es gilt die Anlage des aktuellen Blattes
-                let anlage = if art == 1 { self.cur().map(|c| c.anlage).unwrap_or(anlage) } else { anlage };
-                if let Some(a) = self.project.anlagen.get(anlage) {
+                // Anlage 0 = „Alle“; „Aktuelles Blatt“: Anlagenwahl gesperrt, es gilt die Anlage des aktuellen Blattes
+                let gewaehlt: Vec<usize> = match (art, anlage) {
+                    (1, _) => self.cur().map(|c| vec![c.anlage]).unwrap_or_default(),
+                    (_, 0) => (0..self.project.anlagen.len()).collect(),
+                    (_, a) => vec![a - 1],
+                };
+                for anlage in gewaehlt {
+                    let Some(a) = self.project.anlagen.get(anlage) else { continue };
                     let (v, b): (u32, u32) = (von.trim().parse().unwrap_or(1), bis.trim().parse().unwrap_or(u32::MAX));
                     for (si, s) in a.sheets.iter().enumerate() {
                         let r = SheetRef { anlage, sheet: si };
@@ -267,8 +276,9 @@ impl App {
                 }
                 self.print_sel = Some(sel);
                 self.print_printer = (drucker > 0).then(|| drucker_liste[drucker].clone());
+                self.print_skal = skal;
+                // das Druckdatum setzt das Original erst nach dem Ausdruck (view.rs make_pdf)
                 self.pdf_req = Some((std::env::temp_dir().join("Elektroplanung_Druck.pdf"), true));
-                self.project.gedruckt = today();
             }
         }
     }

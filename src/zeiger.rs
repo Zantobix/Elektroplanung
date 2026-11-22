@@ -118,6 +118,8 @@ pub struct Zustand {
     pub gesperrt: bool,
     /// Leitung unter der Maus (Werkzeug Klemmstelle)
     pub ueber_leitung: bool,
+    /// Auswahlwerkzeug über einem inneren Knick der Leitung unter der Maus (0x415f10: Treffer 2 mit F+0x954)
+    pub knick: bool,
 }
 
 /// Richtung des Doppelpfeils für Griff 0–7 des Rahmens (links oben im Uhrzeigersinn).
@@ -173,6 +175,8 @@ pub fn waehlen(z: &Zustand) -> Zeigerwahl {
         Ziel::Verweis { .. } if z.strg => Zeigerwahl::nur(CursorIcon::PointingHand),
         Ziel::Verweis { text: true, .. } => Zeigerwahl::pfeil(Text),
         Ziel::Verweis { .. } => Zeigerwahl::pfeil(Anschluss),
+        // Knick einer Leitung: Zeiger 5 wie an den Punkten der Zeichenobjekte (knick_ziehen.rs)
+        Ziel::Leitung { .. } if z.knick => Zeigerwahl::pfeil(Punkt),
         Ziel::Objekt { art: Objektart::Verschiebbar, .. } | Ziel::Leitung { .. } => Zeigerwahl::pfeil(Verschieben),
         Ziel::Objekt { art: Objektart::Anschluss, .. } => Zeigerwahl::pfeil(Anschluss),
         Ziel::Objekt { art: Objektart::Schlicht, .. } => Zeigerwahl::nur(CursorIcon::Default),
@@ -197,6 +201,7 @@ impl App {
         };
         let ziehen = match &self.drag {
             Drag::None => Ziehen::Nichts,
+            Drag::Teilstueck { knick: true, .. } => Ziehen::Ecke,
             Drag::Move { .. } | Drag::Teilstueck { .. } => Ziehen::Verschieben,
             Drag::Beschriftung { .. } => Ziehen::Beschriftung,
             Drag::Scale { handle, .. } => Ziehen::Griff(*handle),
@@ -211,7 +216,11 @@ impl App {
         let auswahl_frei = werkzeug == Werkzeug::Auswahl && ziehen == Ziehen::Nichts && ziel.is_none();
         let gesperrt = auswahl_frei && self.fix_active && self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.fixed && canvas::hit(o, m, tol, &self.lib)));
         let ueber_leitung = werkzeug == Werkzeug::Klemmstelle && self.sheet().is_some_and(|s| s.objects.iter().any(|o| matches!(o.kind, Kind::Wire { .. }) && canvas::hit(o, m, tol, &self.lib)));
-        Zustand { werkzeug, ziehen, ziel, waehlen, strg, gesperrt, ueber_leitung }
+        let knick = match ziel {
+            Some(Ziel::Leitung { id }) if werkzeug == Werkzeug::Auswahl && !strg => self.knick_unter(id, m, tol).is_some(),
+            _ => false,
+        };
+        Zustand { werkzeug, ziehen, ziel, waehlen, strg, gesperrt, ueber_leitung, knick }
     }
 }
 
@@ -336,7 +345,7 @@ mod tests {
     use super::*;
 
     fn zustand(ziel: Option<Ziel>) -> Zustand {
-        Zustand { werkzeug: Werkzeug::Auswahl, ziehen: Ziehen::Nichts, ziel, waehlen: None, strg: false, gesperrt: false, ueber_leitung: false }
+        Zustand { werkzeug: Werkzeug::Auswahl, ziehen: Ziehen::Nichts, ziel, waehlen: None, strg: false, gesperrt: false, ueber_leitung: false, knick: false }
     }
 
     fn objekt(art: Objektart) -> Option<Ziel> {
@@ -425,6 +434,11 @@ mod tests {
         assert_eq!(waehlen(&s).system, CursorIcon::Move);
         s.ziehen = Ziehen::Kopieren;
         assert_eq!(waehlen(&s), Zeigerwahl { system: CursorIcon::Default, zusatz: Some(Zusatz::Kopieren) });
+        // Knick einer Leitung: Raute (Zeiger 5), sonst Pfeilkreuz; beim Ziehen am Knick ebenso
+        let mut s = zustand(Some(Ziel::Leitung { id: 1 }));
+        assert_eq!(waehlen(&s).zusatz, Some(Zusatz::Verschieben));
+        s.knick = true;
+        assert_eq!(waehlen(&s).zusatz, Some(Zusatz::Punkt));
         let mut s = zustand(None);
         s.werkzeug = Werkzeug::Klemmstelle;
         assert_eq!(waehlen(&s).zusatz, Some(Zusatz::Klemme));
