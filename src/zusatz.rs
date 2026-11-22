@@ -16,6 +16,8 @@ pub struct Zusatz {
     pub spiegel: Option<crate::kontaktspiegel::SpiegelDlg>,
     /// Bauteilliste › Bearbeiten (TSSpiegel Betriebsart 1, bauteilliste.rs)
     pub bauteilliste: Option<crate::bauteilliste::BauteilListeDlg>,
+    /// Rückgängig-Stand nach dem Anlegen eines Eintrags, dessen Dialog offen ist (neu_anlegen.rs)
+    pub neu: Option<usize>,
 }
 
 impl App {
@@ -26,6 +28,7 @@ impl App {
         self.template_loaded();
         self.spiegel_ui(ctx);
         self.bauteilliste_ui(ctx);
+        self.neu_pruefen();
         // Kontaktspiegel folgen ihren Kontakten (Lage, neue/gelöschte Kontakte) und wie im Original der X-Lage der
         // Spule; Y = über dem Schriftfeld (kontaktspiegel.rs)
         if self.sym_edit.is_none() {

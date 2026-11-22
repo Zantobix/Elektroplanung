@@ -199,7 +199,7 @@ impl App {
         }
         match result {
             None => self.dlg2 = Some(d),
-            Some(false) => {}
+            Some(false) => self.neu_verwerfen(),
             Some(true) => self.apply_dlg2(d),
         }
     }

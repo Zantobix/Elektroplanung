@@ -294,6 +294,10 @@ fn leitung_zuordnung(project: &Project) -> (Vec<Option<usize>>, Vec<i32>) {
 }
 
 /// Kennungen (POT Feld 8) der Potentiale in Modellreihenfolge.
+pub fn pot_ids(project: &Project) -> Vec<i32> {
+    pot_zuordnung(project).1
+}
+
 fn pot_zuordnung(project: &Project) -> (Vec<Option<usize>>, Vec<i32>) {
     let src = basis_prj(project);
     let blocks: Vec<&Block> = src.kids_of("POT").collect();
