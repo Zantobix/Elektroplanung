@@ -659,11 +659,8 @@ impl App {
         let mut drop_tab: Option<(usize, usize)> = None;
         // Reiterbereich endet vor dem Suchfeld; passen nicht alle Reiter, blättern zwei Pfeile (wie TTabControl)
         let limit = full.right() - 299.0 - 4.0;
-        let labels: Vec<_> = self
-            .tabs
-            .iter()
-            .map(|r| ui.painter().layout_no_wrap(self.project.sheet(*r).map(|s| format!("[{}] {}", s.number, s.name)).unwrap_or_default(), FontId::proportional(11.0), Color32::BLACK))
-            .collect();
+        // gleich beschriftete Reiter verschiedener Anlagen bekommen die Anlage vorangestellt (blattreiter.rs, M8)
+        let labels: Vec<_> = crate::blattreiter::beschriftungen(&self.project, &self.tabs).into_iter().map(|t| ui.painter().layout_no_wrap(t, FontId::proportional(11.0), Color32::BLACK)).collect();
         let total: f32 = labels.iter().map(|g| g.size().x + 13.0).sum();
         let overflow = x + total > limit;
         if self.tab_first >= self.tabs.len() {
