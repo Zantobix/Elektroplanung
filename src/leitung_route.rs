@@ -35,7 +35,19 @@ pub fn anschluss_richtung(sheet: &Sheet, lib: &[SymDef], pin: P) -> Option<P> {
         // anderer Anschluss genau darunter/darüber (Polpaar) heißt oben/unten, einer auf gleicher Höhe links/rechts
         let senkrecht = pins.iter().any(|q| q.dist(pin) > 0.05 && (q.x - pin.x).abs() <= 0.05);
         let waagerecht = pins.iter().any(|q| q.dist(pin) > 0.05 && (q.y - pin.y).abs() <= 0.05);
-        return richtung_mit_paar(pin, mn, mx, T, senkrecht, waagerecht);
+        // liegt der Anschluss nicht am Umriss (W2-Leuchte: Anschlussbeschriftungen „1“, „2“, „PE“ ragen über die
+        // Anschlüsse hinaus, Maustest Runde 11), gilt die Richtung von der Mitte zum Anschluss (stärkere Achse)
+        return richtung_mit_paar(pin, mn, mx, T, senkrecht, waagerecht).or_else(|| {
+            let c = P::new((mn.x + mx.x) / 2.0, (mn.y + mx.y) / 2.0);
+            let (dx, dy) = (pin.x - c.x, pin.y - c.y);
+            if dx.abs().max(dy.abs()) < 0.5 {
+                None
+            } else if dy.abs() >= dx.abs() {
+                Some(P::new(0.0, dy.signum()))
+            } else {
+                Some(P::new(dx.signum(), 0.0))
+            }
+        });
     }
     None
 }
@@ -240,10 +252,24 @@ impl crate::app::App {
     /// Weg der gerade gezeichneten Leitung `f` bis `ende` mit Anschlussrichtungen (Vorschau und Ergebnis).
     pub fn leitungsweg(&self, f: &crate::leitung_fuehrung::Fuehrung, ende: P) -> Vec<P> {
         let w = self.leitungsweg_roh(f, ende);
-        match self.sheet() {
-            Some(s) => crate::klemme_leitung::enden_an_klemmen(s, w),
-            None => w,
-        }
+        let Some(s) = self.sheet() else { return w };
+        // läge ein Teilstück auf einer vorhandenen Leitung oder Schiene (Maustest Runde 11: W2 erweitert, die neue
+        // Leitung lief senkrecht auf der Leitung von -E7.6 zum Abgriff), die andere Winkelführung nehmen, wenn sie
+        // frei ist und kein Symbol durchquert; im Klickbetrieb bleiben die gesetzten Ecken
+        let w = if !f.klickbetrieb && ueberlappt(s, &w) {
+            let hind: Vec<_> = crate::leitung_hindernis::umrisse(s, &self.lib).into_iter().map(|u| u.r).collect();
+            let hind = crate::leitung_hindernis::wirksam(&hind, f.start(), ende);
+            let (a, e) = (f.start(), ende);
+            let (da, db) = (anschluss_richtung(s, &self.lib, a), anschluss_richtung(s, &self.lib, e));
+            [vec![a, P::new(a.x, e.y), e], vec![a, P::new(e.x, a.y), e]]
+                .into_iter()
+                .map(crate::leitung_fuehrung::bereinigen)
+                .find(|c| !ueberlappt(s, c) && crate::leitung_hindernis::kreuzungen(c, &hind) == 0 && !laeuft_hinein(c, da, db))
+                .unwrap_or(w)
+        } else {
+            w
+        };
+        crate::klemme_leitung::enden_an_klemmen(s, w)
     }
 
     fn leitungsweg_roh(&self, f: &crate::leitung_fuehrung::Fuehrung, ende: P) -> Vec<P> {
@@ -271,6 +297,32 @@ impl crate::app::App {
         out.extend(umgehen(&w[j..], None));
         crate::leitung_fuehrung::bereinigen(out)
     }
+}
+
+/// Liegt ein Teilstück von `pts` auf einer vorhandenen Leitung oder Sammelschiene (gemeinsame Strecke über 0,5 mm in
+/// derselben Flucht)? Berühren an einem Punkt und Kreuzen zählen nicht.
+pub fn ueberlappt(sheet: &Sheet, pts: &[P]) -> bool {
+    const T: f32 = 0.05;
+    let mut strecken: Vec<(P, P)> = vec![];
+    for o in &sheet.objects {
+        match &o.kind {
+            Kind::Wire { pts: w, .. } => strecken.extend(w.windows(2).map(|v| (v[0], v[1]))),
+            Kind::Busbar { a, x2, .. } => strecken.push((*a, P::new(*x2, a.y))),
+            _ => {}
+        }
+    }
+    pts.windows(2).any(|w| {
+        let (a, b) = (w[0], w[1]);
+        strecken.iter().any(|(c, d)| {
+            if (a.y - b.y).abs() < T && (c.y - d.y).abs() < T && (a.y - c.y).abs() < T {
+                a.x.max(b.x).min(c.x.max(d.x)) - a.x.min(b.x).max(c.x.min(d.x)) > 0.5
+            } else if (a.x - b.x).abs() < T && (c.x - d.x).abs() < T && (a.x - c.x).abs() < T {
+                a.y.max(b.y).min(c.y.max(d.y)) - a.y.min(b.y).max(c.y.min(d.y)) > 0.5
+            } else {
+                false
+            }
+        })
+    })
 }
 
 #[cfg(test)]

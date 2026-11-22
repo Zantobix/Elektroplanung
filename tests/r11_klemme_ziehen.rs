@@ -127,3 +127,15 @@ fn raster_aus_dem_projekt() {
     let i = app.raster_erkennen();
     assert_eq!(i.map(|i| elektroplanung::app::RASTER[i].1), Some(2.5), "{i:?}");
 }
+
+#[test]
+fn ueberlappung_mit_leitung_und_schiene() {
+    use elektroplanung::leitung_route::ueberlappt;
+    let mut s = Sheet::new(1);
+    s.objects.push(wire(1, &[(10.0, 10.0), (10.0, 50.0)]));
+    // gleiche Flucht, gemeinsame Strecke
+    assert!(ueberlappt(&s, &[P::new(20.0, 30.0), P::new(10.0, 30.0), P::new(10.0, 60.0)]));
+    // nur Berühren am Ende bzw. Kreuzen
+    assert!(!ueberlappt(&s, &[P::new(10.0, 50.0), P::new(10.0, 70.0)]));
+    assert!(!ueberlappt(&s, &[P::new(0.0, 30.0), P::new(20.0, 30.0)]));
+}

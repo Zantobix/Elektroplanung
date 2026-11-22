@@ -13,6 +13,10 @@ Raster und Bearbeiten bestehender Pläne (Maustest Runde 11: W2 erweitern, neues
 - Ohne gemerkte Rasterweite stellt das Öffnen die Weite ein, in der das Projekt gezeichnet ist (größte Weite, auf
   der mindestens die Hälfte der Leitungsecken liegt; W2: 2,5 mm statt der Vorgabe 10 mm). So lassen sich neue
   Teile in die bestehenden Reihen setzen.
+- Neue Leitungen laufen nicht mehr auf vorhandenen Leitungen oder Schienen: Läge ein Teilstück darauf, nimmt die
+  Leitung die andere Winkelführung, sofern sie frei ist und kein Symbol durchquert.
+- Anschlüsse, die nicht am Umriss eines Symbols liegen (W2-Leuchte: Beschriftungen „1“, „2“, „PE“ ragen darüber),
+  haben jetzt eine Richtung (Mitte → Anschluss); Leitungen verlassen sie in diese Richtung statt seitlich.
 - Einfügen versetzt die Kopie um mindestens 10 mm (ein Vielfaches des Rasters); bei 2,5 mm verdeckte sie sonst
   das Original fast ganz.
 - Strg+V fügt unter Linux wieder ein: Kopieren legt zusätzlich einen kurzen Text in die System-Zwischenablage
