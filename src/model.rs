@@ -503,11 +503,14 @@ pub struct SchieneSet {
     pub schleife: bool,
     pub autoende: bool,
     pub einspeisung: bool,
+    /// Kennung des Blattes mit der Einspeisung (SMS Byte 0x40, nur gelesen; einspeisung.rs)
+    #[serde(default)]
+    pub einspeisung_blatt: u64,
 }
 
 impl Default for SchieneSet {
     fn default() -> Self {
-        SchieneSet { kurz: String::new(), name: String::new(), potential: String::new(), stift: 0, quer: true, pfeile: true, klemmen: false, schleife: false, autoende: false, einspeisung: false }
+        SchieneSet { kurz: String::new(), name: String::new(), potential: String::new(), stift: 0, quer: true, pfeile: true, klemmen: false, schleife: false, autoende: false, einspeisung: false, einspeisung_blatt: 0 }
     }
 }
 

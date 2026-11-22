@@ -1,6 +1,15 @@
-//! Bildexport (Datei › Als Bild exportieren…): das aktuelle Blatt oder alle Blätter der Anlage als PNG mit
-//! 150/300/600 dpi. Das Original hat dafür nur den Menüeintrag „Bitmapexport“ ohne eigenes Einstellungsformular
-//! (TPEXPORT ist die Projektliste der Exporteinstellung, TLISTEXPORT der Listenexport).
+//! Bildexport (Datei › Bitmapexport): das aktuelle Blatt oder alle Blätter der Anlage als Bild.
+//!
+//! Original (Bitmapexport1Click 0x47f9dc): ohne Einstellungsformular; nur mit geöffnetem Blatt. Es legt ein TBitmap
+//! an, so groß wie das Blatt der Anlage (ANL +0x98/+0x9c in 0,1 mm, quer gedreht) mal LOGPIXELSX des Bildschirms
+//! mal 5 – bei 96 dpi also 480 dpi (A4 quer 5613 × 3969 Bildpunkte) –, zeichnet das aktuelle Blatt mit der
+//! Zeichenroutine 0x438b94 hinein (ohne Kantenglättung) und fragt dann mit TSaveDialog (Vorgabe-Endung „bmp“,
+//! Filter „Windows Bitmap|*.bmp|JPG|*.jpg“) nach der Datei: Filter 1 speichert die Bitmap, sonst ein TJPEGImage
+//! (Delphi-Vorgabe Qualität 90). Schlägt das Anlegen fehl: „Nicht genug Speicher vorhanden“ (Überschrift „Fehler“).
+//!
+//! Nachbau: dieselben Formate und dieselbe Vorgabe (480 dpi, aktuelles Blatt, Dateityp nach dem Filter bzw. der
+//! Endung); als Erweiterung davor ein kleiner Dialog mit Auflösung (150/300/480/600 dpi), allen Blättern der Anlage
+//! (je Blatt eine Datei), Kantenglättung und zusätzlich PNG (mit eingetragener Auflösung).
 //!
 //! Ablauf: Das Blatt wird mit den Zeichenroutinen der Zeichenfläche in eine unsichtbare Ebene gezeichnet
 //! (Maßstab = Bildpunkte je mm), die Formen werden von epaint in Dreiecke zerlegt (mit Kantenglättung durch
@@ -14,8 +23,15 @@ use eframe::egui::{self, epaint, Color32, ColorImage, Pos2, Rect, TextureId};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Wählbare Auflösungen in dpi (Vorgabe 300)
-pub const DPI: [u32; 3] = [150, 300, 600];
+/// Wählbare Auflösungen in dpi; Vorgabe 480 = Original (5 × 96 dpi Bildschirmauflösung)
+pub const DPI: [u32; 4] = [150, 300, 480, 600];
+/// Index der Vorgabe in `DPI`
+pub const DPI_ORIGINAL: usize = 2;
+
+/// Gewählte Auflösung (Index begrenzt).
+pub fn dpi(idx: usize) -> u32 {
+    DPI[idx.min(DPI.len() - 1)]
+}
 
 /// Einstellungen des Dialogs
 pub struct BildDlg {
@@ -28,15 +44,44 @@ pub struct BildDlg {
 
 impl Default for BildDlg {
     fn default() -> Self {
-        BildDlg { alle: false, dpi_idx: 1, glatt: true }
+        BildDlg { alle: false, dpi_idx: DPI_ORIGINAL, glatt: true }
     }
 }
 
-/// Bildgröße eines Blattes in Pixeln.
+/// Bildgröße eines Blattes in Pixeln (gerundet wie die FPU des Originals: bei ,5 zur geraden Zahl).
 pub fn pixel_groesse(sheet: &Sheet, dpi: u32) -> (usize, usize) {
     let (w, h) = sheet.dims();
-    let k = dpi as f32 / 25.4;
-    ((w * k).round().max(1.0) as usize, (h * k).round().max(1.0) as usize)
+    let k = dpi as f64 / 25.4;
+    ((w as f64 * k).round_ties_even().max(1.0) as usize, (h as f64 * k).round_ties_even().max(1.0) as usize)
+}
+
+/// Dateiformat nach der Endung: „png“, „jpg“/„jpeg“, sonst Windows-Bitmap (Vorgabe-Endung des Originals).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Format {
+    Bmp,
+    Jpg,
+    Png,
+}
+
+pub fn format_nach_endung(p: &Path) -> Format {
+    match p.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).as_deref() {
+        Some("png") => Format::Png,
+        Some("jpg") | Some("jpeg") => Format::Jpg,
+        _ => Format::Bmp,
+    }
+}
+
+/// Bild im Format kodieren (JPEG mit Qualität 90 wie TJPEGImage).
+pub fn bild_bytes(img: &image::RgbImage, dpi: u32, f: Format) -> Result<Vec<u8>, String> {
+    use image::ImageEncoder;
+    let mut out = vec![];
+    match f {
+        Format::Png => return png_bytes(img, dpi),
+        Format::Jpg => image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90).write_image(img.as_raw(), img.width(), img.height(), image::ExtendedColorType::Rgb8),
+        Format::Bmp => image::codecs::bmp::BmpEncoder::new(&mut out).write_image(img.as_raw(), img.width(), img.height(), image::ExtendedColorType::Rgb8),
+    }
+    .map_err(|e| e.to_string())?;
+    Ok(out)
 }
 
 /// Bild eines Bildobjekts laden (Projektbild "bld:<Nummer>" oder Datei), wie die Zeichenfläche.
@@ -233,7 +278,8 @@ pub fn datei_je_blatt(base: &Path, nummern: &[u32]) -> Vec<PathBuf> {
         .enumerate()
         .map(|(i, n)| {
             let doppelt = nummern.iter().filter(|m| *m == n).count() > 1;
-            let name = if doppelt { format!("{stem}_{n}_{}.png", i + 1) } else { format!("{stem}_{n}.png") };
+            let ext = base.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| "bmp".into());
+            let name = if doppelt { format!("{stem}_{n}_{}.{ext}", i + 1) } else { format!("{stem}_{n}.{ext}") };
             dir.join(name)
         })
         .collect()
@@ -253,7 +299,7 @@ pub fn render_headless(project: &Project, lib: &[SymDef], r: SheetRef, dpi: u32,
 }
 
 impl App {
-    /// Datei › Als Bild exportieren…
+    /// Datei › Bitmapexport
     pub fn open_bild_export(&mut self) {
         if self.cur().is_none() {
             self.info = "Kein Blatt geöffnet".into();
@@ -266,17 +312,17 @@ impl App {
         let Some(mut d) = self.suche.bild.take() else { return };
         let Some(cur) = self.cur() else { return };
         let anlage_name = self.project.anlagen.get(cur.anlage).map(|a| a.name.clone()).unwrap_or_default();
-        let groesse = self.sheet().map(|s| pixel_groesse(s, DPI[d.dpi_idx.min(2)])).unwrap_or((0, 0));
+        let groesse = self.sheet().map(|s| pixel_groesse(s, dpi(d.dpi_idx))).unwrap_or((0, 0));
         let mut go = false;
         let mut abbrechen = false;
         let bold = crate::props::bold(13.0);
-        let closed = crate::props::tool_window(ctx, "bildexport", "Als Bild exportieren", [340.0, 160.0], egui::Order::Middle, |ui| {
+        let closed = crate::props::tool_window(ctx, "bildexport", "Bitmapexport", [340.0, 160.0], egui::Order::Middle, |ui| {
             ui.radio_value(&mut d.alle, false, egui::RichText::new("Aktuelles Blatt").font(bold.clone()));
             ui.radio_value(&mut d.alle, true, egui::RichText::new(format!("Alle Blätter der Anlage „{anlage_name}“ (je Blatt eine Datei)")).font(bold.clone()));
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Auflösung").font(bold.clone()));
-                egui::ComboBox::from_id_salt("bild_dpi").width(90.0).selected_text(format!("{} dpi", DPI[d.dpi_idx.min(2)])).show_ui(ui, |ui| {
+                egui::ComboBox::from_id_salt("bild_dpi").width(90.0).selected_text(format!("{} dpi", dpi(d.dpi_idx))).show_ui(ui, |ui| {
                     for (i, v) in DPI.iter().enumerate() {
                         ui.selectable_value(&mut d.dpi_idx, i, format!("{v} dpi"));
                     }
@@ -298,8 +344,9 @@ impl App {
             return;
         }
         let sheets: Vec<usize> = if d.alle { (0..self.project.anlagen[cur.anlage].sheets.len()).collect() } else { vec![cur.sheet] };
-        let vorschlag = self.sheet().map(|s| format!("Blatt {}.png", s.number)).unwrap_or_else(|| "Blatt.png".into());
-        let Some(base) = rfd::FileDialog::new().add_filter("PNG-Bild", &["png"]).set_file_name(vorschlag).save_file() else {
+        let vorschlag = self.sheet().map(|s| format!("Blatt {}.bmp", s.number)).unwrap_or_else(|| "Blatt.bmp".into());
+        // Filter wie TSaveDialog des Originals, PNG als Erweiterung dahinter
+        let Some(base) = rfd::FileDialog::new().add_filter("Windows Bitmap", &["bmp"]).add_filter("JPG", &["jpg"]).add_filter("PNG-Bild", &["png"]).set_file_name(vorschlag).save_file() else {
             self.suche.bild = Some(d);
             return;
         };
@@ -309,12 +356,13 @@ impl App {
         } else {
             vec![base.clone()]
         };
-        let dpi = DPI[d.dpi_idx.min(2)];
+        let dpi = dpi(d.dpi_idx);
+        let format = format_nach_endung(&base);
         let mut n = 0;
         for (si, f) in sheets.iter().zip(&files) {
             let r = SheetRef { anlage: cur.anlage, sheet: *si };
             let Some(img) = blatt_bild(ctx, &self.project, &self.lib, &mut self.images, r, dpi, d.glatt) else { continue };
-            match png_bytes(&img, dpi).and_then(|b| std::fs::write(f, b).map_err(|e| e.to_string())) {
+            match bild_bytes(&img, dpi, format).and_then(|b| std::fs::write(f, b).map_err(|e| e.to_string())) {
                 Ok(()) => n += 1,
                 Err(e) => {
                     self.dialog = Some(crate::app::Dialog::Message(format!("Bild konnte nicht geschrieben werden: {e}")));
@@ -346,6 +394,28 @@ mod tests {
         let f = datei_je_blatt(Path::new("x/Plan.png"), &[1, 2, 2]);
         let n: Vec<String> = f.iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect();
         assert_eq!(n, ["Plan_1.png", "Plan_2_2.png", "Plan_2_3.png"]);
+        let f = datei_je_blatt(Path::new("x/Plan.bmp"), &[4]);
+        assert_eq!(f[0].file_name().unwrap(), "Plan_4.bmp");
+    }
+
+    /// Vorgabe wie das Original bei 96 dpi Bildschirm: A4 quer 5613 × 3969, hoch 3969 × 5613; Formate nach Endung.
+    #[test]
+    fn groesse_und_formate_wie_original() {
+        assert_eq!(dpi(BildDlg::default().dpi_idx), 480);
+        let mut s = Sheet::new(1);
+        assert_eq!(pixel_groesse(&s, 480), (5613, 3969));
+        s.portrait = true;
+        assert_eq!(pixel_groesse(&s, 480), (3969, 5613));
+        assert_eq!(format_nach_endung(Path::new("a/b.BMP")), Format::Bmp);
+        assert_eq!(format_nach_endung(Path::new("a/b")), Format::Bmp);
+        assert_eq!(format_nach_endung(Path::new("a/b.jpeg")), Format::Jpg);
+        assert_eq!(format_nach_endung(Path::new("a/b.png")), Format::Png);
+        let img = image::RgbImage::from_pixel(4, 3, image::Rgb([200, 10, 10]));
+        for f in [Format::Bmp, Format::Jpg, Format::Png] {
+            let b = bild_bytes(&img, 480, f).unwrap();
+            assert_eq!(image::load_from_memory(&b).unwrap().to_rgb8().dimensions(), (4, 3));
+        }
+        assert_eq!(&bild_bytes(&img, 480, Format::Bmp).unwrap()[..2], b"BM");
     }
 
     #[test]

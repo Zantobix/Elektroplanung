@@ -206,6 +206,9 @@ nicht. Gemessen werden stattdessen:
   - Sammelschiene: Beim Verschieben wandert der Abgriff einer Leitung auf der Schiene mit, so dass keine Leitung
     auf der Schiene entlangläuft; markierte Leitungen reißen beim Verschieben nicht von der Schiene ab
     (`src/schiene_halten.rs`).
+  - Bitmapexport: vor dem Speichern ein kleiner Dialog mit Auflösung (150/300/480/600 dpi, Vorgabe 480 wie das
+    Original bei 96 dpi), allen Blättern der Anlage und Kantenglättung; neben BMP und JPG des Originals auch PNG
+    (`src/bildexport.rs`).
   - Vormarkierung (gestricheltes Rechteck beim Überfahren) nur bei Objekten, nicht bei Leitungen.
   - Kontextmenü einer Leitung › „Netz markieren“: markiert alle elektrisch verbundenen Leitungen des Blattes
     (Netz-Index zur Laufzeit nach QElectroTech, `src/netz.rs`; nicht in der Datei).

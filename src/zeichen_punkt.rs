@@ -8,7 +8,10 @@
 //!
 //! Punkte je Typ (Schleife in 0x455274): Linie (1) und Kreis (5) zwei, Kurve (2) und Rechteck (3) vier,
 //! Dreieck (4) drei. Im Nachbau: Linie/Kreis/Dreieck/Tabelle/Bild die beiden Rahmenpunkte, Rechteck die vier
-//! Ecken, Kurve Anfang, Kontrollpunkte und Ende. Texte und Vielecke sind (noch) nicht dabei.
+//! Ecken, Kurve Anfang, Kontrollpunkte und Ende. Texte (ZCN 6 und 11) haben zwei Punkte: Feld 0/1 und 2/3, beim
+//! Textfeld also linke obere und rechte untere Ecke der Textbox; Ziehen ändert nur die Box (der Schriftgrad
+//! bleibt). Gedrehte Texte (Feld 5 ≠ 0) drehen den zweiten Punkt im Original um den ersten (0x4698ec) – im Nachbau
+//! haben hochkant stehende Texte deshalb (noch) keine Punkte. Vielecke sind nicht dabei.
 //! Ein Klick ohne Bewegung ändert nichts (kein Rasterfang des Punktes, kein Rückgängig-Schritt).
 
 use crate::app::{App, Drag};
@@ -21,6 +24,8 @@ pub enum Punkt {
     Ecke(usize),
     /// Griff einer Kurve (0 Anfang, 1/2 Kontrollpunkte, 3 Ende), siehe kurve.rs
     Kurve(usize),
+    /// Ecke der Textbox eines Textes (0 links oben, 1 rechts unten)
+    Text(usize),
 }
 
 /// Punkt des Zeichenobjekts `k` in Reichweite `tol` um `m` (der nächstgelegene).
@@ -29,6 +34,10 @@ pub fn punkt_bei(k: &Kind, m: P, tol: f32) -> Option<Punkt> {
         Kind::Curve { .. } => return crate::kurve::griff_bei(k, m, tol).map(Punkt::Kurve),
         Kind::Rect { a, b } => vec![*a, *b, P::new(a.x, b.y), P::new(b.x, a.y)],
         Kind::Line { a, b } | Kind::Circle { a, b } | Kind::Triangle { a, b } | Kind::Table { a, b, .. } | Kind::Image { a, b, .. } => vec![*a, *b],
+        Kind::Text { vertical: false, style, .. } => {
+            let (mn, mx) = style.rect?;
+            return [mn, mx].iter().enumerate().map(|(i, q)| (q.dist(m), i)).filter(|(d, _)| *d <= tol).min_by(|x, y| x.0.total_cmp(&y.0)).map(|(_, i)| Punkt::Text(i));
+        }
         _ => return None,
     };
     pts.iter()
@@ -43,6 +52,16 @@ pub fn punkt_bei(k: &Kind, m: P, tol: f32) -> Option<Punkt> {
 pub fn punkt_setzen(k: &mut Kind, p: Punkt, q: P) {
     match p {
         Punkt::Kurve(g) => crate::kurve::griff_setzen(k, g, q),
+        Punkt::Text(i) => {
+            if let Kind::Text { pos, align, vertical, style, .. } = k {
+                if let Some((mn, mx)) = style.rect {
+                    let (a, b) = if i == 0 { (q, mx) } else { (mn, q) };
+                    let (mn, mx) = crate::canvas::norm_rect(a, b);
+                    style.rect = Some((mn, mx));
+                    *pos = crate::epr::text_anchor(mn, mx, *align, *vertical);
+                }
+            }
+        }
         Punkt::Ecke(c) => {
             if let Some((a, b)) = k.frame_points() {
                 let (na, nb) = match c {
@@ -121,7 +140,17 @@ mod tests {
         assert_eq!(punkt_bei(&rechteck, p(19.5, 0.5), 1.5), Some(Punkt::Ecke(3)));
         let kurve = Kind::Curve { a: p(0.0, 0.0), c1: p(0.0, 10.0), c2: p(10.0, 20.0), b: p(20.0, 20.0) };
         assert_eq!(punkt_bei(&kurve, p(0.3, 9.8), 1.5), Some(Punkt::Kurve(1)));
-        // Symbole, Leitungen, Texte haben keine solchen Punkte
+        // Text (Textbox): linke obere und rechte untere Ecke; hochkant und ohne Box keine
+        let text = crate::textbox::neu(p(10.0, 10.0), p(40.0, 20.0), "A");
+        assert_eq!(punkt_bei(&text, p(10.5, 10.4), 1.5), Some(Punkt::Text(0)));
+        assert_eq!(punkt_bei(&text, p(39.5, 19.4), 1.5), Some(Punkt::Text(1)));
+        assert_eq!(punkt_bei(&text, p(40.0, 10.0), 1.5), None);
+        let mut hoch = text.clone();
+        if let Kind::Text { vertical, .. } = &mut hoch {
+            *vertical = true;
+        }
+        assert_eq!(punkt_bei(&hoch, p(10.0, 10.0), 1.5), None);
+        // Symbole und Leitungen haben keine solchen Punkte
         let leitung = Kind::Wire { pts: vec![p(0.0, 0.0), p(20.0, 0.0)], leitung: 0, bez: vec![], opts: 0 };
         assert_eq!(punkt_bei(&leitung, p(0.0, 0.0), 1.5), None);
     }
@@ -167,5 +196,15 @@ mod tests {
         let mut k = Kind::Curve { a: p(0.0, 0.0), c1: p(0.0, 10.0), c2: p(10.0, 20.0), b: p(20.0, 20.0) };
         punkt_setzen(&mut k, Punkt::Kurve(3), p(30.0, 25.0));
         assert!(matches!(k, Kind::Curve { b, .. } if b == p(30.0, 25.0)));
+        // Textbox: nur die Box ändert sich, der Ankerpunkt folgt der Ausrichtung, der Schriftgrad bleibt
+        let mut t = crate::textbox::neu(p(10.0, 10.0), p(40.0, 20.0), "A");
+        punkt_setzen(&mut t, Punkt::Text(1), p(50.0, 30.0));
+        let Kind::Text { pos, style, size, .. } = &t else { unreachable!() };
+        assert_eq!(style.rect, Some((p(10.0, 10.0), p(50.0, 30.0))));
+        assert_eq!(*pos, crate::epr::text_anchor(p(10.0, 10.0), p(50.0, 30.0), crate::model::Align::Left, false));
+        assert_eq!(*size, crate::textbox::VORGABE_PT * 0.3528);
+        punkt_setzen(&mut t, Punkt::Text(0), p(60.0, 5.0));
+        let Kind::Text { style, .. } = &t else { unreachable!() };
+        assert_eq!(style.rect, Some((p(50.0, 5.0), p(60.0, 30.0))));
     }
 }

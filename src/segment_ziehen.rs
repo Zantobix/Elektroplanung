@@ -87,16 +87,23 @@ impl App {
             return false;
         }
         let Kind::Wire { pts, .. } = &o.kind else { return false };
-        let Some(idx) = teilstueck_bei(pts, m, tol) else { return false };
+        // innerer Knick zuerst wie in der Trefferprüfung des Originals (knick_ziehen.rs)
+        let (idx, knick) = match crate::knick_ziehen::knick_bei(pts, m, tol) {
+            Some(i) => (i, true),
+            None => match teilstueck_bei(pts, m, tol) {
+                Some(i) => (i, false),
+                None => return false,
+            },
+        };
         let orig = pts.clone();
-        self.drag = Drag::Teilstueck { id, idx, orig, start: self.snap(m), moved: false };
+        self.drag = Drag::Teilstueck { id, idx, orig, start: self.snap(m), moved: false, knick };
         true
     }
 
     /// Maus bewegt während des Teilstück-Ziehens.
     pub fn teilstueck_ziehen(&mut self, m: P) {
-        let Drag::Teilstueck { id, idx, orig, start, moved } = self.drag.clone() else { return };
-        let d = quer(orig[idx], orig[idx + 1], self.snap(m).sub(start));
+        let Drag::Teilstueck { id, idx, orig, start, moved, knick } = self.drag.clone() else { return };
+        let d = if knick { self.snap(m).sub(start) } else { quer(orig[idx], orig[idx + 1], self.snap(m).sub(start)) };
         if !moved && d.x.abs() < 1e-4 && d.y.abs() < 1e-4 {
             return;
         }
@@ -105,13 +112,14 @@ impl App {
         }
         // Abgriff an der Sammelschiene wandert mit (keine Leitung auf der Schiene, schiene_halten.rs)
         let sch = self.sheet().map(|s| crate::schiene_halten::schienen(s, &[])).unwrap_or_default();
-        let neu = crate::schiene_halten::abgreifen(&verschieben(&orig, idx, d), &sch);
+        let neu_pts = if knick { crate::knick_ziehen::knick_verschieben(&orig, idx, d) } else { verschieben(&orig, idx, d) };
+        let neu = crate::schiene_halten::abgreifen(&neu_pts, &sch);
         self.with_sheet(|s, _| {
             if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
                 *pts = neu;
             }
         });
-        self.drag = Drag::Teilstueck { id, idx, orig, start, moved: true };
+        self.drag = Drag::Teilstueck { id, idx, orig, start, moved: true, knick };
     }
 }
 

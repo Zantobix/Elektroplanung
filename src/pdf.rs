@@ -18,6 +18,8 @@ pub struct Page {
     pub links: Vec<Link>,
     /// Pixel der Bildobjekte auf dieser Seite (`pdf_bilder`)
     pub bilder: crate::pdf_bilder::Pixel,
+    /// Beim Drucken: Lage des Blattes auf dem Druckerpapier (`druck_seite`); sonst ist die Seite so groß wie das Blatt
+    pub platz: Option<crate::druck_seite::Platz>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +52,18 @@ pub fn render_sheets(
     lib: &[crate::symbols::SymDef],
     images: &std::collections::HashMap<String, egui::TextureHandle>,
     take: &dyn Fn(crate::model::SheetRef) -> bool,
+) -> (Vec<u8>, usize) {
+    render_sheets_platz(ctx, project, lib, images, take, &|_| None)
+}
+
+/// Wie `render_sheets`, je Blatt mit seiner Lage auf dem Druckerpapier (Drucken, `druck_seite::einrichten`).
+pub fn render_sheets_platz(
+    ctx: &egui::Context,
+    project: &crate::model::Project,
+    lib: &[crate::symbols::SymDef],
+    images: &std::collections::HashMap<String, egui::TextureHandle>,
+    take: &dyn Fn(crate::model::SheetRef) -> bool,
+    platz: &dyn Fn(crate::model::SheetRef) -> Option<crate::druck_seite::Platz>,
 ) -> (Vec<u8>, usize) {
     use crate::canvas::{self, DrawCtx, SheetColors, Xf};
     let z = 10.0;
@@ -108,7 +122,7 @@ pub fn render_sheets(
                     Some(Link { mn: f.mn, mx: f.mx, page: refs.iter().position(|r| *r == ziel)? })
                 })
                 .collect();
-            pages.push(Page { shapes: collect(ctx, layer), origin, z, w_mm: sw, h_mm: sh, links, bilder });
+            pages.push(Page { shapes: collect(ctx, layer), origin, z, w_mm: sw, h_mm: sh, links, bilder, platz: platz(crate::model::SheetRef { anlage: ai, sheet: si }) });
             n += 1;
         }
     }
@@ -403,11 +417,34 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
                 w.s.push_str("Q\n");
             }
         }
-        let content = w.s;
+        // Drucken: Blatt mit Maßstab und Versatz aufs Papier setzen, auf die bedruckbare Fläche beschnitten
+        let (seite_w, seite_h, lage) = match &pg.platz {
+            Some(p) => (p.papier_w, p.papier_h, (p.s, p.x, p.y)),
+            None => (pg.w_mm, pg.h_mm, (1.0, 0.0, 0.0)),
+        };
+        let content = match &pg.platz {
+            Some(p) => {
+                let (x0, y0, x1, y1) = p.clip;
+                format!(
+                    "q {:.3} {:.3} {:.3} {:.3} re W n\n{} 0 0 {} {:.3} {:.3} cm\n{}Q\n",
+                    x0 * PT_PER_MM,
+                    (p.papier_h - y1) * PT_PER_MM,
+                    (x1 - x0) * PT_PER_MM,
+                    (y1 - y0) * PT_PER_MM,
+                    p.s,
+                    p.s,
+                    p.x * PT_PER_MM,
+                    (p.papier_h - p.y - p.s * pg.h_mm) * PT_PER_MM,
+                    w.s
+                )
+            }
+            None => w.s,
+        };
         let mut refs = vec![];
         for l in pg.links.iter().filter(|l| l.page < n) {
-            let (x0, x1) = (l.mn.x * PT_PER_MM, l.mx.x * PT_PER_MM);
-            let (y0, y1) = ((pg.h_mm - l.mx.y) * PT_PER_MM, (pg.h_mm - l.mn.y) * PT_PER_MM);
+            let (s, ox, oy) = lage;
+            let (x0, x1) = ((ox + s * l.mn.x) * PT_PER_MM, (ox + s * l.mx.x) * PT_PER_MM);
+            let (y0, y1) = ((seite_h - oy - s * l.mx.y) * PT_PER_MM, (seite_h - oy - s * l.mn.y) * PT_PER_MM);
             annots.push(format!("<< /Type /Annot /Subtype /Link /Rect [{x0:.2} {y0:.2} {x1:.2} {y1:.2}] /Border [0 0 0] /Dest [{} 0 R /Fit] >>", 4 + l.page * 2));
             refs.push(format!("{annot_nr} 0 R"));
             annot_nr += 1;
@@ -415,8 +452,8 @@ pub fn build(pages: &[Page]) -> Vec<u8> {
         let annots_entry = if refs.is_empty() { String::new() } else { format!(" /Annots [{}]", refs.join(" ")) };
         objs.push(format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font 3 0 R{{XOBJ}} >> /Contents {} 0 R{annots_entry} >>",
-            pg.w_mm * PT_PER_MM,
-            pg.h_mm * PT_PER_MM,
+            seite_w * PT_PER_MM,
+            seite_h * PT_PER_MM,
             5 + i * 2
         ));
         objs.push(format!("<< /Length {} >>\nstream\n{}endstream", content.len(), content));

@@ -70,7 +70,8 @@ pub enum Drag {
     /// wurde verschoben (dann kein Kontextmenü)
     Rechts { start: P, druck: Pos2, kopie: bool, schieben: Option<Vec2>, geschoben: bool },
     /// Teilstück `idx` einer Leitung quer verschieben, Enden bleiben angeschlossen (segment_ziehen.rs)
-    Teilstueck { id: u64, idx: usize, orig: Vec<P>, start: P, moved: bool },
+    /// `knick`: statt des Teilstücks `idx` wird der innere Eckpunkt `idx` gezogen (knick_ziehen.rs)
+    Teilstueck { id: u64, idx: usize, orig: Vec<P>, start: P, moved: bool, knick: bool },
 }
 
 pub enum TextTarget {
@@ -207,6 +208,8 @@ pub struct App {
     /// Blattauswahl und Drucker für den nächsten Ausdruck
     pub print_sel: Option<Vec<SheetRef>>,
     pub print_printer: Option<String>,
+    /// Druckdialog „An Papiergröße anpassen“ (TForm3 Skal)
+    pub print_skal: bool,
     /// zuletzt im Dialog Symboleigenschaften gewählte Freigaben
     pub sym_frg_default: (bool, bool),
     pub align_ref: usize,
@@ -341,6 +344,7 @@ impl App {
             dlg2: None,
             print_sel: None,
             print_printer: None,
+            print_skal: false,
             sym_frg_default: (true, false),
             align_ref: 0,
             info: String::new(),
