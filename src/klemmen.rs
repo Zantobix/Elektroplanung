@@ -485,6 +485,16 @@ pub fn apply_index(p: &mut Project, id: u64, e: &Eingabe) {
         opt.posk = e.posk;
         opt.position = if pos == nr { 0 } else { pos };
     }
+    // in eine andere Leiste umgehängt: die alte Leiste führt die Nummer nicht mehr, sofern keine andere Klemmstelle
+    // sie dort trägt (Gegenprobe Runde 11: der Klemmplan des Originals zeigt dann keine leere Zeile mit der Nummer)
+    if old_leiste != e.leiste {
+        let belegt = a.sheets.iter().flat_map(|s| s.objects.iter()).any(|o| matches!(&o.kind, Kind::Terminal { leiste, nr, .. } if *leiste == old_leiste && *nr == old_nr));
+        if !belegt {
+            if let Some(k) = a.klemmen.iter_mut().find(|k| k.name == old_leiste) {
+                k.nrs.retain(|n| *n != old_nr);
+            }
+        }
+    }
     // folgende Klemmen fortlaufend (Klemmen einer Etagengruppe – gleiche alte Nummer – behalten dieselbe)
     let start = order.iter().position(|x| *x == me).map(|i| i + 1).unwrap_or(order.len());
     if e.auto && e.korr {
@@ -566,6 +576,22 @@ mod tests {
 
     fn nrs(p: &Project) -> Vec<(u32, u32)> {
         p.anlagen[0].sheets[0].objects.iter().filter_map(|o| if let Kind::Terminal { nr, opt, .. } = &o.kind { Some((*nr, opt.pos(*nr))) } else { None }).collect()
+    }
+
+    #[test]
+    fn umgehaengte_klemme_verlaesst_alte_leiste() {
+        // Gegenprobe Runde 11: Klemme 2 von X1 nach X2 → Klemmplan X1 ohne leere Zeile „2“
+        let (mut p, ids) = project_with(2);
+        for o in p.anlagen[0].sheets[0].objects.iter_mut() {
+            if let Kind::Terminal { leiste, .. } = &mut o.kind {
+                *leiste = "X1".into();
+            }
+        }
+        p.anlagen[0].klemmen[0].nrs = vec![1, 2];
+        new_leiste(&mut p, 0).unwrap();
+        let e = Eingabe { leiste: "X2".into(), nummer: String::new(), auto: true, korr: false, position: String::new(), posk: false, ebene: 0 };
+        apply_index(&mut p, ids[1], &e);
+        assert_eq!(p.anlagen[0].klemmen[0].nrs, vec![1]);
     }
 
     #[test]

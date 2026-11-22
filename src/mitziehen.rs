@@ -566,8 +566,8 @@ mod tests_profil {
         let lib = crate::symbols::builtin();
         let mut s = z_blatt();
         let r = ziehen(&mut s, &lib, &[1], P::new(0.0, -6.0));
-        // Höhe 43 → 49: drei senkrechte Stücke (10, 13, 20) je +2
-        let soll = [P::new(50.0, 101.0), P::new(50.0, 113.0), P::new(70.0, 113.0), P::new(70.0, 128.0), P::new(110.0, 128.0), P::new(110.0, 150.0)];
+        // Höhe 43 → 49: die Anschlussstücke (10 am Symbol, 20 am Ziel) bleiben, das innere senkrechte Stück 13 → 19
+        let soll = [P::new(50.0, 101.0), P::new(50.0, 111.0), P::new(70.0, 111.0), P::new(70.0, 130.0), P::new(110.0, 130.0), P::new(110.0, 150.0)];
         assert!(eq(&r[0].1, &soll), "{:?}", r[0].1);
     }
 

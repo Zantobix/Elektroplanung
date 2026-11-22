@@ -103,13 +103,49 @@ impl App {
         l.truncate(MERKEN_MAX);
     }
 
-    /// Beim Öffnen: gemerkte Rasterweite der Projektdatei einstellen (sonst bleibt die aktuelle Auswahl).
-    pub fn raster_laden(&mut self) {
-        let Some(p) = &self.path else { return };
+    /// Beim Öffnen: gemerkte Rasterweite der Projektdatei einstellen; ist keine gemerkt, die Rasterweite, in der
+    /// das Projekt gezeichnet ist (`raster_erkennen`), sonst bleibt die aktuelle Auswahl. Liefert, ob eine gemerkte
+    /// Weite galt.
+    pub fn raster_laden(&mut self) -> bool {
+        let Some(p) = &self.path else { return false };
         let k = p.to_string_lossy().to_string();
         if let Some((_, i)) = self.opt.raster_je_projekt.iter().find(|(n, _)| n == &k) {
             self.raster_idx = (*i).min(RASTER.len() - 1);
+            return true;
         }
+        false
+    }
+
+    /// Rasterweite, in der das Projekt gezeichnet ist (Erweiterung, Maustest Runde 11: W2 liegt im
+    /// 2,5-mm-Raster, mit der Vorgabe 10 mm ließen sich neue Teile nicht in die Reihen setzen): die größte Weite, auf
+    /// der mindestens die Hälfte der Eckpunkte von Leitungen liegt (Zufall wäre 4 % bei 2,5 mm; in W2 folgen viele
+    /// Eckpunkte den Anschlüssen der Symbole und liegen auf keinem Raster) (Leitungsenden an Anschlüssen zählen nicht, sie
+    /// folgen den Symbolen). Ohne genug Eckpunkte (unter 20) bleibt die Auswahl.
+    pub fn raster_erkennen(&mut self) -> Option<usize> {
+        // Eckpunkte aller Blätter mit dem Rasterursprung ihres Blattes
+        let mut punkte: Vec<(P, P)> = vec![];
+        for a in &self.project.anlagen {
+            for s in &a.sheets {
+                let u = ursprung(s, &a.set, self.opt.rand_ursprung);
+                for o in &s.objects {
+                    if let Kind::Wire { pts, .. } = &o.kind {
+                        if pts.len() > 2 {
+                            punkte.extend(pts[1..pts.len() - 1].iter().map(|p| (*p, u)));
+                        }
+                    }
+                }
+            }
+        }
+        if punkte.len() < 20 {
+            return None;
+        }
+        let i = (0..RASTER.len()).rev().find(|&i| {
+            let w = RASTER[i].1;
+            let treffer = punkte.iter().filter(|(p, u)| fang(*p, w, *u).dist(*p) < 0.05).count();
+            treffer * 2 >= punkte.len()
+        })?;
+        self.raster_idx = i;
+        Some(i)
     }
 
     /// Schrittweite der Pfeiltasten wie im Original (0x43f054): Rasterweite, mit Umschalt 0,1 mm; der

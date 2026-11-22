@@ -115,3 +115,15 @@ fn doppelte_leitung_erkannt() {
     assert!(!liegt_auf_leitungen(&s, &[P::new(10.0, 30.0), P::new(20.0, 30.0)]));
     assert!(!liegt_auf_leitungen(&s, &[P::new(10.0, 40.0), P::new(10.0, 60.0)]));
 }
+
+/// W2 ist im 2,5-mm-Raster gezeichnet: ohne gemerkte Weite stellt das Öffnen 2,5 mm ein.
+#[test]
+fn raster_aus_dem_projekt() {
+    let Ok(w2) = std::env::var("EP_SAMPLE") else { return };
+    let mut app = test_app();
+    app.project = elektroplanung::epr::import(std::path::Path::new(&w2)).unwrap();
+    app.tabs = vec![elektroplanung::model::SheetRef { anlage: 0, sheet: 0 }];
+    app.active = 0;
+    let i = app.raster_erkennen();
+    assert_eq!(i.map(|i| elektroplanung::app::RASTER[i].1), Some(2.5), "{i:?}");
+}

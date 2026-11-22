@@ -263,6 +263,9 @@ pub struct App {
     pub move_follow: Vec<crate::mitziehen::Mitzieh>,
     /// markierte Leitungen, die beim Verschieben an ihren Sammelschienen bleiben (schiene_halten.rs)
     pub move_halt: Vec<crate::schiene_halten::Halt>,
+    /// Text für die System-Zwischenablage nach „Kopieren“ (view.rs gibt ihn an egui weiter): Unter Linux meldet
+    /// egui Strg+V nur, wenn dort Text liegt – sonst blieb Einfügen per Tastatur wirkungslos (Maustest Runde 11)
+    pub ablage_text: Option<String>,
     /// offenes Fenster „Fehler melden / Wunsch äußern“ (fehlermeldung.rs)
     pub meldung: Option<crate::fehlermeldung::Meldung>,
     /// Eigenschaften mehrerer markierter Objekte (Stift, Fixierung, Textgröße/-stil)
@@ -381,6 +384,7 @@ impl App {
             owner_pick: None,
             move_follow: vec![],
             move_halt: vec![],
+            ablage_text: None,
             meldung: None,
             multi_props: None,
             zusatz: Default::default(),
@@ -914,6 +918,7 @@ impl App {
         // Kontaktspiegel kopiert das Original nicht mit (kontaktspiegel.rs)
         let objs: Vec<Obj> = self.selected_objs().into_iter().filter(|o| !matches!(o.kind, Kind::Spiegel { .. })).collect();
         if !objs.is_empty() {
+            self.ablage_text = Some(format!("Elektroplanung: {} Objekt(e) kopiert", objs.len()));
             self.clipboard = objs;
         }
     }
@@ -1382,7 +1387,7 @@ impl App {
                     let extra: Vec<SymDef> = self.project.symdefs.iter().filter(|d| symbols::find(&self.lib, &d.key).is_none()).cloned().collect();
                     self.lib.extend(extra);
                     self.path = Some(p);
-                    self.raster_laden();
+                    let gemerkt = self.raster_laden();
                     self.fix_tabs();
                     // Wie das Original: alle Blätter als Reiter öffnen, erstes aktiv, Explorer auf "Projekt"
                     self.tabs.clear();
@@ -1393,6 +1398,9 @@ impl App {
                     }
                     self.active = 0;
                     self.right_tab = RightTab::Projekt;
+                    if !gemerkt {
+                        self.raster_erkennen();
+                    }
                     // Fehler in den Daten (TErrliste): Prüfsummen/Struktur wie das Original, Blöcke ohne Darstellung
                     let mut lines = bytes.as_ref().and_then(|b| b.as_ref().ok()).map(|b| crate::meldungen::ladefehler_liste(b)).unwrap_or_default();
                     lines.extend(crate::meldungen::bildfehler(&self.project));

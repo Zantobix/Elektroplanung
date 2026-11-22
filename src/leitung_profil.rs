@@ -133,6 +133,15 @@ pub fn nachfuehren(pts: &[P], neu: P, rund: &dyn Fn(P) -> P) -> Ergebnis {
         if !idx.iter().any(|&i| st[i].len.abs() >= EPS) {
             return Ergebnis::Unpassend;
         }
+        // Anschlussstücke (erstes und letztes Teilstück) behalten ihre Länge, solange innere Teilstücke dieser
+        // Achse die Änderung aufnehmen können (Maustest Runde 11: Lampe nach unten verschoben, das 5-mm-Stück aus
+        // dem unteren Anschluss schrumpfte auf 0 und die Leitung lief seitlich aus dem Anschluss)
+        let innen: Vec<usize> = idx.iter().copied().filter(|&i| i != 0 && i + 1 != st.len()).collect();
+        let mut probe = st.clone();
+        if innen.iter().any(|&i| probe[i].len.abs() >= EPS) && verteilen(&mut probe, &innen, diff).abs() < EPS {
+            st = probe;
+            continue;
+        }
         if verteilen(&mut st, &idx, diff).abs() >= EPS {
             return Ergebnis::Unpassend;
         }

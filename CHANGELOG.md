@@ -9,6 +9,18 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Raster und Bearbeiten bestehender Pläne (Maustest Runde 11: W2 erweitern, neues Projekt umbauen):
+- Ohne gemerkte Rasterweite stellt das Öffnen die Weite ein, in der das Projekt gezeichnet ist (größte Weite, auf
+  der mindestens die Hälfte der Leitungsecken liegt; W2: 2,5 mm statt der Vorgabe 10 mm). So lassen sich neue
+  Teile in die bestehenden Reihen setzen.
+- Strg+V fügt unter Linux wieder ein: Kopieren legt zusätzlich einen kurzen Text in die System-Zwischenablage
+  (egui meldet Einfügen nur, wenn dort Text liegt).
+- Mitziehen mit Formerhalt: Die Anschlussstücke (erstes und letztes Teilstück) behalten ihre Länge, solange innere
+  Stücke die Änderung aufnehmen; bisher schrumpfte z. B. das 5-mm-Stück aus dem unteren Anschluss einer Lampe auf 0,
+  und die Leitung lief seitlich aus dem Anschluss.
+- Klemmplan: Eine in eine andere Leiste umgehängte Klemme hinterlässt in der alten Leiste keine leere Zeile mit
+  ihrer Nummer mehr (wie im Original).
+
 Klemmstellen und Sammelschienen (Nutzer-Befunde und Gegenprobe im Original):
 - Eine markierte und als Ganzes verschobene Leitung bleibt an Klemmstellen, Symbolanschlüssen und Leitungen hängen,
   die nicht mitverschoben werden (bisher nur an Sammelschienen); das Endstück wird länger bzw. kürzer, ein

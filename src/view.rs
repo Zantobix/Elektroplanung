@@ -2238,6 +2238,9 @@ impl App {
         if paste {
             self.paste();
         }
+        if let Some(t) = self.ablage_text.take() {
+            ctx.copy_text(t);
+        }
         if arrows.iter().any(|b| *b) && !self.selection.is_empty() {
             let st = self.pfeil_schritt(shift);
             let d = if arrows[0] {
