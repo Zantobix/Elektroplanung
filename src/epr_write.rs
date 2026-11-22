@@ -305,7 +305,8 @@ fn object_block_raw(project: &Project, o: &Obj) -> Option<Block> {
     }
     if let Some(r) = o.raw.as_deref() {
         if r.kind == o.kind && r.pen == o.pen && r.fixed == o.fixed {
-            return Some(r.block.clone());
+            // Knoten auf einer inzwischen verschobenen/gelöschten Leitung nachführen (knoten.rs)
+            return Some(crate::knoten::veralteter_knoten(project, o, &r.block).unwrap_or_else(|| r.block.clone()));
         }
         let mut b = r.block.clone();
         patch(&mut b, &r.kind, &o.kind, o.pen);

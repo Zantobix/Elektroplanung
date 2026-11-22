@@ -368,6 +368,8 @@ pub fn nachfuehren(project: &Project, o: &Obj, b: &mut Block) {
             b.set_i32(13, leitung_id(project, *leitung));
             bezeichnungen(b, bez);
             verweis_enden(project, o, b);
+            // Knoten an Leitungen und Sammelschienen (knoten.rs)
+            crate::knoten::enden_nachfuehren(project, o, b, None);
         }
     }
     if b.is("VSY") {
@@ -507,6 +509,7 @@ pub fn patch_more(project: &Project, o: &Obj, old: &Kind, b: &mut Block) {
             if (pts.first(), pts.last()) != (op.first(), op.last()) {
                 verweis_enden(project, o, b);
             }
+            crate::knoten::enden_nachfuehren(project, o, b, Some(op));
         }
     }
     // Eigentümer (OWR) nur bei Änderung, damit ein OWR auf ein nicht gefundenes Symbol erhalten bleibt

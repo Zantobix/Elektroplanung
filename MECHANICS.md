@@ -359,3 +359,13 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   den Rasterpunkt der Maus; Enter ohne Wirkung; Pfeiltasten mit Umschalt 0,1 mm, Strg+A alles markieren.
 - Schriftfeld %Geändert (0x4876d8, Fall 8): auf dem Bildschirm „Heute“, wenn das Blatt in der Rückgängig-Liste steht
   (in dieser Sitzung geändert), sonst Datum BLT @120 bzw. „---------“; %Datum = heute, %Erstellt = BLT @112.
+
+## Verbindungsknoten (src/knoten.rs, 22.11.2026)
+- Knoten sind keine eigenen Objekte: VBG Byte 0 (Anfang) bzw. 0x14 (Ende) = Anschlussart 1 Symbol, 2 Sammelschiene,
+  3 andere Leitung, 5 Klemmstelle; Ziel in Feld 2/3 bzw. 6/7 (bei Art 3 die VBG-Kennung Feld 10/11 der getroffenen
+  Leitung), Anschluss Feld 4 bzw. 8 (Art 3: −1). MouseUp bei 0x41d371 setzt Art 3 beim Ende auf einer Leitung; die
+  Zeichenroutine 0x46422c setzt den Punkt (Ellipse) an Enden der Art 3 bzw. Art 2 mit Anschluss ≠ 1, die
+  Schienenroutine 0x438b94 je angeschlossener Leitung. W2: 453 Enden der Art 3, alle am Ende, alle im Innern der
+  Zielleitung; kein Anfang der Art 3.
+- Brücken an Kreuzungen: das Original zeichnet keine (kein Arc-Aufruf im Programm, nur Ellipse/PolyBezier;
+  Bildschirmfoto docs/reference/original_main.png: kreuzende Leiter ohne Bogen und ohne Punkt).

@@ -1063,5 +1063,17 @@ pub fn junctions(sheet: &Sheet) -> Vec<P> {
             out.push(*e);
         }
     }
+    // Abgriffe an Sammelschienen: das Original zeichnet beim Zeichnen der Schiene an jedem angeschlossenen Leiter
+    // einen Punkt (Routine 0x438b94, Ellipse je Verbindung; Bildschirmfoto docs/reference/original_main.png).
+    // Leiter, die eine Schiene nur kreuzen, bekommen keinen Punkt.
+    for o in &sheet.objects {
+        let Kind::Busbar { a, x2, .. } = &o.kind else { continue };
+        let (x1, x2) = (a.x.min(*x2), a.x.max(*x2));
+        for e in &ends {
+            if (e.y - a.y).abs() < 0.05 && e.x >= x1 - 0.05 && e.x <= x2 + 0.05 && !out.iter().any(|q| q.dist(*e) < 0.05) {
+                out.push(*e);
+            }
+        }
+    }
     out
 }
