@@ -957,9 +957,12 @@ impl App {
         let sel = self.selection.clone();
         let lib = self.lib.clone();
         self.with_sheet(|s, _| {
+            // Original (ToolButton17Click 0x465994): gemeinsame Mitte aller markierten Objekte; hier für Auswahlen
+            // nur aus Zeichenobjekten (Symbole und Sonderobjekte drehen weiter um ihren Einfügepunkt)
+            let gemeinsam = crate::drehen_mitte::gemeinsame_mitte(s.objects.iter().filter(|o| sel.contains(&o.id)), &lib);
             for o in s.objects.iter_mut().filter(|o| sel.contains(&o.id)) {
                 let (mn, mx) = canvas::obj_bounds(o, &lib);
-                let c = P::new(((mn.x + mx.x) / 2.0 / 0.5).round() * 0.5, ((mn.y + mx.y) / 2.0 / 0.5).round() * 0.5);
+                let c = gemeinsam.unwrap_or_else(|| P::new(((mn.x + mx.x) / 2.0 / 0.5).round() * 0.5, ((mn.y + mx.y) / 2.0 / 0.5).round() * 0.5));
                 let f = |p: &mut P| match op {
                     1 => {
                         let (dx, dy) = (p.x - c.x, p.y - c.y);
@@ -1205,15 +1208,16 @@ impl App {
 
     pub fn new_leitung(&mut self) {
         self.checkpoint();
-        let n = self.project.leitungen.len() + 1;
-        let palette = [[0, 0, 0], [160, 0, 0], [0, 0, 170], [0, 120, 0], [150, 90, 0], [120, 0, 120]];
-        self.project.leitungen.push(Leitung { name: format!("Leitung {n}"), color: palette[(n - 1) % palette.len()], width_mm: 0.25, quer: 1.5, adern: 3, kennz: 0, style: 0, id: 0 });
+        // Vorgaben und Name „Leitung <Kennung>“ wie im Original (neu_anlegen.rs)
+        let k = crate::neu_anlegen::naechste_kennung(&self.project);
+        self.project.leitungen.push(crate::neu_anlegen::leitung_vorgabe(k));
         self.leitung = self.project.leitungen.len() - 1;
     }
 
     pub fn new_potential(&mut self) {
         self.checkpoint();
-        let n = self.project.potentiale.len() + 1;
+        // Name „Potential <Kennung>“ wie im Original (0x4052c4)
+        let n = crate::neu_anlegen::naechste_kennung(&self.project);
         self.project.potentiale.push(format!("Potential {n}"));
         self.info = format!("Potential {n} angelegt");
     }
@@ -1259,6 +1263,8 @@ impl App {
         anl.sammelschienen.push(name.clone());
         anl.schienen.insert(name.clone(), SchieneSet { name: format!("Schiene {n}"), pfeile: false, ..Default::default() });
         self.tree_open.insert(format!("prj/a{a}/ss"));
+        // Original legt die Schiene erst bei OK an: Abbrechen nimmt sie wieder heraus
+        self.neu_merken();
         self.open_schiene_dialog(a, &name);
     }
 
@@ -1401,7 +1407,16 @@ impl App {
     /// Anlagen eines anderen Projekts anhängen (Datei › Projekt hinzufügen).
     pub fn add_project(&mut self, prj: Project) {
         self.checkpoint();
-        for d in &prj.symdefs {
+        // wie das Original (0x4961c8): nur Symbole übernehmen, die auf den Blättern der übernommenen Anlagen stehen
+        // und dem Projekt noch fehlen
+        let benutzt: std::collections::HashSet<&str> = prj
+            .anlagen
+            .iter()
+            .flat_map(|a| &a.sheets)
+            .flat_map(|s| &s.objects)
+            .filter_map(|o| if let Kind::Symbol { key, .. } = &o.kind { Some(key.as_str()) } else { None })
+            .collect();
+        for d in prj.symdefs.iter().filter(|d| benutzt.contains(d.key.as_str())) {
             if !self.project.symdefs.iter().any(|x| x.key == d.key) {
                 self.project.symdefs.push(d.clone());
             }
@@ -1618,6 +1633,10 @@ impl App {
 
     /// DXF-Datei auf das aktuelle Blatt übernehmen (als Gruppe).
     pub fn dxf_import(&mut self) {
+        // Original (0x49d9a0): ohne geöffnetes Blatt kein Dateidialog
+        if self.cur().is_none() {
+            return;
+        }
         let Some(p) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).pick_file() else { return };
         let frame = self.sheet().map(|s| s.frame()).unwrap_or((5.0, 20.0, 292.0, 205.0));
         match crate::dxf::import(&p, frame) {

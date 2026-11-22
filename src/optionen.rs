@@ -187,7 +187,9 @@ fn farbe(c: [u8; 3]) -> Color32 {
     Color32::from_rgb(c[0], c[1], c[2])
 }
 
-const FORMATE: &[(&str, (i32, i32))] = &[("A4", (2100, 2970)), ("A3", (2970, 4200)), ("A2", (4200, 5940)), ("A1", (5940, 8410)), ("Benutzerdefiniert", (0, 0))];
+/// Blattformate der Projektvorgaben: wie im Original (FormatChange 0x4a0918) A3, A4, A5 und Benutzerdefiniert
+/// (nur dann sind Breite/Höhe frei); A2/A1 sind Ergänzungen des Nachbaus.
+const FORMATE: &[(&str, (i32, i32))] = &[("A3", (2970, 4200)), ("A4", (2100, 2970)), ("A5", (1480, 2100)), ("A2", (4200, 5940)), ("A1", (5940, 8410)), ("Benutzerdefiniert", (0, 0))];
 const ZIEL: &[&str] = &["Ziel anzeigen", "Eigenschaften"];
 
 fn f1(v: f32) -> String {

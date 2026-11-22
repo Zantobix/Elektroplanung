@@ -176,7 +176,7 @@ impl App {
                 self.new_sheet_dialog();
             }
             if tool_button(ui, Icon::NewPotential, "Neues Potential", true, false).clicked() {
-                self.new_potential();
+                self.potential_neu();
             }
             if tool_button(ui, Icon::NewBusbar, "Neue Sammelschiene", true, false).clicked() {
                 self.new_busbar();
@@ -220,8 +220,7 @@ impl App {
                 }
             }
             if tool_button(ui, Icon::NewLeitung, "Neue Leitung", true, false).clicked() {
-                self.new_leitung();
-                self.open_leitung_dialog(self.leitung);
+                self.leitung_neu();
             }
             sep(ui, 5.0);
             static_text(ui, "Klemmleiste", 89.0);
@@ -233,7 +232,7 @@ impl App {
                 self.klemme = ki;
             }
             if tool_button(ui, Icon::NewKlemmleiste, "Neue Klemmleiste", true, false).clicked() {
-                self.new_klemmleiste();
+                self.klemmleiste_neu();
             }
         });
     }
@@ -2045,13 +2044,13 @@ impl App {
                 }
                 ui.separator();
                 if ui.button("Potential").clicked() {
-                    self.new_potential();
+                    self.potential_neu();
                 }
                 if ui.button("Leitung").clicked() {
-                    self.new_leitung();
+                    self.leitung_neu();
                 }
                 if ui.button("Klemmleiste").clicked() {
-                    self.new_klemmleiste();
+                    self.klemmleiste_neu();
                 }
                 if ui.button("Sammelschine").clicked() {
                     self.new_busbar();
@@ -2579,9 +2578,10 @@ impl App {
         }
         let Some(p) = self.ask_save.clone() else { return };
         let mut choice: Option<u8> = None;
-        // Neu/Beenden: „Das Projekt wurde geändert! Änderungen Speichern?“ (Achtung); Öffnen: „Geänderte Daten Speichern?“
+        // Neu/Beenden: „Das Projekt wurde geändert! Änderungen Speichern?“; Öffnen und zuletzt geöffnete Dateien
+        // (ToolButton5Click 0x42616c, Open1Click 0x46dabc): „Geänderte Daten Speichern?“ – beide mit Überschrift „Achtung“
         let neu_beenden = matches!(p, crate::app::Pending::New | crate::app::Pending::Quit);
-        let (titel, frage) = if neu_beenden { (crate::meldungen::T_ACHTUNG, crate::meldungen::SE_PROJEKT_GEAENDERT) } else { ("Elektroplanung", "Geänderte Daten Speichern?") };
+        let (titel, frage) = if neu_beenden { (crate::meldungen::T_ACHTUNG, crate::meldungen::SE_PROJEKT_GEAENDERT) } else { (crate::meldungen::T_ACHTUNG, "Geänderte Daten Speichern?") };
         let closed = crate::props::tool_window(ctx, "asksave", titel, [300.0, 70.0], egui::Order::Foreground, |ui| {
             ui.label(frage);
             ui.add_space(6.0);

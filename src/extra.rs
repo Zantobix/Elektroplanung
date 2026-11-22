@@ -800,7 +800,8 @@ impl App {
     pub fn new_platzhalter(&mut self) {
         self.checkpoint();
         let n = self.project.platzhalter.len() + 1;
-        self.project.platzhalter.push(Platzhalter { name: format!("Platzhaltergruppe {n}"), werte: vec![] });
+        self.project.platzhalter.push(Platzhalter { name: crate::neu_anlegen::platzhalter_name(n), werte: vec![] });
+        self.neu_merken();
         let idx = self.project.platzhalter.len() - 1;
         self.xdlg = Some(XDialog::Platz { idx, name: self.project.platzhalter[idx].name.clone(), text: String::new() });
     }
@@ -1392,6 +1393,10 @@ impl App {
                 }
             }
             ("Löschen", TAction::Symbol(k)) => self.delete_library_symbol(&k.clone()),
+            // Lschen1Click: Zweige Potentiale, Leitungen, Stifte, Klemmleisten, Sammelschienen (neu_anlegen.rs)
+            ("Löschen", a @ (TAction::Potential(_) | TAction::Leitung(_) | TAction::Stift(_) | TAction::Klemmleiste(..) | TAction::Schiene(..))) => {
+                self.explorer_loeschen(&a.clone());
+            }
             ("Löschen", TAction::Bauteil(i)) => {
                 self.checkpoint();
                 let i = *i;
@@ -1477,15 +1482,8 @@ impl App {
             ("Neue Grafik", _) => self.new_project_graphic(),
             ("Eigenschaften", TAction::Bild(i)) => self.open_grafik_dialog(*i),
             ("Löschen", TAction::Bild(i)) => self.delete_project_graphic(*i),
-            ("Neue Leitung", _) => {
-                self.new_leitung();
-                self.open_leitung_dialog(self.leitung);
-            }
-            ("Neues Potential", _) => {
-                self.new_potential();
-                let i = self.project.potentiale.len() - 1;
-                self.open_potential_dialog(i);
-            }
+            ("Neue Leitung", _) => self.leitung_neu(),
+            ("Neues Potential", _) => self.potential_neu(),
             ("Neuer Stift", _) => self.neuer_stift(false),
             // wie im Original (0x4867d4): Gruppe des angeklickten Gruppenknotens als Vorgabe
             ("Neues Bauteil", _) => {
@@ -1784,6 +1782,7 @@ impl App {
             self.xdlg = Some(d);
         } else {
             self.part_assign_after = None;
+            self.neu_verwerfen();
         }
     }
 

@@ -303,7 +303,7 @@ impl App {
 
     /// Datei › Projekt hinzufügen: Anlagen auswählen (TWahl), dann übernehmen.
     pub fn open_add_project(&mut self) {
-        let Some(p) = rfd::FileDialog::new().add_filter("Elektroplanung Projekt", &["epj", "epr"]).pick_file() else { return };
+        let Some(p) = rfd::FileDialog::new().add_filter("Elektroplanungs Projekt", &["epr", "epj"]).add_filter("Elektroplan Vorlage", &["epv"]).pick_file() else { return };
         // wie das Original: Projekt hinzufügen nimmt nur Dateien ab Version 6.0.0
         if crate::vorlage::is_epr_format(&p) {
             if let Some((titel, text)) = crate::meldungen::ladefehler_vorab(&std::fs::read(&p), true) {
@@ -869,7 +869,7 @@ impl App {
                     self.dlg3 = Some(keep);
                 }
             }
-            Some(false) => {}
+            Some(false) => self.neu_verwerfen(),
             None => self.dlg3 = Some(d),
         }
     }
