@@ -9,6 +9,15 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Kleinere Angleichungen an das Original:
+- Bauteilliste: Ein Symbol bzw. eine Klemmstelle kann wie im Original mehrere Bauteile führen. Die Liste zeigt
+  alle, Ablegen hängt eine Zeile an, „Zeile löschen“ entfernt die gewählte; gespeichert wird je Bauteil ein
+  IDL-Block. Artikel- und Stückliste zählen alle Bauteile.
+- Rechts-Ziehen auf freier Fläche verschiebt bei vergrößerter Ansicht die Ansicht (das Blatt folgt der Maus,
+  begrenzt wie die Bildlaufleisten); danach öffnet sich kein Kontextmenü. Passt das Blatt ins Fenster, bleibt es
+  beim Kontextmenü.
+- Sammelschienen mit „Einspeisung“ zeigen am Anfang kein gefülltes Quadrat mehr; das Original zeichnet dort keins.
+
 Fehler melden und Wünsche äußern:
 - Neu im Menü Hilfe: „Fehler melden…“ und „Wunsch äußern…“. Ein kleines Fenster mit einem Textfeld öffnet ein
   fertig ausgefülltes Issue auf GitHub (Version und Betriebssystem auf Wunsch angehängt) oder kopiert den Text in

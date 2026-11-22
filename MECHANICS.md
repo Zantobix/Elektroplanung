@@ -326,6 +326,13 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   (Kennungen aus Gruppen.tfi Art 1 bzw. 2, 0 = „Keine Zuordnung“), Feld 8/9/10 Breite/Höhe/Tiefe in mm (Vorgabe
   500/800/700), Texte je 40 Byte: 0x2C Name, 0x54 Typ, 0x7C Artikel-Nr., 0xA4 interne Nr.; 0xD0 Symbol, 0xD8 Bild,
   0xE0 Erstellungszeit. Zuordnung: VSY › IDL bzw. OBJ (Klemmstelle) › IDL vor TIT, 8 Byte = Kennung des Bauteils.
+  Bauteilliste: je Bauteil ein IDL (verkettete Liste am Objekt +0xbc, Speichern 0x4228c4 schreibt je Knoten einen
+  8-Byte-Block mit Blockende), in Listenreihenfolge; Modell `part_of` (erstes) + `weitere_bauteile`.
+- Sammelschiene (Blattzeichnung 0x438b94): kein Quadrat am Anfang; Kreise nur an Abgriffen bei „Klemmen“ (SMS 0x31) und
+  für die Einspeisung (SMS 0x38 ≠ 0) nur bei „Klemmen“ auf dem Blatt mit der Kennung SMS +0x40.
+- Rechts-Ziehen auf freier Fläche (MouseMove 0x40f351, Shift-Bit 4 = rechte Taste): bei Bildlaufbereich ab 3 Bildpunkten
+  Ansicht verschieben (Position = beim Drücken + Druckpunkt − Maus, begrenzt auf die Leisten, Merker +0x7b9);
+  MouseUp 0x41fa5e öffnet dann kein Kontextmenü (rechts_ziehen.rs).
 - ERS (Platzhaltergruppe, 12 Byte Name) › TLI (8 Byte Suchtext) › STR (Ersetzungstext, fehlt bei leerem Text).
 - PRJ Byte 0x90 = 1 Projekt abgeschlossen; Byte 0x70 Bit 0 = 0 „Alter Klemmenplan“. FUS Feld 1 = 2 Maßangaben
   relativ (GRS-Koordinaten 0..10000), 0 absolut (0,1 mm: x · 2870/10000, y · Höhe/10000, gerundet – so rechnet

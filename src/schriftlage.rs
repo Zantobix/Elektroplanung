@@ -9,7 +9,15 @@
 //! - Schriftfeld: Schrift = 0,88 × Feldhöhe je Zeile (gemessen 0,877–0,887 an „Neubau EG“, „Wohnung 2“,
 //!   „1 / 4“), zu breite Texte auf die Feldbreite verkleinert. Symboltexte folgen dieser Regel nicht (die Option
 //!   „2“ der Steckdose passt zu 0,72 × Höhe, „SPD“, „M“, „Dusch/WC“ sind im Ausdruck 7–20 % größer) und bleiben
-//!   vorerst bei 0,72 (canvas.rs).
+//!   vorerst bei 0,72 (canvas.rs). Ursache (Dekompilat, 22.11.2026): Symboltexte (Element 6, 0x50 Byte) geben
+//!   Feld 10 (+0x28) als Schriftgröße an die Textroutine 0x491eec (Aufruf in 0x5486e8); in allen 750 Texten der
+//!   Symbole.tfi ist es 0 = einpassen. Die Routine misst dann in einem Bezugs-DC (Fenster +0x900, dpi +0x908) in
+//!   ganzen Bildpunkten: Boxbreite und Zeilenhöhe = dpi × Maß(0,1 mm) / 254 (ganzzahlig), lfHeight wird ab einer
+//!   Schätzung so lange vergrößert, wie GetTextExtent (Zellhöhe, bei Times ≈ 1,107 Geviert) in Zeilenhöhe und
+//!   Breite passt, danach ein Schritt zurück; zuletzt Umrechnung auf das Ziel und Verkleinern, solange die
+//!   breiteste Zeile zu breit ist. Die Größe hängt damit von der Rundung auf ganze Bildpunkte im Bezugs-DC ab
+//!   (z. B. „2“ in der 2,1 mm hohen Box: 7 Bildpunkte bei 96 dpi → 6 Bildpunkte Geviert ≈ 1,59 mm; Ausdruck
+//!   1,524 mm). Ohne die dpi des Bezugs-DC und die Anfangsschätzung ist das nicht sicher nachzubilden.
 //! - Spaltenleiste: Strompfad-Nummern in 12 pt, unabhängig vom Blattformat.
 //! - Kennzeichnung (BMK) und Wert eines Symbols: Schriftgröße aus der Anlage („Titel“ ANL Feld 46, „Wert“ Feld 47;
 //!   die Zeichenroutine 0x438b94 reicht ANL +0xb8 bzw. +0xbc an die Textroutine 0x491eec). Diese setzt
