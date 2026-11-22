@@ -95,6 +95,8 @@ pub const INHALT_FRAGE_1: &str = "Zum anlegen eines vollständigen Inhaltsverzei
 pub const QUERVERWEIS_FRAGE_1: &str = "Zum Anzeigen einer kompletten Querverweisliste";
 pub const FRAGE_SIND_NOCH: &str = " sind noch ";
 pub const FRAGE_IST_NOCH_1: &str = " ist noch 1 Blatt";
+pub const FB_INHALT: &str = "Es kann kein Folgeblatt für's Inhaltsverzeichnis erstellt werden da die dafür\nbenötigte Seite: ";
+pub const FB_VERGEBEN: &str = " schon vergeben ist!\n";
 pub const FRAGE_NOETIG: &str = " nötig.\nSollen alle nötigen Blätter erzeugt werden?";
 
 // ------------------------------------------------------------------ Drucken (Drucken1Click)
@@ -107,6 +109,9 @@ pub const DRUCK_NIE_GEDRUCKT: &str = "Es wurden noch keine Blätter des Projekte
 
 pub const SE_SYMBOL_UEBERNEHMEN: &str = "Symbol übernehmen";
 pub const SE_EINSTELLUNGEN: &str = "Einstellungen für das Symbol";
+pub const SE_STIFT_SYMBOL: &str = "Stift für das Symbol ";
+pub const SE_NEUER_KONTAKT: &str = "Neuer Kontakt";
+pub const SE_SCHRIFTFELD_UEBERNEHMEN: &str = "Schriftfeld übernehmen";
 pub const SE_BIBLIOTHEKSSYMBOL: &str = "Bibliothekssymbol '";
 pub const SE_PROJEKTSYMBOL: &str = "Projektsymbol '";
 pub const SE_BEARBEITEN: &str = "' bearbeiten";
@@ -117,6 +122,13 @@ pub const SE_AENDERUNG_1: &str = "Diese Änderung wirkt sich auf alle Symbole de
 pub const SE_AENDERUNG_2: &str = "' im gesamten Projekt aus.\nSoll statt dessen ein neues Symbol angelegt werden?";
 pub const SE_VERLUST: &str = "Bei mindestens einem Symbol, Schriftfeld oder Bauteil, das gerade bearbeitet wird, gehen alle Änderungen verloren.\nMöchten Sie die Änderungen vorher noch übernehmen?";
 pub const SE_PROJEKT_GEAENDERT: &str = "Das Projekt wurde geändert!\nÄnderungen Speichern?";
+
+// ------------------------------------------------------------------ Ablegen aus der Bibliothek (PaintBox1DragDrop 0x440c1a)
+
+pub const BS_BIBLIOTHEK: &str = "Das Symbol aus der Bibliothek ist ";
+pub const BS_ALTER: &str = "älter ";
+pub const BS_NEUER: &str = " neuer ";
+pub const BS_ALS: &str = "als das Symbol im Projekt.\nSoll es trotzdem übernommen werden?\n(Dies wirkt sich auf das ganze Projekt aus)";
 
 // ------------------------------------------------------------------ Kontaktspiegel (fcn 0x4b6674)
 
@@ -177,6 +189,8 @@ pub const TA_ORIGINAL: &str = "original Text";
 pub const TA_ALTERNATIV: &str = "alternativ Text";
 pub const TA_WAHL: &str = "Wahl ";
 pub const TA_NEUE_WAHL: &str = "Neue Wahl";
+/// erste Spalte: eigener Text im Original (0x479116), die weiteren „Wahl n“
+pub const TA_WAHL_1: &str = "Wahl 1";
 pub const TA_PARAMETER: &str = "Parameter";
 pub const TA_WERT: &str = "Wert";
 pub const SE_SEITEN: &str = "Definierte Seiten";
@@ -202,6 +216,12 @@ pub const BG_NEUE_HAUPTGRUPPE: &str = "Neue Hauptgruppe";
 pub const EX_ANLEGEN: &str = "Die Datei konnte nicht angelegt werden!";
 pub const EX_SCHREIBSCHUTZ: &str = "Die Datei ist Schreibgeschützt!";
 pub const EX_PLATZ: &str = "Nicht genug Speicherplatz auf dem Datenträger";
+
+// ------------------------------------------------------------------ Programmeinstellungen (TForm4, 0x4a07ac)
+
+pub const OPT_OHNE_SCHRIFTFELD: &str = "Ohne Schriftfeld";
+pub const OPT_VORGABESCHRIFTFELD: &str = "Vorgabeschriftfeld";
+pub const OPT_SCHRIFTFELD_DATEI: &str = "Schriftfeld aus Datei";
 
 
 // ------------------------------------------------------------------ Dialoge
@@ -776,6 +796,15 @@ pub fn editor_titel(symbol: Option<(&str, &str)>) -> String {
     }
 }
 
+/// Spaltenkopf der Alternativtexte (0x479064): Spalte `k` (ab 0) = „Wahl 1“, „Wahl 2“ …
+pub fn wahl_kopf(k: usize) -> String {
+    if k == 0 {
+        TA_WAHL_1.to_string()
+    } else {
+        format!("{TA_WAHL}{}", k + 1)
+    }
+}
+
 /// Abschlussmeldung der Synchronisierung (TBiblio.Button7Click, Überschrift „Summe“).
 pub fn sync_summe(gruppen: usize, versionen: usize, symbole: usize, bauteile: usize) -> String {
     let e = |n: usize, eins: &'static str, mehr: &'static str| if n == 1 { eins } else { mehr };
@@ -812,6 +841,26 @@ pub fn fenstertitel(name: &str, pfad: Option<&std::path::Path>, kennung: Option<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spaltenkoepfe_alternativtexte() {
+        // 0x479116: erste Spalte „Wahl 1“, danach „Wahl n“
+        assert_eq!(wahl_kopf(0), "Wahl 1");
+        assert_eq!(wahl_kopf(3), "Wahl 4");
+    }
+
+    #[test]
+    fn schriftfeld_auswahl_wie_tform4() {
+        let t: Vec<&str> = crate::optionen::SCHRIFTFELD_REIHENFOLGE.iter().map(|v| crate::optionen::schriftfeld_text(*v)).collect();
+        assert_eq!(t, ["Ohne Schriftfeld", "Vorgabeschriftfeld", "Schriftfeld aus Datei"]);
+    }
+
+    #[test]
+    fn folgeblatt_inhaltsverzeichnis_wortlaut() {
+        // 0x5caa8e + Seite + 0x5caaee
+        let t = format!("{FB_INHALT}2.1{FB_VERGEBEN}");
+        assert!(t.starts_with("Es kann kein Folgeblatt für's Inhaltsverzeichnis erstellt werden da die dafür\nbenötigte Seite: 2.1 schon vergeben ist!"));
+    }
 
     #[test]
     fn zahlen_wie_floattostr() {

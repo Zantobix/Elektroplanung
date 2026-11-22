@@ -53,7 +53,7 @@ pub struct Optionen {
     pub pfad_hoehe: i32,
     pub pfade: i32,
     pub ab_null: bool,
-    /// Schriftfeld: 0 = Standard, 1 = aus Datei
+    /// Schriftfeld: 0 = Standard, 1 = aus Datei, 2 = ohne
     pub schriftfeld: usize,
     pub schriftfeld_datei: String,
     pub schrift: String,
@@ -410,9 +410,11 @@ impl App {
                                     ui.set_width(300.0);
                                     ui.label("Schriftfeld");
                                     ui.horizontal(|ui| {
-                                        egui::ComboBox::from_id_salt("optfeld").width(150.0).selected_text(["Vorgabeschriftfeld", "Aus Datei"][o.schriftfeld.min(1)]).show_ui(ui, |ui| {
-                                            ui.selectable_value(&mut o.schriftfeld, 0, "Vorgabeschriftfeld");
-                                            ui.selectable_value(&mut o.schriftfeld, 1, "Aus Datei");
+                                        // Einträge in der Reihenfolge des Originals (TForm4, 0x4a0884–0x4a08b2)
+                                        egui::ComboBox::from_id_salt("optfeld").width(150.0).selected_text(schriftfeld_text(o.schriftfeld)).show_ui(ui, |ui| {
+                                            for v in SCHRIFTFELD_REIHENFOLGE {
+                                                ui.selectable_value(&mut o.schriftfeld, v, schriftfeld_text(v));
+                                            }
                                         });
                                         if ui.button("Suchen").clicked() {
                                             if let Some(p) = rfd::FileDialog::new().add_filter("Schriftfelddatei", &["eff", "json"]).pick_file() {
@@ -642,5 +644,18 @@ mod tests {
         let mut o: Optionen = serde_json::from_str(&j).unwrap();
         o.migrieren();
         assert_eq!(o.raender, [50, 50, 100, 50]);
+    }
+}
+
+/// Auswahl „Schriftfeld“ der Programmeinstellungen: gespeicherter Wert (0 Vorgabe, 1 Datei, 2 ohne) in der
+/// Reihenfolge der Liste des Originals (TForm4: „Ohne Schriftfeld“, „Vorgabeschriftfeld“, „Schriftfeld aus Datei“).
+pub const SCHRIFTFELD_REIHENFOLGE: [usize; 3] = [2, 0, 1];
+
+/// Text eines Eintrags der Auswahl „Schriftfeld“.
+pub fn schriftfeld_text(v: usize) -> &'static str {
+    match v {
+        0 => crate::meldungen::OPT_VORGABESCHRIFTFELD,
+        1 => crate::meldungen::OPT_SCHRIFTFELD_DATEI,
+        _ => crate::meldungen::OPT_OHNE_SCHRIFTFELD,
     }
 }

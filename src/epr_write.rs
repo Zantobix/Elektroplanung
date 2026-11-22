@@ -109,7 +109,8 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
         }
         // im Symboleditor geänderte Projektsymbole neu schreiben (Kennung, Kopf und Parameter bleiben)
         if k.is("SYM") {
-            if let Some(nb) = edited_sym(project, k) {
+            // dazu das Änderungsdatum einer aus der Bibliothek übernommenen Fassung (bib_stand.rs)
+            if let Some(nb) = crate::bib_stand::sym_block(project, k, edited_sym(project, k)) {
                 prj.kids.push(nb);
                 continue;
             }

@@ -572,10 +572,10 @@ impl App {
                 self.group_selection(false);
             }
             crate::view::sep(ui, 4.0);
-            // Label4: Name des Symbols (Klick: Name und BMK-Vorlage)
-            let name = self.sym_edit.as_ref().map(|e| e.name.clone()).unwrap_or_default();
+            // Label4: im Symbolmodus „Stift für das Symbol “ vor der Stiftliste (0x47689c: Label4.Caption); der Name
+            // steht im Fenstertitel. Klick (Erweiterung): Name und BMK-Vorlage ändern
             let (r, resp) = ui.allocate_exact_size(Vec2::new(151.0, 26.0), Sense::click());
-            ui.painter().text(Pos2::new(r.left() + 3.0, r.center().y), egui::Align2::LEFT_CENTER, &name, FontId::proportional(13.0), Color32::BLACK);
+            ui.painter().text(Pos2::new(r.left() + 3.0, r.center().y), egui::Align2::LEFT_CENTER, crate::meldungen::SE_STIFT_SYMBOL, FontId::proportional(13.0), Color32::BLACK);
             if resp.on_hover_text("Name und BMK-Vorlage ändern").clicked() {
                 if let Some(e) = &self.sym_edit {
                     self.xdlg = Some(XDialog::SymName { name: e.name.clone(), bmk: e.bmk.clone() });
@@ -1753,8 +1753,15 @@ impl App {
                 }
             }
             ui.add_space(8.0);
+            // Schriftfeld bearbeiten: Übernehmen-Knopf mit dem Hinweis des Originals (0x47689c, Button8 im Modus 'b')
+            let ok_hinweis = matches!(d, XDialog::Title { .. }).then_some(crate::meldungen::SE_SCHRIFTFELD_UEBERNEHMEN);
             ui.horizontal(|ui| {
-                if ui.button("    OK    ").clicked() {
+                let r = ui.button("    OK    ");
+                let r = match ok_hinweis {
+                    Some(h) => r.on_hover_text(h),
+                    None => r,
+                };
+                if r.clicked() {
                     ok = true;
                 }
                 if ui.button("Abbrechen").clicked() {
