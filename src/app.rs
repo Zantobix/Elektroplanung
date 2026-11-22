@@ -65,8 +65,10 @@ pub enum Drag {
     Beschriftung { id: u64, wert: bool, start: P, orig: P },
     Pan { last: Pos2 },
     /// Rechte Maustaste gedrückt (rechts_ziehen.rs): Rasterpunkt und Bildschirmlage beim Drücken; `kopie` = auf
-    /// einem Objekt (Ziehen legt eine Kopie ab), sonst öffnet das Loslassen das Kontextmenü
-    Rechts { start: P, druck: Pos2, kopie: bool },
+    /// einem Objekt (Ziehen legt eine Kopie ab), sonst öffnet das Loslassen das Kontextmenü; `schieben` = auf
+    /// freier Fläche: Ansichtsversatz beim Drücken (Ziehen verschiebt die vergrößerte Ansicht), `geschoben` = es
+    /// wurde verschoben (dann kein Kontextmenü)
+    Rechts { start: P, druck: Pos2, kopie: bool, schieben: Option<Vec2>, geschoben: bool },
     /// Teilstück `idx` einer Leitung quer verschieben, Enden bleiben angeschlossen (segment_ziehen.rs)
     Teilstueck { id: u64, idx: usize, orig: Vec<P>, start: P, moved: bool },
 }
