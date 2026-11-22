@@ -1055,7 +1055,7 @@ impl App {
         sheet.portrait = self.opt.hochformat;
         sheet.columns = self.opt.pfade.max(1) as u32;
         sheet.col_auto = true;
-        self.project.anlagen.push(Anlage { name: format!("Anlage {n}"), sheets: vec![sheet], sammelschienen: vec![], klemmleisten: vec!["Klemme 1".into()], klemmen: vec![], schienen: Default::default(), set: self.opt.anlage(), raw: None });
+        self.project.anlagen.push(Anlage { name: format!("Anlage {n}"), sheets: vec![sheet], sammelschienen: vec![], klemmleisten: crate::klemmen::erste_leiste().0, klemmen: crate::klemmen::erste_leiste().1, schienen: Default::default(), set: self.opt.anlage(), raw: None });
         let a = self.project.anlagen.len() - 1;
         self.tree_open.insert(format!("prj/a{a}"));
         self.tree_open.insert(format!("prj/a{a}/bl"));

@@ -141,11 +141,11 @@ mod tests {
     fn terminal_and_bmk_lists() {
         let mut p = Project::new_default();
         let s = &mut p.anlagen[0].sheets[0];
-        s.objects.push(Obj { id: 1, kind: Kind::Terminal { pos: P::new(50.0, 50.0), leiste: "Klemme 1".into(), nr: 2, level: 0, text_off: None, tpl: String::new(), opt: Default::default() }, pen: 0, fixed: false, group: None, raw: None });
-        s.objects.push(Obj { id: 2, kind: Kind::Terminal { pos: P::new(80.0, 50.0), leiste: "Klemme 1".into(), nr: 1, level: 0, text_off: None, tpl: String::new(), opt: crate::klemmen::KlemmOpt { funktion: "Licht".into(), ..Default::default() } }, pen: 0, fixed: false, group: None, raw: None });
+        s.objects.push(Obj { id: 1, kind: Kind::Terminal { pos: P::new(50.0, 50.0), leiste: "X1".into(), nr: 2, level: 0, text_off: None, tpl: String::new(), opt: Default::default() }, pen: 0, fixed: false, group: None, raw: None });
+        s.objects.push(Obj { id: 2, kind: Kind::Terminal { pos: P::new(80.0, 50.0), leiste: "X1".into(), nr: 1, level: 0, text_off: None, tpl: String::new(), opt: crate::klemmen::KlemmOpt { funktion: "Licht".into(), ..Default::default() } }, pen: 0, fixed: false, group: None, raw: None });
         let (h, rows) = liste(&p, 2);
         assert_eq!(h.len(), 4);
-        assert_eq!(rows, vec![vec!["Anlage 1", "Klemme 1", "Klemme 1.1", "Licht"], vec!["Anlage 1", "Klemme 1", "Klemme 1.2", ""]]);
-        assert_eq!(text(&h, &rows[..1], 1), "Anlage;Klemmleiste;Klemme;Funktion\r\nAnlage 1;Klemme 1;Klemme 1.1;Licht\r\n");
+        assert_eq!(rows, vec![vec!["Anlage 1", "X1", "X1.1", "Licht"], vec!["Anlage 1", "X1", "X1.2", ""]]);
+        assert_eq!(text(&h, &rows[..1], 1), "Anlage;Klemmleiste;Klemme;Funktion\r\nAnlage 1;X1;X1.1;Licht\r\n");
     }
 }

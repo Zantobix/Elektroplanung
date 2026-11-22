@@ -91,7 +91,7 @@ impl App {
     /// Werkzeug Klemmstelle: Klick bei `m` (mm), Fangweite `tol`. Liefert die Id der neuen Klemmstelle.
     pub fn klemmstelle_setzen(&mut self, m: P, tol: f32) -> u64 {
         let ks = self.klemmleisten();
-        let leiste = ks.get(self.klemme).cloned().unwrap_or_else(|| "Klemme 1".into());
+        let leiste = ks.get(self.klemme).cloned().unwrap_or_else(|| crate::klemmen::vorgabe_leiste(1).name);
         let nr = self.klemmen_zaehler(&leiste);
         // Leitung unter der Maus (oberste) und ihr nächster Abschnitt
         let treffer = self.sheet().and_then(|s| {

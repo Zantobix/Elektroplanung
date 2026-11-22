@@ -681,7 +681,9 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             let mut st = stroke;
             st.width = (0.35 * z).max(1.0);
             // Einstellungen der Schiene (TSSchiene): Stift, Querverweise, Pfeile, Einspeisung
-            let set = dc.anlage.and_then(|an| an.schienen.get(name)).cloned().unwrap_or_default();
+            let set_ref = dc.anlage.and_then(|an| an.schienen.get(name));
+            let text = crate::schiene_platzieren::beschriftung(name, set_ref).to_string();
+            let set = set_ref.cloned().unwrap_or_default();
             let line_style = if set.stift > 0 { dc.project.stifte.get(set.stift).map(|s| s.style).unwrap_or(0) } else if *bs != 0 { *bs } else { style };
             styled_line(p, &sp(&[*a, b]), st, line_style, z);
             if set.einspeisung {
@@ -690,9 +692,10 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             let (xin, xout) = if set.quer { (xin.clone(), xout.clone()) } else { (String::new(), String::new()) };
             let (xin, xout) = (&xin, &xout);
             let pfeile = set.pfeile;
-            if !name.is_empty() {
+            // Beschriftung = Kürzel (wie im Original), sonst Name
+            if !text.is_empty() {
                 let lp = a.add(*label);
-                p.text(xf.s(lp), Align2::LEFT_TOP, name, times(2.5 * z), tc);
+                p.text(xf.s(lp), Align2::LEFT_TOP, text, times(2.5 * z), tc);
             }
             // Querverweise: Pfeil ► vor dem Anfang (vom vorigen Blatt) bzw. hinter dem Ende (zum nächsten Blatt)
             let arrow = |tip: P| {

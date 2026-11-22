@@ -11,6 +11,7 @@ pub mod bib_gruppen;
 pub mod bildexport;
 pub mod blatt_tasten;
 pub mod blattnummer;
+pub mod blattreiter;
 pub mod canvas;
 pub mod dialoge;
 pub mod dialoge3;
