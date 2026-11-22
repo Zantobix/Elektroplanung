@@ -24,6 +24,12 @@ Behoben (Maustest 22.11.2026):
 - Sammelschienen-Dialog: Potential „Keine Zuordnung“ wählbar und Vorgabe; neue Schienen mit Kürzel „L<n>“, ohne Pfeile
   (Vorgaben des Originals)
 - Doppelklick auf eine Anlage im Projektbaum öffnet ihre Eigenschaften (wie im Original) statt sie zuzuklappen
+- Neue Klemmleisten wie im Original: Name „Klemme n“, Titel „Xn“ – eingesetzte Klemmstellen heißen „X1.1“ statt
+  „Klemme 1.1“
+- Sammelschiene auf dem Blatt mit ihrem Kürzel („L1“) beschriftet statt mit dem Namen („Schiene 1“)
+- Textbox-Eigenschaften: Felder Oben/Links schrumpfen nicht mehr („2100“ war abgeschnitten)
+- Bewusste Abweichung: Blattreiter mit gleicher Beschriftung aus verschiedenen Anlagen (z. B. zweimal „[1] Blatt 1“)
+  tragen die Anlagen-Kurzform bzw. den Anlagennamen davor; das Original unterscheidet sie nicht
 
 ## [0.2.0]
 

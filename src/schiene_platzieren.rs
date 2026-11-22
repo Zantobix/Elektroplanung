@@ -17,6 +17,12 @@ pub fn naechste_lage(oben: f32, vorhanden: &[f32]) -> f32 {
     y
 }
 
+/// Beschriftung einer Schiene auf dem Blatt: wie im Original das Kürzel („L1“, Maus-Befund M13). Aus .epr
+/// geladene Schienen führen ihr Kürzel (SMS › TIT) schon als Namen und haben kein eigenes Kürzel – dann der Name.
+pub fn beschriftung<'a>(name: &'a str, set: Option<&'a SchieneSet>) -> &'a str {
+    set.map(|s| s.kurz.trim()).filter(|k| !k.is_empty()).unwrap_or(name)
+}
+
 impl App {
     /// Schiene `name` auf das aktuelle Blatt legen (ohne Rückgängig-Schritt) und markieren.
     pub fn schiene_auf_blatt_nocp(&mut self, name: String) -> Option<u64> {
@@ -45,6 +51,16 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn beschriftung_kuerzel_vor_name() {
+        use crate::model::SchieneSet;
+        let neu = SchieneSet { kurz: "L1".into(), ..Default::default() };
+        assert_eq!(super::beschriftung("Schiene 1", Some(&neu)), "L1");
+        // aus .epr: kein Kürzel, Name = TIT = Kürzel
+        assert_eq!(super::beschriftung("L2", Some(&SchieneSet::default())), "L2");
+        assert_eq!(super::beschriftung("L3", None), "L3");
+    }
+
     use super::*;
 
     #[test]
