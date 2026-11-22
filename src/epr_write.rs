@@ -73,7 +73,9 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
     let mut new_syms: Vec<Block> = vec![];
     let mut ids: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
     let tpl_sym = tpl_prj.kid("SYM").cloned();
-    let mut stamp = delphi_now();
+    // eine Folge neuer Kennungen für alle Teile des Speicherns, ohne die schon belegten (kennungen.rs)
+    crate::kennungen::beginnen(project, &base);
+    crate::vbg_enden::beginnen();
     for o in project.anlagen.iter().flat_map(|a| &a.sheets).flat_map(|s| &s.objects) {
         if let Kind::Symbol { key, .. } = &o.kind {
             if ids.contains_key(key) {
@@ -85,8 +87,8 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
             }
             let def = project.symdefs.iter().find(|d| &d.key == key);
             if let (Some(def), Some(tpl)) = (def, tpl_sym.as_ref()) {
-                stamp += 1.0 / 86_400_000.0; // je Symbol eine Millisekunde später (Kennung = Zeitstempel wie im Original)
-                let id = stamp.to_bits();
+                // Kennung = Zeitstempel wie im Original, je Symbol eine Millisekunde später
+                let id = crate::kennungen::neu();
                 new_syms.push(sym_block(def, tpl, id));
                 ids.insert(key.clone(), id);
             }
@@ -142,6 +144,11 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
 }
 
 /// Neuer SYM-Block, falls das Projektsymbol zu `k` gegenüber der Datei geändert wurde.
+/// Wurde das Projektsymbol `k` (SYM der Grundlage) im Symboleditor geändert (wird es neu geschrieben)?
+pub(crate) fn sym_geaendert(project: &Project, k: &Block) -> bool {
+    edited_sym(project, k).is_some()
+}
+
 fn edited_sym(project: &Project, k: &Block) -> Option<Block> {
     let id = sym_id(k)?;
     let key = format!("epr:{id:016x}");
@@ -286,6 +293,8 @@ fn sheet_block(project: &Project, s: &Sheet, tpl_blt: &Block) -> Block {
 /// Block für ein Objekt: Original unverändert, verschoben oder aus den Daten neu erzeugt.
 pub fn object_block(project: &Project, o: &Obj) -> Option<Block> {
     let mut b = object_block_raw(project, o)?;
+    // doppelt vergebene Kennung aus der Datei ersetzen (kennungen.rs)
+    crate::kennungen::umbenennen(o, &mut b);
     crate::epr_projekt::leitung_setzen(project, o, &mut b);
     crate::epr_zusatz::objekt(project, o, &mut b);
     Some(b)
@@ -305,8 +314,8 @@ fn object_block_raw(project: &Project, o: &Obj) -> Option<Block> {
     }
     if let Some(r) = o.raw.as_deref() {
         if r.kind == o.kind && r.pen == o.pen && r.fixed == o.fixed {
-            // Knoten auf einer inzwischen verschobenen/gelöschten Leitung nachführen (knoten.rs)
-            return Some(crate::knoten::veralteter_knoten(project, o, &r.block).unwrap_or_else(|| r.block.clone()));
+            // Enden nachführen, deren Ziel verschoben/gelöscht wurde oder fehlt (vbg_enden.rs)
+            return Some(crate::vbg_enden::veraltet(project, o, &r.block).unwrap_or_else(|| r.block.clone()));
         }
         let mut b = r.block.clone();
         patch(&mut b, &r.kind, &o.kind, o.pen);
@@ -755,13 +764,6 @@ fn sym_id(s: &Block) -> Option<u64> {
     s.data.get(80..88).map(|b| u64::from_le_bytes(b.try_into().unwrap()))
 }
 
-/// Jetzt als Delphi-Datum (Tage seit 30.12.1899) – das Original kennzeichnet Symbole mit ihrem Erstellungszeitpunkt.
-fn delphi_now() -> f64 {
-    let base = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
-    let now = chrono::Local::now().naive_local();
-    (now - base).num_milliseconds() as f64 / 86_400_000.0
-}
-
 /// Zeichenelemente eines Symbols im Originalformat: aus den Bibliotheksdaten oder aus den Grundelementen erzeugt.
 /// Rückgabe: Elemente (je 0x50 Byte), Texte (Nr. 1 = BMK-Vorlage), Bildnamen.
 pub fn sym_elements(def: &crate::symbols::SymDef) -> (Vec<u8>, Vec<String>, Vec<String>) {
@@ -876,9 +878,10 @@ fn encode_elements(def: &crate::symbols::SymDef) -> (Vec<u8>, Vec<String>, Vec<S
     }
     for (i, p) in def.pins.iter().enumerate() {
         let vis = def.pin_vis.get(i).copied().unwrap_or((0, 1));
+        // Feld 4: Anschlussnummer (Leitungsenden im VBG verweisen darauf, vbg_enden.rs; die Bibliothek zählt ab 1),
         // Feld 5: Textnummer der Anschlussbezeichnung; Zusatzoption wie bei den Grundelementen
         let (t, flag) = def.pin_info.get(i).copied().unwrap_or((0, 0));
-        el(7, &[*p, *p], 0, vis, flag, &[(5, t as i32)]);
+        el(7, &[*p, *p], 0, vis, flag, &[(4, i as i32 + 1), (5, t as i32)]);
     }
     (out, texts, def.options.clone())
 }

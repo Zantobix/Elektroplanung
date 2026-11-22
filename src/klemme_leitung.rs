@@ -16,7 +16,6 @@
 use crate::app::App;
 use crate::canvas;
 use crate::model::*;
-use std::cell::Cell;
 
 /// Abstand der Leitungsenden vom Mittelpunkt der Klemmstelle (mm).
 pub const KLEMME_R: f32 = 0.8;
@@ -54,21 +53,6 @@ pub fn lage(a: P, b: P, m: P, raster: P) -> P {
     };
     let t = ((p.x - a.x) * u.x + (p.y - a.y) * u.y).clamp(KLEMME_R.min(len / 2.0), (len - KLEMME_R).max(len / 2.0));
     P::new(a.x + u.x * t, a.y + u.y * t)
-}
-
-thread_local! {
-    static ZAEHLER: Cell<u32> = const { Cell::new(0) };
-}
-
-/// Neue VBG-Kennung (Delphi-Zeitstempel wie die Kennungen des Originals, je Aufruf eine Millisekunde weiter).
-fn neue_kennung() -> u64 {
-    let base = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
-    let jetzt = (chrono::Local::now().naive_local() - base).num_milliseconds() as f64 / 86_400_000.0;
-    let n = ZAEHLER.with(|z| {
-        z.set(z.get() + 1);
-        z.get()
-    });
-    (jetzt + (1000.0 + n as f64) / 86_400_000.0).to_bits()
 }
 
 impl App {
@@ -136,7 +120,7 @@ impl App {
                 // Kopie des Originalblocks mit eigener Kennung (VBG Byte 40); `kind` der alten Leitung, damit der
                 // Schreiber Punkte, Enden und Bezeichnungen nachträgt
                 if r.block.data.len() >= 48 {
-                    r.block.data[40..48].copy_from_slice(&neue_kennung().to_le_bytes());
+                    r.block.data[40..48].copy_from_slice(&crate::kennungen::neu().to_le_bytes());
                 }
             }
             let neu = Obj { id: neu_id, kind: zweite, pen: o.pen, fixed: o.fixed, group: o.group, raw };

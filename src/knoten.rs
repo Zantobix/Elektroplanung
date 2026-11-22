@@ -10,11 +10,10 @@
 //! W2 (fixtures/W2.epr): 453 Enden der Art 3, alle am Ende (Feld 5), alle geometrisch im Innern einer anderen
 //! Leitung; kein Anfang der Art 3. Der Nachbau zeichnet die Punkte weiter aus der Geometrie (`canvas::junctions`),
 //! damit sie beim Verschieben (Teilstück ziehen, Symbol/Klemmstelle mitziehen) sofort entstehen und verschwinden.
-//! Beim Speichern bringt [`enden_nachfuehren`] die Anschlussart geänderter Leitungen in Übereinstimmung, damit das
-//! Original dieselben Punkte zeigt; unveränderte Blöcke bleiben byteidentisch, solange ihr Knoten noch stimmt.
+//! Beim Speichern schreibt `vbg_enden` Anschlussart, Ziel und Anschluss aller Enden aus der Geometrie, damit das
+//! Original dieselben Punkte zeigt; unveränderte Blöcke bleiben byteidentisch, solange ihre Enden noch stimmen.
 
-use crate::eprfile::Block;
-use crate::model::{seg_dist, Kind, Obj, Project, Sheet, P};
+use crate::model::{seg_dist, Kind, Obj, Sheet, P};
 
 /// Anschlussart einer Leitung auf einer anderen Leitung.
 pub const ART_LEITUNG: u8 = 3;
@@ -22,9 +21,6 @@ pub const ART_LEITUNG: u8 = 3;
 pub const ART_SCHIENE: u8 = 2;
 const ART_KLEMME: u8 = 5;
 const T: f32 = 0.05;
-
-/// Byte der Anschlussart, Feld der Zielkennung, Feld der Anschlussnummer – für Anfang (0) und Ende (1).
-const ENDEN: [(usize, usize, usize); 2] = [(0, 2, 4), (0x14, 6, 8)];
 
 /// Liegt `p` im Innern (nicht an einem Ende) der Leitung `pts`?
 pub fn im_innern(pts: &[P], p: P) -> bool {
@@ -46,73 +42,6 @@ pub fn ziel<'a>(sheet: &'a Sheet, eigen: u64, p: P) -> Option<(u8, &'a Obj)> {
         return Some((ART_SCHIENE, o));
     }
     sheet.objects.iter().find(|o| o.id != eigen && matches!(&o.kind, Kind::Wire { pts, .. } if im_innern(pts, p))).map(|o| (ART_LEITUNG, o))
-}
-
-fn kennung_bei(b: &Block, feld: usize) -> u64 {
-    b.data.get(feld * 4..feld * 4 + 8).map(|d| u64::from_le_bytes(d.try_into().unwrap())).unwrap_or(0)
-}
-
-/// Stimmt der gespeicherte Knoten (Art 3 bzw. 2) noch mit der Geometrie überein?
-fn knoten_stimmt(sheet: &Sheet, art: u8, kennung: u64, p: P) -> bool {
-    sheet.objects.iter().any(|o| {
-        crate::epr_neu::kennung(o) == kennung
-            && match (&o.kind, art) {
-                (Kind::Wire { pts, .. }, ART_LEITUNG) => pts.windows(2).any(|s| seg_dist(p, s[0], s[1]) < T),
-                (k, ART_SCHIENE) => auf_schiene(k, p),
-                _ => false,
-            }
-    })
-}
-
-/// Anschlussart, Zielkennung und Anschlussnummer beider Enden der Leitung `o` im VBG-Block `b` nachführen. `alt` =
-/// Punkte beim Laden (None bei neuen Leitungen). Ein Ende wird nur angefasst, wenn es sich bewegt hat oder sein
-/// gespeicherter Knoten (Art 3) nicht mehr zur Geometrie passt. Symbolanschlüsse (Art 1 mit Kennung) bleiben,
-/// wie sie sind (die Anschlussnummer kennt nur die Symboldefinition).
-pub fn enden_nachfuehren(project: &Project, o: &Obj, b: &mut Block, alt: Option<&[P]>) {
-    let Kind::Wire { pts, .. } = &o.kind else { return };
-    if pts.len() < 2 || b.data.len() < 0x24 {
-        return;
-    }
-    let Some(sheet) = project.find_obj(o.id).and_then(|(r, _)| project.sheet(r)) else { return };
-    for (i, (art_at, id_feld, nr_feld)) in ENDEN.into_iter().enumerate() {
-        let p = if i == 0 { pts[0] } else { pts[pts.len() - 1] };
-        let a = alt.and_then(|a| if i == 0 { a.first() } else { a.last() }).copied();
-        let art = b.data[art_at];
-        let kennung = kennung_bei(b, id_feld);
-        let bewegt = a.is_none_or(|a| a.dist(p) > 1e-4);
-        let veraltet = art == ART_LEITUNG && !knoten_stimmt(sheet, art, kennung, p);
-        if !(bewegt || veraltet) || (art == 1 && kennung != 0) {
-            continue;
-        }
-        // Enden an der Pfeilspitze eines Verweises führt `epr_neu::verweis_enden` (Art dort ungeklärt)
-        if sheet.objects.iter().any(|v| matches!(&v.kind, Kind::Verweis { pos, .. } if pos.dist(p) < T)) {
-            continue;
-        }
-        match ziel(sheet, o.id, p) {
-            Some((neu @ (ART_LEITUNG | ART_SCHIENE), z)) => {
-                b.data[art_at] = neu;
-                b.data[id_feld * 4..id_feld * 4 + 8].copy_from_slice(&crate::epr_neu::kennung(z).to_le_bytes());
-                b.set_i32(nr_feld, if neu == ART_LEITUNG { -1 } else { 0 });
-            }
-            // Kennung der Klemmstelle schreibt `epr_neu::verweis_enden`
-            Some((neu, _)) => b.data[art_at] = neu,
-            None if matches!(art, ART_LEITUNG | ART_SCHIENE | ART_KLEMME) => {
-                b.data[art_at] = 0;
-                b.data[id_feld * 4..id_feld * 4 + 8].fill(0);
-                b.set_i32(nr_feld, 0);
-            }
-            None => {}
-        }
-    }
-}
-
-/// Unveränderte Leitung beim Speichern: Block mit nachgeführtem Knoten, falls ihr gespeicherter Knoten nicht mehr
-/// stimmt (die Leitung, auf der sie endete, wurde verschoben oder gelöscht), sonst `None` (Originalblock bleibt).
-pub fn veralteter_knoten(project: &Project, o: &Obj, b: &Block) -> Option<Block> {
-    let Kind::Wire { pts, .. } = &o.kind else { return None };
-    let mut neu = b.clone();
-    enden_nachfuehren(project, o, &mut neu, Some(pts));
-    (neu.data != b.data).then_some(neu)
 }
 
 #[cfg(test)]

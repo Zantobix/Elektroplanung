@@ -585,13 +585,6 @@ fn write_anlage(project: &Project, a: &Anlage, blk: &mut Block, pots: &std::coll
     }
 }
 
-/// Neue Kennung (8 Byte) als Zeitstempel wie im Original (SMS Feld 8/9).
-fn stempel(n: usize) -> u64 {
-    let base = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
-    let now = chrono::Local::now().naive_local();
-    ((now - base).num_milliseconds() as f64 / 86_400_000.0 + n as f64 / 86_400_000.0).to_bits()
-}
-
 fn write_schienen(a: &Anlage, blk: &mut Block, pots: &std::collections::HashMap<&str, i32>) {
     let blocks: Vec<Block> = blk.kids_of("SMS").cloned().collect();
     let refs: Vec<&Block> = blocks.iter().collect();
@@ -607,7 +600,7 @@ fn write_schienen(a: &Anlage, blk: &mut Block, pots: &std::collections::HashMap<
                 None => {
                     let mut b = Block::new("SMS", vec![0; 76]);
                     b.set_i32(7, 0xffff);
-                    b.data[32..40].copy_from_slice(&stempel(i).to_le_bytes());
+                    b.data[32..40].copy_from_slice(&crate::kennungen::neu().to_le_bytes());
                     b.set_i32(12, 1);
                     b
                 }
