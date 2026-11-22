@@ -1,5 +1,6 @@
 //! Elektroplanung – Nachbau in Rust. Bibliothek mit Datenmodell, Dateiformaten, Zeichnen, GUI und MCP-Server.
 
+pub mod anschluss_folgen;
 pub mod anschlusskreise;
 pub mod app;
 pub mod baum;
@@ -50,6 +51,7 @@ pub mod kontaktspiegel;
 pub mod kontextmenue;
 pub mod kuerzel;
 pub mod kurve;
+pub mod leitung_anschluss;
 pub mod leitung_bahn;
 pub mod leitung_fuehrung;
 pub mod leitung_hindernis;

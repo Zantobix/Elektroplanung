@@ -1352,12 +1352,14 @@ impl App {
                     let min = 6.0 / xf.z;
                     // Klick auf eine Sammelschiene beendet wie ein Anschluss (senkrecht auf die Schiene)
                     let ziel = self.pin_near(m, min, &[]).or_else(|| self.sheet().and_then(|s| crate::leitung_route::schiene_bei(s, m, min)).map(|s| crate::leitung_route::ende_auf_schiene(f.letzter(), s)));
+                    // Klick auf eine Leitung beendet ebenfalls (Abzweig bzw. Kürzen, leitung_anschluss.rs)
+                    let ziel = ziel.or_else(|| self.sheet().and_then(|s| crate::leitung_route::ende_auf_leitung(s, f.letzter(), m, min)));
                     match ziel {
                         Some(pin) if !(f.pts.len() == 1 && pin.dist(f.start()) < 0.01) => {
                             let pts = self.leitungsweg(&f, pin);
                             self.drag = Drag::None;
                             if pts.len() >= 2 {
-                                self.neue_leitung(pts);
+                                self.leitung_anschliessen(pts);
                             }
                         }
                         _ => {
@@ -1493,6 +1495,7 @@ impl App {
                         if let Some(hi) = frame_handles(mn, mx).iter().enumerate().position(|(i, q)| !(nur_ecken && i % 2 == 1) && (q.x - m.x).abs() <= r && (q.y - m.y).abs() <= r) {
                             self.checkpoint();
                             let orig = self.selected_objs();
+                            self.move_follow = self.wire_followers(&self.selection.clone());
                             self.drag = Drag::Scale { handle: hi, start: (mn, mx), orig };
                             return;
                         }
@@ -1536,6 +1539,10 @@ impl App {
                     }
                     // auf einer nicht markierten Sammelschiene: Leitung beginnen (schiene_leitung.rs)
                     if !ctrl && self.leitung_an_schiene_beginnen(m, tol) {
+                        return;
+                    }
+                    // Umschalt auf einer Leitung: Abzweig beginnen (leitung_anschluss.rs)
+                    if !ctrl && ui.input(|i| i.modifiers.shift) && self.leitung_an_leitung_beginnen(m, tol) {
                         return;
                     }
                     // Punkt einer Linie, eines Rechtecks, einer Kurve … ziehen wie im Original (zeichen_punkt.rs)
@@ -1732,7 +1739,7 @@ impl App {
                     } else if end.dist(f.start()) > 0.01 {
                         // gezogen: Knick nach der ersten Zugrichtung
                         let pts = self.leitungsweg(&f, end);
-                        self.neue_leitung(pts);
+                        self.leitung_anschliessen(pts);
                     } else {
                         // Klick auf den Anschluss ohne Ziehen: Klickbetrieb wie im Original
                         f.klickbetrieb = true;

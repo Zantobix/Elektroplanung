@@ -265,6 +265,10 @@ impl App {
                 }
             }
         });
+        // angeschlossene Leitungen folgen den neuen Anschlusslagen (C1, anschluss_folgen.rs)
+        let f = std::mem::take(&mut self.move_follow);
+        self.anschluesse_nachfuehren(orig, &f);
+        self.move_follow = f;
     }
 }
 

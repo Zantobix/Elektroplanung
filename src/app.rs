@@ -969,6 +969,8 @@ impl App {
         self.checkpoint();
         let sel = self.selection.clone();
         let lib = self.lib.clone();
+        // angeschlossene Leitungen folgen den gedrehten/gespiegelten Anschlüssen (C2, anschluss_folgen.rs)
+        let (follow, alt) = (self.wire_followers(&sel), self.selected_objs());
         self.with_sheet(|s, _| {
             // Original (ToolButton17Click 0x465994): gemeinsame Mitte aller markierten Objekte; hier für Auswahlen
             // nur aus Zeichenobjekten (Symbole und Sonderobjekte drehen weiter um ihren Einfügepunkt)
@@ -1020,6 +1022,7 @@ impl App {
                 }
             }
         });
+        self.anschluesse_nachfuehren(&alt, &follow);
     }
 
     pub fn group_selection(&mut self, on: bool) {
