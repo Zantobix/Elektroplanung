@@ -45,6 +45,9 @@ pub struct Optionen {
     pub format: (i32, i32),
     pub hochformat: bool,
     pub raender: [i32; 4],
+    /// Stand der Randvorgabe: 0 = ältere Version mit Links 10 mm als Vorgabe (siehe `migrieren`), 1 = aktuell
+    #[serde(default)]
+    pub raender_stand: u8,
     pub pfad_hoehe: i32,
     pub pfade: i32,
     pub ab_null: bool,
@@ -74,7 +77,8 @@ pub struct Optionen {
 
 impl Default for Optionen {
     fn default() -> Self {
-        let a = AnlSettings::default();
+        // Projektvorgaben des Originals ohne INI (Ränder Links 20 mm)
+        let a = AnlSettings::neu();
         Optionen {
             raster_idx: 5,
             alt_raster_idx: None,
@@ -97,6 +101,7 @@ impl Default for Optionen {
             format: a.format,
             hochformat: false,
             raender: a.raender,
+            raender_stand: 1,
             pfad_hoehe: a.pfad_hoehe,
             pfade: a.pfade,
             ab_null: a.ab_null,
@@ -131,6 +136,13 @@ impl Optionen {
                 self.gitter = false;
             }
             self.raster_idx = a.saturating_sub(1).min(crate::app::RASTER.len() - 1);
+        }
+        // ältere Versionen gaben Links 10 mm vor (Ränder von W2); unverändert gespeichert → Vorgabe des Originals
+        if self.raender_stand == 0 {
+            if self.raender == crate::rahmen::RAENDER_W2 {
+                self.raender = crate::rahmen::RAENDER_NEU;
+            }
+            self.raender_stand = 1;
         }
     }
 
@@ -608,5 +620,23 @@ mod tests {
         let mut o: Optionen = serde_json::from_str(&j).unwrap();
         o.migrieren();
         assert_eq!(o.raster_idx, 1);
+    }
+
+    #[test]
+    fn randvorgabe_wie_original() {
+        // neue Anlage: Links 20 mm, die übrigen Ränder 5 mm (Original-Dialog orig_03)
+        assert_eq!(Optionen::default().anlage().raender, [50, 50, 200, 50]);
+        // ältere gespeicherte Optionen mit der alten Vorgabe (Links 10 mm) → Vorgabe des Originals
+        let mut o: Optionen = serde_json::from_str(r#"{"raender": [50, 50, 100, 50]}"#).unwrap();
+        o.migrieren();
+        assert_eq!((o.raender, o.raender_stand), ([50, 50, 200, 50], 1));
+        // selbst gewählte Ränder bleiben, ebenso nach der Umstellung gespeicherte 10 mm
+        let mut o: Optionen = serde_json::from_str(r#"{"raender": [50, 50, 150, 50]}"#).unwrap();
+        o.migrieren();
+        assert_eq!(o.raender, [50, 50, 150, 50]);
+        let j = serde_json::to_string(&Optionen { raender: [50, 50, 100, 50], ..Default::default() }).unwrap();
+        let mut o: Optionen = serde_json::from_str(&j).unwrap();
+        o.migrieren();
+        assert_eq!(o.raender, [50, 50, 100, 50]);
     }
 }

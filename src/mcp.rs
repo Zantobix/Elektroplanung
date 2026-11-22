@@ -43,7 +43,9 @@ pub fn open_project(path: &Path) -> Result<Project, String> {
         crate::epr::import(path)
     } else {
         let s = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        serde_json::from_str(&s).map_err(|e| e.to_string())
+        let mut p: Project = serde_json::from_str(&s).map_err(|e| e.to_string())?;
+        crate::rahmen::abgleichen(&mut p);
+        Ok(p)
     }
 }
 
@@ -231,6 +233,7 @@ impl Server {
 
     /// Ein Werkzeug ausführen; Ergebnis als JSON-Wert.
     pub fn call(&mut self, name: &str, a: &Value) -> Result<Value, String> {
+        crate::rahmen::abgleichen(&mut self.project);
         if let Some(r) = self.symbol_call(name, a) {
             return r;
         }

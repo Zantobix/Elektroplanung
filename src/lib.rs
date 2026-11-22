@@ -57,6 +57,7 @@ pub mod pdf_bilder;
 pub mod pdf_schriften;
 pub mod props;
 pub mod pruefen;
+pub mod rahmen;
 pub mod raster;
 pub mod rechts_ziehen;
 pub mod sammelschiene_lage;

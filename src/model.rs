@@ -4,11 +4,6 @@ use serde::{Deserialize, Serialize};
 
 pub const SHEET_W: f32 = 297.0;
 pub const SHEET_H: f32 = 210.0;
-pub const FRAME_LEFT: f32 = 5.0;
-pub const FRAME_RIGHT: f32 = 5.0;
-/// oberer Rand quer (ANL +0xa8 = 100 in 0,1 mm)
-pub const FRAME_TOP: f32 = 10.0;
-pub const FRAME_BOTTOM: f32 = 5.0;
 pub const COLUMN_BAR_H: f32 = 5.0;
 pub const TITLE_H: f32 = 15.0;
 pub const GRID_ORIGIN: f32 = 5.0;
@@ -380,13 +375,16 @@ pub struct Sheet {
     pub erstellt: String,
     #[serde(default)]
     pub geaendert: String,
+    /// Ränder der Anlage (Kopie für `frame`, siehe `crate::rahmen`; nicht gespeichert)
+    #[serde(skip, default = "crate::rahmen::raender_w2")]
+    pub raender: [i32; 4],
     #[serde(skip)]
     pub raw: Option<Box<RawSheet>>,
 }
 
 impl Sheet {
     pub fn new(number: u32) -> Self {
-        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, zusatz: 0, art_fest: false, pfad_linien: false, erstellt: today(), geaendert: String::new(), raw: None }
+        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, zusatz: 0, art_fest: false, pfad_linien: false, erstellt: today(), geaendert: String::new(), raender: crate::rahmen::RAENDER_W2, raw: None }
     }
 
     /// Blattgröße in mm (A4 quer oder hoch).
@@ -398,17 +396,12 @@ impl Sheet {
         }
     }
 
-    /// Rahmen (x0, y0, x1, y1) in mm aus den Rändern der Anlage (ANL +0xa0…+0xac, in W2 und der Vorlage überall
-    /// 50/50/100/50): quer links/rechts/unten 5, oben 10 (Original-Ausdruck "Altbau EG", Listenblätter in der
-    /// Gegenprobe); hoch links 10, oben/rechts/unten 5 (Original-PDF "Elektroplanung Wohnung 2", Seite 1).
-    /// BLT Feld 24 ist keine Rahmenhöhe, sondern die Unterkante der Zeichenfläche (siehe `kontaktspiegel`).
+    /// Rahmen (x0, y0, x1, y1) in mm aus den Rändern der Anlage (`raender`, siehe `crate::rahmen`; W2 quer
+    /// links/rechts/unten 5, oben 10; hoch links 10, sonst 5). BLT Feld 24 ist keine Rahmenhöhe, sondern die
+    /// Unterkante der Zeichenfläche (siehe `kontaktspiegel`).
     pub fn frame(&self) -> (f32, f32, f32, f32) {
         let (w, h) = self.dims();
-        if self.portrait {
-            (10.0, 5.0, w - 5.0, h - 5.0)
-        } else {
-            (FRAME_LEFT, FRAME_TOP, w - FRAME_RIGHT, h - FRAME_BOTTOM)
-        }
+        crate::rahmen::rahmen(w, h, self.portrait, self.raender)
     }
 
     /// Blattart wie im Original (0 Deckblatt, 1 Inhaltsverzeichnis, 2 Querverweise, 3 Schaltplan, 4 Klemmplan,
@@ -544,7 +537,15 @@ pub struct AnlSettings {
 impl Default for AnlSettings {
     fn default() -> Self {
         // Werte eines neuen Projekts (wie in W2.epr bei allen Anlagen)
-        AnlSettings { kurz: String::new(), von: String::new(), znr: String::new(), format: (2100, 2970), raender: [50, 50, 100, 50], pfade: 8, pfad_hoehe: 50, ab_null: false, size_titel: 10, size_wert: 8, size_verbg: 6, size_pfad: 10 }
+        AnlSettings { kurz: String::new(), von: String::new(), znr: String::new(), format: (2100, 2970), raender: crate::rahmen::RAENDER_W2, pfade: 8, pfad_hoehe: 50, ab_null: false, size_titel: 10, size_wert: 8, size_verbg: 6, size_pfad: 10 }
+    }
+}
+
+impl AnlSettings {
+    /// Vorgaben des Originals für eine neue Anlage (Projektvorgaben ohne INI, Form1 +0x9c4…+0x9f4, Bild orig_03):
+    /// A4, Ränder Oben/Unten/Rechts 5 mm, Links 20 mm, 8 Strompfade zu 5 mm ohne '0', Schrift 10/8/6/10.
+    pub fn neu() -> Self {
+        AnlSettings { raender: crate::rahmen::RAENDER_NEU, ..Default::default() }
     }
 }
 

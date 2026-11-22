@@ -279,6 +279,10 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   (W2 hat einen Spiegel ohne Spule), „Alles markieren“ und Kopieren lassen ihn aus. Details in `src/kontaktspiegel.rs`.
 - BLT Feld 24 ist damit keine Rahmenhöhe: der Rahmen kommt aus den Rändern der Anlage (ANL +0x98 Höhe 2100,
   +0x9c Breite 2970, +0xa0…+0xac Ränder 50/50/100/50 – quer oben 10 mm, sonst 5 mm; hoch links 10 mm).
+  Zuordnung (0x438b94): hoch links +0xa8, oben +0xa0, unten +0xa4, rechts +0xac (= Dialog „Blattränder in mm
+  (Hochformat)“ Links/Oben/Unten/Rechts); quer gedreht: links +0xa4, oben +0xa8 (Heftrand „Links“), rechts +0xa0,
+  unten +0xac. Neue Anlagen übernehmen die Projektvorgaben (Form1 +0x9cc…+0x9d8, ohne INI 50/50/200/50 → Links
+  20 mm). Nachbau: `src/rahmen.rs` (Kopie der Ränder je Blatt, Abgleich nach dem Laden und vor jedem Bild).
 - VSY › OWR (24 Byte, letzter Unterblock): Kennung des Eigentümers (VSY Byte 96), seines Blattes (BLT Byte 72),
   seiner Anlage (ANL Byte 0x88). Beim Zeichnen (Textroutine 0x46e9f4 Art 1, Laufzeit +0xb4) zeigt das Symbol die
   Kennzeichnung des Eigentümers und darunter dessen Lage (Ausdruck Seite 10/18/29: „-K1“ mit „/5“, „/4“, „/5“;
