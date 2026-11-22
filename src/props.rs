@@ -84,6 +84,8 @@ pub struct SheetProps {
     pub zusatz: usize,
     /// Klemmleisten der Anlage (Kennung, Titel) für den Zusatz beim Klemmplan
     pub leisten: Vec<(i32, String)>,
+    /// gerade über Hinzufügen › Blatt angelegt: Abbruch nimmt das Blatt wieder weg (wie im Original, Maus-Befund M18)
+    pub neu: bool,
 }
 
 pub struct AnlProps {
@@ -437,6 +439,7 @@ impl App {
                     _ => 0,
                 },
                 leisten,
+                neu: false,
             }));
         }
     }
@@ -508,7 +511,13 @@ impl App {
         }
         match result {
             Some(true) => self.apply_props(p),
-            Some(false) => {}
+            Some(false) => {
+                // Abbruch im Dialog eines neuen Blattes: Blatt wieder entfernen (ohne Wiederholen-Schritt)
+                if matches!(&p, Props::Sheet(s) if s.neu) {
+                    self.do_undo();
+                    self.redo.pop();
+                }
+            }
             None => self.props = Some(p),
         }
     }

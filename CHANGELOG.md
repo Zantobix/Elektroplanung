@@ -67,6 +67,8 @@ Behoben (Maustest 22.11.2026):
 - Leitung zu einer Sammelschiene von einem Anschluss, der von der Schiene weg zeigt: der Leiter trifft die Schiene
   senkrecht an der Mausposition, statt um das Symbol herum und auf der Schiene zurück zu laufen (Knoten lag sonst
   auf der Kreuzung mit einer anderen Leitung)
+- Hinzufügen › Blatt (auch Datei › Neu › Blatt, Knopf „Neues Blatt“) öffnet wie im Original gleich den
+  Eigenschaftendialog des neuen Blattes; Abbruch nimmt es wieder weg
 - Rahmenauswahl wie im Original: markiert werden Objekte, deren Anfangs-/Einfügepunkt im Rahmen liegt (bisher nur
   ganz enthaltene Objekte)
 - Blattrahmen (mit Strompfadleiste, Schriftfeld und Zeichenfläche) kommt aus den Blatträndern der Anlage statt aus

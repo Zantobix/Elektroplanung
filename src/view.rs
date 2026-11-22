@@ -173,7 +173,7 @@ impl App {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             ui.add_space(29.0);
             if tool_button(ui, Icon::NewSheet, "Neues Blatt", true, false).clicked() {
-                self.new_sheet();
+                self.new_sheet_dialog();
             }
             if tool_button(ui, Icon::NewPotential, "Neues Potential", true, false).clicked() {
                 self.new_potential();
@@ -1924,7 +1924,7 @@ impl App {
                         self.guarded(crate::app::Pending::New);
                     }
                     if ui.button("Blatt").clicked() {
-                        self.new_sheet();
+                        self.new_sheet_dialog();
                     }
                 });
                 ui.separator();
@@ -2019,7 +2019,7 @@ impl App {
                     self.new_anlage();
                 }
                 if ui.button("Blatt").on_hover_text("Fügt dem Projekt ein neues Blatt hinzu").clicked() {
-                    self.new_sheet();
+                    self.new_sheet_dialog();
                 }
                 if ui.button("Symbol (nur Projekt)").on_hover_text("Öffnet die Symbolbearbeitung mit einem neuem Symbol").clicked() {
                     self.open_symbol_editor(None);
@@ -2726,7 +2726,7 @@ impl App {
             }
             "zoom_in" if self.canvas_area.is_positive() => self.zoom_at(center, self.canvas_area, 1.25),
             "zoom_out" if self.canvas_area.is_positive() => self.zoom_at(center, self.canvas_area, 0.8),
-            "blatt_neu" => self.new_sheet(),
+            "blatt_neu" => self.new_sheet_dialog(),
             "blatt_vor" if !self.tabs.is_empty() => {
                 self.active = (self.active + 1) % self.tabs.len();
                 self.selection.clear();

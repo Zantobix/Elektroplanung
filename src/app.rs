@@ -1059,6 +1059,22 @@ impl App {
         self.open_sheet(r);
     }
 
+    /// Hinzufügen › Blatt wie im Original: neues Blatt anlegen und gleich seinen Eigenschaftendialog öffnen
+    /// (Art, Bezeichnung, Nummer, Ausrichtung); Abbruch nimmt das Blatt wieder weg (Maus-Befund M18).
+    pub fn new_sheet_dialog(&mut self) {
+        let vorher = self.project.anlagen.iter().map(|a| a.sheets.len()).sum::<usize>();
+        self.new_sheet();
+        if self.project.anlagen.iter().map(|a| a.sheets.len()).sum::<usize>() == vorher {
+            return;
+        }
+        if let Some(r) = self.cur() {
+            self.open_sheet_props_dialog(r);
+            if let Some(crate::props::Props::Sheet(s)) = self.props.as_mut() {
+                s.neu = true;
+            }
+        }
+    }
+
     pub fn new_anlage(&mut self) {
         self.checkpoint();
         let n = self.project.anlagen.len() + 1;
@@ -2030,5 +2046,25 @@ mod tests {
         let mut k = sym(1, "builtin:schliesser", P::new(20.0, 15.0)).kind;
         k.scale_about(P::new(10.0, 10.0), 2.0, 2.0);
         assert!(matches!(k, Kind::Symbol { pos, scale, .. } if pos == P::new(30.0, 20.0) && scale == 1.0));
+    }
+}
+
+#[cfg(test)]
+mod blatt_dialog_tests {
+    /// Maus-Befund M18: Hinzufügen › Blatt öffnet den Eigenschaftendialog des neuen Blattes; Abbruch entfernt es.
+    #[test]
+    fn neues_blatt_mit_dialog_und_abbruch() {
+        let mut app = crate::blatt_tasten::test_app();
+        let vorher = app.project.anlagen[0].sheets.len();
+        app.new_sheet_dialog();
+        assert_eq!(app.project.anlagen[0].sheets.len(), vorher + 1);
+        assert!(matches!(&app.props, Some(crate::props::Props::Sheet(s)) if s.neu));
+        // Abbruch wie im Dialog: Blatt wieder weg, kein Wiederholen-Schritt
+        let redo = app.redo.len();
+        app.props = None;
+        app.do_undo();
+        app.redo.pop();
+        assert_eq!(app.project.anlagen[0].sheets.len(), vorher);
+        assert_eq!(app.redo.len(), redo);
     }
 }
