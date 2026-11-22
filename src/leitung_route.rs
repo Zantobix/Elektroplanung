@@ -246,7 +246,19 @@ impl crate::app::App {
         if let Some(p) = self.sheet().and_then(|s| ende_auf_leitung(s, f.letzter(), m, tol)) {
             return p;
         }
-        self.snap(m)
+        // Flucht des Bezugspunkts (Anfang bzw. letzter Knick) vor dem Raster: liegt die Maus weniger als ein halbes
+        // Raster neben ihr, bleibt das Ende in der Flucht (Maustest Runde 12: Lampenanschluss bei x = 202,3, Raster
+        // 10 mm – das erste gefangene Ende sprang auf x = 205, die Leitung lief erst nach rechts statt nach unten)
+        let mut q = self.snap(m);
+        let bezug = f.bahn.last().copied().unwrap_or_else(|| f.letzter());
+        let halb = self.raster() / 2.0;
+        if (m.x - bezug.x).abs() < halb {
+            q.x = bezug.x;
+        }
+        if (m.y - bezug.y).abs() < halb {
+            q.y = bezug.y;
+        }
+        q
     }
 
     /// Weg der gerade gezeichneten Leitung `f` bis `ende` mit Anschlussrichtungen (Vorschau und Ergebnis).
@@ -256,7 +268,7 @@ impl crate::app::App {
         // läge ein Teilstück auf einer vorhandenen Leitung oder Schiene (Maustest Runde 11: W2 erweitert, die neue
         // Leitung lief senkrecht auf der Leitung von -E7.6 zum Abgriff), die andere Winkelführung nehmen, wenn sie
         // frei ist und kein Symbol durchquert; im Klickbetrieb bleiben die gesetzten Ecken
-        let w = if !f.klickbetrieb && ueberlappt(s, &w) {
+        let w = if !f.klickbetrieb && f.bahn.is_empty() && ueberlappt(s, &w) {
             let hind: Vec<_> = crate::leitung_hindernis::umrisse(s, &self.lib).into_iter().map(|u| u.r).collect();
             let hind = crate::leitung_hindernis::wirksam(&hind, f.start(), ende);
             let (a, e) = (f.start(), ende);

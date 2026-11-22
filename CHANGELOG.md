@@ -9,6 +9,15 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Leitungsführung nach Nutzerwünschen (Runde 12):
+- Gezogene Leitungen folgen dem Mausweg: jede Richtungsänderung der Maus (ab einem Raster) wird ein Knick, Zurückfahren
+  nimmt ihn wieder weg (`leitung_bahn.rs`). Bisher galt nur die erste Bewegung, danach ein Knick zum Ende.
+- Das Leitungsende bleibt in der Flucht des Anfangs bzw. letzten Knicks, solange die Maus weniger als ein halbes Raster
+  daneben liegt. Bisher sprang es bei Anschlüssen neben dem Raster seitlich auf das Raster, und die Leitung lief
+  zuerst in die falsche Richtung.
+- Verschobene Symbole und Klemmstellen rücken wieder auf das Raster (erster Anschluss), auch wenn sie vorher daneben
+  lagen (bewusste Abweichung: das Original behält den Rest).
+
 Raster und Bearbeiten bestehender Pläne (Maustest Runde 11: W2 erweitern, neues Projekt umbauen):
 - Ohne gemerkte Rasterweite stellt das Öffnen die Weite ein, in der das Projekt gezeichnet ist (größte Weite, auf
   der mindestens die Hälfte der Leitungsecken liegt; W2: 2,5 mm statt der Vorgabe 10 mm). So lassen sich neue

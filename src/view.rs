@@ -1602,8 +1602,14 @@ impl App {
         if let Drag::Wire { f } = &self.drag {
             let ende = self.leitungsende(f, m, xf.z);
             let da = self.sheet().and_then(|s| crate::leitung_route::anschluss_richtung(s, &self.lib, f.start()));
+            let raster = self.raster();
             if let Drag::Wire { f } = &mut self.drag {
+                let vorher = f.zuletzt;
                 f.bewegen_mit(ende, da, 6.0 / xf.z);
+                // Knicke entlang des Mauswegs (leitung_bahn.rs); kleinste Strecke ein Raster
+                if vorher.is_none_or(|v| v.dist(ende) >= 0.01) {
+                    f.bahn_fortschreiben(vorher, ende, raster.max(2.5));
+                }
             }
         }
         if matches!(self.drag, Drag::Teilstueck { .. }) {
@@ -1621,16 +1627,23 @@ impl App {
             let still = !moved && total.x.abs() < 1e-4 && total.y.abs() < 1e-4;
             let objs = if still { vec![] } else { self.selected_objs() };
             let movable: Vec<u64> = objs.iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
+            // Bezug: erster Anschluss des Symbols (wie beim Platzieren auf dem Raster) bzw. die Klemmstelle
             let reference = self.selection.iter().filter_map(|id| objs.iter().find(|o| o.id == *id && movable.contains(id))).find_map(|o| match &o.kind {
-                Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } => Some(*pos),
+                Kind::Symbol { pos, .. } => Some((*pos, canvas::obj_pins(o, &self.lib).first().copied().unwrap_or(*pos))),
+                Kind::Terminal { pos, .. } => Some((*pos, *pos)),
                 _ => None,
             });
-            if let Some(pos) = reference {
+            if let Some((pos, pin)) = reference {
                 // Lage vor dem Ziehen = jetzige Lage − bisherige Verschiebung
                 let p0 = pos.sub(applied);
                 // Taste F gehalten wie im Original: Bezugspunkt springt auf den Rasterpunkt der Maus (blatt_tasten.rs)
                 if ui.input(|i| i.key_down(Key::F)) && !ui.ctx().egui_wants_keyboard_input() {
                     total = self.fang_versatz(p0, m);
+                } else if !still && self.fang() > 0.0 && !self.no_snap {
+                    // neben dem Raster liegendes Objekt rückt beim Verschieben wieder auf das Raster (Nutzerwunsch
+                    // Runde 12, bewusste Abweichung: das Original verschiebt um Vielfache des Rasters und behält den Rest)
+                    let a0 = pin.sub(applied);
+                    total = self.snap(a0.add(total)).sub(a0);
                 }
                 let np = self.align_to_path(p0.add(total));
                 total.x = np.x - p0.x;

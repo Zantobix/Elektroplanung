@@ -80,6 +80,14 @@ impl Fuehrung {
     /// Weg beim Ziehen bis `ende` (Vorschau und Ergebnis); `da`/`db` = Anschlussrichtungen, `s` = Stichlänge.
     pub fn zugweg(&self, ende: P, da: Option<P>, db: Option<P>, s: f32) -> Vec<P> {
         let a = self.start();
+        // Knicke nach dem Mausweg (leitung_bahn.rs), solange der Weg den Anschluss nach außen verlässt und nicht in
+        // ein Anschluss-Symbol hineinläuft
+        if let Some(w) = self.bahn_weg(ende) {
+            let raus = |d: Option<P>, v: P| d.is_none_or(|d| skalar(v, d) > 0.0);
+            if raus(da, w[1].sub(a)) && !laeuft_hinein(&w, da, db) {
+                return w;
+            }
+        }
         let erst = self.richtung.unwrap_or_else(|| crate::leitung_knick::entscheiden(ende.sub(a), da, self.gekippt));
         zugweg(a, da, ende, db, erst, s)
     }

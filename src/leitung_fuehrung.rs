@@ -100,17 +100,20 @@ pub struct Fuehrung {
     /// Beginn auf einer Sammelschiene (Höhe, waagerechte Ausdehnung): der Anfang wandert auf der Schiene in die
     /// Flucht des Ziels bzw. des ersten Eckpunkts, der Leiter verlässt die Schiene senkrecht
     pub schiene: Option<(f32, f32, f32)>,
+    /// Knicke nach dem Mausweg (`leitung_bahn.rs`) und Achse des laufenden Teilstücks
+    pub bahn: Vec<P>,
+    pub bahn_achse: Option<Richtung>,
 }
 
 impl Fuehrung {
     pub fn neu(start: P) -> Self {
-        Fuehrung { pts: vec![start], richtung: None, gekippt: false, zuletzt: None, klickbetrieb: false, schiene: None }
+        Fuehrung { pts: vec![start], richtung: None, gekippt: false, zuletzt: None, klickbetrieb: false, schiene: None, bahn: vec![], bahn_achse: None }
     }
 
     /// Leitung, die auf einer Sammelschiene `schiene` (Höhe, x von, x bis) bei `m` beginnt.
     pub fn von_schiene(m: P, schiene: (f32, f32, f32)) -> Self {
         let (y, x1, x2) = schiene;
-        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), gekippt: false, zuletzt: None, klickbetrieb: false, schiene: Some(schiene) }
+        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), gekippt: false, zuletzt: None, klickbetrieb: false, schiene: Some(schiene), bahn: vec![], bahn_achse: None }
     }
 
     /// Beginnt die Leitung auf einer Schiene und ist noch kein Eckpunkt gesetzt: Anfang in die Flucht von `ziel`
