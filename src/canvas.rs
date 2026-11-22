@@ -537,8 +537,8 @@ pub fn macro_values(project: &Project, anlage: &Anlage, sheet: &Sheet) -> MacroV
         projekt: project.name.clone(),
         // wie im Original: Datum des Blattes (BLT), sonst des Projekts
         erstellt: if sheet.erstellt.is_empty() { project.erstellt.clone() } else { sheet.erstellt.clone() },
-        // auf dem Bildschirm nach einer Änderung „Heute“ wie im Original (blatt_tasten.rs)
-        geaendert: crate::blatt_tasten::geaendert_text(if sheet.geaendert.is_empty() { project.geaendert.clone() } else { sheet.geaendert.clone() }),
+        // auf dem Bildschirm nach einer Änderung „Heute“ wie im Original, ohne Blattdatum „---------“ (blatt_tasten.rs)
+        geaendert: crate::blatt_tasten::geaendert_text(crate::blatt_tasten::geaendert_datum(sheet)),
         name: sheet.name.clone(),
         // „Erstellt von“ der Anlage (ANL @66), nicht des Projekts: Im Original-Ausdruck zeigt jede Anlage ihren
         // eigenen Namen, eine Anlage mit leerem Feld keinen
@@ -756,6 +756,8 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                     (None, None)
                 };
                 let bmk = owner_bmk.as_ref().unwrap_or(bmk);
+                // Schriftgrößen Titel/Wert aus der Anlage (schriftlage.rs)
+                let (th, wh) = dc.anlage.map(|a| (crate::schriftlage::anlage_schrift(a.set.size_titel), crate::schriftlage::anlage_schrift(a.set.size_wert))).unwrap_or((crate::schriftlage::TITEL_SCHRIFT, crate::schriftlage::WERT_SCHRIFT));
                 if let Some((off, vert)) = title {
                     // Lage aus der Projektdatei (Titel X/Y bzw. Wert X/Y im Eigenschaftendialog), Ausrichtung Links/Mittig/Rechts
                     let place = |txt: &str, at: P, align: u8, size: f32| {
@@ -771,7 +773,7 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                     };
                     if !bmk.is_empty() {
                         let shown = if owner_bmk.is_some() { bmk.clone() } else { symbols::display_bmk(bmk, ext.counter, &dc.bmk) };
-                        let (a, b) = place(&shown, pos.add(*off), ext.title_align, 2.5);
+                        let (a, b) = place(&shown, pos.add(*off), ext.title_align, th);
                         if let Some(q) = &qv {
                             crate::eigentuemer::zeichne_querverweis(dc, q, a, b, *vert, tc);
                         }
@@ -779,7 +781,7 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                     if !value.is_empty() {
                         let shown = dc.project.expand_placeholders(value);
                         let at = ext.value_off.map(|v| pos.add(v)).unwrap_or(P::new(pos.x + off.x, pos.y + off.y + 2.8));
-                        place(&shown, at, ext.value_align, 2.2);
+                        place(&shown, at, ext.value_align, wh);
                     }
                 } else {
                     // BMK links vom Symbol (bzw. am Titelanker der Bibliothek, wenn ungedreht)
@@ -789,13 +791,13 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                     };
                     if !bmk.is_empty() {
                         let at = P::new(anchor.x, anchor.y - if value.is_empty() { 0.0 } else { 1.4 });
-                        p.text(xf.s(at), Align2::RIGHT_CENTER, bmk, times(2.6 * z), tc);
+                        p.text(xf.s(at), Align2::RIGHT_CENTER, bmk, times(th * z), tc);
                         if let Some(q) = &qv {
-                            crate::eigentuemer::zeichne_querverweis_rechts(dc, q, bmk, at, 2.6, tc);
+                            crate::eigentuemer::zeichne_querverweis_rechts(dc, q, bmk, at, th, tc);
                         }
                     }
                     if !value.is_empty() {
-                        p.text(xf.s(P::new(anchor.x, anchor.y + 1.6)), Align2::RIGHT_CENTER, value, times(2.2 * z), tc);
+                        p.text(xf.s(P::new(anchor.x, anchor.y + 1.6)), Align2::RIGHT_CENTER, value, times(wh * z), tc);
                     }
                 }
             } else {

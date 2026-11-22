@@ -23,6 +23,14 @@ Laufzeittexte wie im Original (Verhaltensmetrik M5):
 - Bibliothek › Symbolgruppen › Hinzufügen: neue Gruppe unter der markierten („Hauptgruppe: …“) oder als „Neue
   Hauptgruppe“, ohne Eingabe „Neue Gruppe“
 
+Behoben (kleinere offene Punkte):
+- Einfügen (Strg+V) speichert die eingefügten Objekte mit neuen Kennungen; bisher standen OBJ/VBG/VSY-Kennungen der
+  Vorlage doppelt in der .epr-Datei
+- Schriftfeld „Geändert“: Blätter ohne Änderungsdatum (z. B. die Klemmpläne in W2) zeigen „---------“ wie das
+  Original statt des Projektdatums
+- Kennzeichnung (BMK) und Wert der Symbole in der Schriftgröße der Anlage („Titel“/„Wert“ als Bildpunkte bei
+  96 dpi: 10 → 2,65 mm, 8 → 2,12 mm) statt fest 2,5/2,2 mm; im Ausdruck des Originals 2,62 mm
+
 Behoben (Maustest 22.11.2026):
 - Leitung aufziehen: die Vorschau folgt von Anfang an stetig der Maus; die Knickrichtung wechselt nur nahe am
   Anschluss bei deutlich anderer Bewegung (Hysterese), vom Anschluss weg geht es mindestens einen Stich nach außen,
