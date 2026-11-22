@@ -24,6 +24,9 @@ Behoben (Maustest 22.11.2026):
 - Sammelschienen-Dialog: Potential „Keine Zuordnung“ wählbar und Vorgabe; neue Schienen mit Kürzel „L<n>“, ohne Pfeile
   (Vorgaben des Originals)
 - Doppelklick auf eine Anlage im Projektbaum öffnet ihre Eigenschaften (wie im Original) statt sie zuzuklappen
+- Blattrahmen (mit Strompfadleiste, Schriftfeld und Zeichenfläche) kommt aus den Blatträndern der Anlage statt aus
+  festen Maßen und folgt einer Änderung in den Anlagen-Eigenschaften sofort; im Querformat ist „Links“ der obere
+  Rand (Heftrand). Neue Anlagen und Projekte haben wie im Original Links 20 mm (bisher 10 mm)
 
 ## [0.2.0]
 

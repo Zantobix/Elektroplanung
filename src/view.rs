@@ -2415,6 +2415,8 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        // Ränder der Anlagen in die Blätter: geänderte Anlagen-Eigenschaften ändern den Rahmen sofort
+        crate::rahmen::abgleichen(&mut self.project);
         self.handle_shot(&ctx);
         self.shortcuts(&ctx);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.title()));

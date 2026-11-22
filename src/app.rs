@@ -1044,6 +1044,7 @@ impl App {
         let Some(anl) = self.project.anlagen.get_mut(a) else { return };
         let n = anl.sheets.iter().map(|s| s.number).max().unwrap_or(0) + 1;
         anl.sheets.push(Sheet::new(n));
+        crate::rahmen::abgleichen_anlage(anl);
         let r = SheetRef { anlage: a, sheet: anl.sheets.len() - 1 };
         self.open_sheet(r);
     }
@@ -1057,6 +1058,7 @@ impl App {
         sheet.col_auto = true;
         self.project.anlagen.push(Anlage { name: format!("Anlage {n}"), sheets: vec![sheet], sammelschienen: vec![], klemmleisten: vec!["Klemme 1".into()], klemmen: vec![], schienen: Default::default(), set: self.opt.anlage(), raw: None });
         let a = self.project.anlagen.len() - 1;
+        crate::rahmen::abgleichen_anlage(&mut self.project.anlagen[a]);
         self.tree_open.insert(format!("prj/a{a}"));
         self.tree_open.insert(format!("prj/a{a}/bl"));
         self.open_sheet(SheetRef { anlage: a, sheet: 0 });
@@ -1075,6 +1077,9 @@ impl App {
     pub fn new_project(&mut self) {
         self.sym_edit = None;
         self.project = Project::new_default();
+        // Anlage 1 bekommt wie im Original die Projektvorgaben (Ränder, Strompfade, Schriftgrößen)
+        self.project.anlagen[0].set = self.opt.anlage();
+        crate::rahmen::abgleichen(&mut self.project);
         if let Some(tb) = crate::extra::load_default_titleblock() {
             self.project.titleblock = tb;
         }
@@ -1312,6 +1317,7 @@ impl App {
                 } else {
                     self.new_project();
                     self.project = prj;
+                    crate::rahmen::abgleichen(&mut self.project);
                     let extra: Vec<SymDef> = self.project.symdefs.iter().filter(|d| symbols::find(&self.lib, &d.key).is_none()).cloned().collect();
                     self.lib.extend(extra);
                     self.path = Some(p);

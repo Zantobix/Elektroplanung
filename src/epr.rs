@@ -287,6 +287,8 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
             a.sheets.push(Sheet::new(1));
         }
     }
+    // Rahmen der Blätter aus den Rändern ihrer Anlage
+    crate::rahmen::abgleichen(&mut p);
     p.next_id = next_id + 10;
     crate::epr_projekt::import(prj, &mut p);
     crate::epr_zusatz::import(prj, &mut p);

@@ -73,10 +73,10 @@ pub const SCHRIFT: f32 = 2.5;
 const NUMMER_X: f32 = 3.4;
 const LAGE_X: f32 = 7.0;
 
-/// Unterkante der Zeichenfläche: Blatthöhe − unterer Rand (5 mm) − Schriftfeldhöhe (W2: 210 − 5 − 15 = 190 mm,
+/// Unterkante der Zeichenfläche: Blatthöhe − unterer Rand der Anlage − Schriftfeldhöhe (W2: 210 − 5 − 15 = 190 mm,
 /// hoch 297 − 5 − 15 = 277 mm – BLT Feld 24 ohne Kontaktspiegel).
 pub fn zeichen_unterkante(p: &Project, s: &Sheet) -> f32 {
-    s.dims().1 - FRAME_BOTTOM - p.title_h()
+    s.frame().3 - p.title_h()
 }
 
 /// Y-Lage der ersten Zeile wie im Original (BLT Feld 24): Unterkante der Zeichenfläche minus größte Höhe der
