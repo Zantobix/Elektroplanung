@@ -225,7 +225,9 @@ pub fn tool_window(ctx: &egui::Context, id: &str, title: &str, size: [f32; 2], o
 }
 
 fn edit(ui: &mut egui::Ui, s: &mut String, w: f32) -> egui::Response {
-    ui.add(egui::TextEdit::singleline(s).desired_width(w).font(egui::FontId::proportional(12.0)))
+    // Mindestbreite: in Grids schrumpft ein Feld sonst auf die Spaltenbreite des ersten (noch schmalen) Bildes
+    // und bleibt so („2100“ abgeschnitten, Maus-Befund M9)
+    ui.add(egui::TextEdit::singleline(s).desired_width(w).min_size(Vec2::new(w, 0.0)).font(egui::FontId::proportional(12.0)))
 }
 
 impl App {
