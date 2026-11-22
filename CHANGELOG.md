@@ -9,6 +9,14 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Mehrpolige Symbole wie im Original:
+- Symbole mit Versatz je Bild (Element Feld 13/14) werden in der gewählten Variante richtig gezeichnet: Leistungs-
+  kontakt, Sicherung, Motorschutz, Thermoschutz 2-/3-polig zeigen alle Pole um den Bezugspunkt verteilt (vorher
+  lagen die Pole übereinander), Logikgatter u. a. verschieben Eingänge senkrecht; ebenso im Variantenrad
+- Alle Pole sind anschließbar (Anschlussfang, automatische Verbindungen, Klemmplan, Leitungsenden mit Art 1 statt 0);
+  Umriss und Treffer neuer Symbole umfassen alle Pole und nur die Elemente der gesetzten Zusatzoptionen
+- Der Versatz bleibt beim Bearbeiten und Neuschreiben eines Symbols erhalten
+
 Leitungsenden wie im Original (Maus-Befund M21, Klemmplan im Original leer):
 - Beim Speichern bestimmt der Nachbau Art, Ziel und Anschluss jedes Endes neuer und geänderter Verbindungen aus der
   Geometrie: Symbolanschluss (Art 1, VSY-Kennung, Anschlussnummer aus Feld 4 des Anschlusselements, auch bei

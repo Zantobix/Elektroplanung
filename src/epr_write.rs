@@ -158,7 +158,7 @@ fn edited_sym(project: &Project, k: &Block) -> Option<Block> {
         a.name == b.name && a.bmk == b.bmk && a.prims == b.prims && a.pins == b.pins && a.title == b.title && a.vis == b.vis
             && a.pin_vis == b.pin_vis && a.options == b.options && a.flag == b.flag && a.flag_names == b.flag_names
             && a.alt_sets == b.alt_sets && a.text_mode == b.text_mode && a.fill == b.fill && a.value_pos == b.value_pos
-            && a.params == b.params && a.pens == b.pens && a.frg == b.frg
+            && a.params == b.params && a.pens == b.pens && a.frg == b.frg && a.versatz == b.versatz
     };
     if same(def, &orig) {
         return None;
@@ -796,6 +796,8 @@ fn encode_elements(def: &crate::symbols::SymDef) -> (Vec<u8>, Vec<String>, Vec<S
     use crate::symbols::Prim;
     let mut out = vec![];
     let mut texts = vec![def.bmk.clone()];
+    // Versatz je Option des gerade geschriebenen Elements (Feld 13/14, symbols::Versatz)
+    let vs = std::cell::Cell::new(P::default());
     let mut el = |ty: u8, pts: &[P], style: u8, vis: (u16, u16), flag: u32, extra: &[(usize, i32)]| {
         let mut e = vec![0u8; 0x50];
         for (i, p) in pts.iter().take(4).enumerate() {
@@ -805,6 +807,8 @@ fn encode_elements(def: &crate::symbols::SymDef) -> (Vec<u8>, Vec<String>, Vec<S
         for (idx, v) in extra {
             e[idx * 4..idx * 4 + 4].copy_from_slice(&v.to_le_bytes());
         }
+        e[0x34..0x38].copy_from_slice(&to01(vs.get().x).to_le_bytes());
+        e[0x38..0x3c].copy_from_slice(&to01(vs.get().y).to_le_bytes());
         e[0x3c] = ty;
         e[0x40..0x44].copy_from_slice(&(style as i32).to_le_bytes());
         e[0x44..0x46].copy_from_slice(&vis.0.to_le_bytes());
@@ -814,15 +818,18 @@ fn encode_elements(def: &crate::symbols::SymDef) -> (Vec<u8>, Vec<String>, Vec<S
         out.extend_from_slice(&e);
     };
     if let Some(t) = def.title {
+        vs.set(def.versatz.title);
         el(9, &[t], 0, (0, 1), 0, &[(7, 1), (9, 1)]);
     }
     if let Some(t) = def.value_pos {
+        vs.set(def.versatz.value);
         el(10, &[t], 0, (0, 1), 0, &[]);
     }
     let fill = |i: usize| def.fill.get(i).copied().unwrap_or(false) as i32;
     for (i, pr) in def.prims.iter().enumerate() {
         let vis = def.vis.get(i).copied().unwrap_or((0, 1));
         let flag = def.flag.get(i).copied().unwrap_or(0);
+        vs.set(def.versatz.prims.get(i).copied().unwrap_or_default());
         match pr {
             Prim::Line(a, b, st) => el(1, &[*a, *b], *st, vis, flag, &[]),
             Prim::Bezier(a, b, c, d, st) => el(2, &[*a, *b, *c, *d], *st, vis, flag, &[]),
@@ -881,6 +888,7 @@ fn encode_elements(def: &crate::symbols::SymDef) -> (Vec<u8>, Vec<String>, Vec<S
         // Feld 4: Anschlussnummer (Leitungsenden im VBG verweisen darauf, vbg_enden.rs; die Bibliothek zählt ab 1),
         // Feld 5: Textnummer der Anschlussbezeichnung; Zusatzoption wie bei den Grundelementen
         let (t, flag) = def.pin_info.get(i).copied().unwrap_or((0, 0));
+        vs.set(def.versatz.pins.get(i).copied().unwrap_or_default());
         el(7, &[*p, *p], 0, vis, flag, &[(4, i as i32 + 1), (5, t as i32)]);
     }
     (out, texts, def.options.clone())

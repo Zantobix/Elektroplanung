@@ -771,13 +771,7 @@ impl App {
         let ext = SymExt { querverweise: def.frg.0, sicherung: def.frg.1, title_align, ..Default::default() };
         let id = self.add_obj(Kind::Symbol { key: def.key.clone(), pos, rot, mirror_h: false, mirror_v: false, bmk, value: String::new(), scale: 1.0, option, title: Some((title, false)), flags: 0, ext });
         // nur die Anschlüsse des gewählten Bildes (ohne Zusatzoptionen)
-        let wpins: Vec<P> = def
-            .pins
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| symbols::visible(option, def.pin_vis.get(*i)) && symbols::flag_visible(0, def.pin_info.get(*i).map(|x| &x.1)))
-            .map(|(_, q)| sym_xform(*q, pos, rot, false, false))
-            .collect();
+        let wpins: Vec<P> = symbols::anschluss_lagen(&def, option, 0).into_iter().map(|(_, q)| sym_xform(q, pos, rot, false, false)).collect();
         self.insert_into_wire(&wpins);
         if self.auto_conn_eff() {
             // gehört zum selben Rückgängig-Schritt wie das Setzen (add_obj hat ihn schon angelegt)
@@ -1745,6 +1739,7 @@ impl App {
             fill: vec![],
             pens: vec![],
             options: vec![],
+            versatz: Default::default(),
         };
         self.checkpoint();
         self.project.symdefs.push(def.clone());
@@ -1813,7 +1808,7 @@ pub fn symbol_title(def: &SymDef) -> (P, u8) {
 pub fn symbol_title_rot(def: &SymDef, rot: u8, option: u16) -> (P, u8) {
     let (mn, mx) = symbols::bounds_opt(def, option);
     if rot % 4 == 0 {
-        return match def.title {
+        return match symbols::title_lage(def, option) {
             Some(t) => (P::new(t.x.min(mn.x - 0.8), t.y - 1.25), 2),
             None => (P::new(mn.x - 1.0, (mn.y + mx.y) / 2.0 - 1.25), 2),
         };

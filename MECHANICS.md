@@ -397,7 +397,7 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   sonst Inneres einer anderen Leitung (Art 3); sonst nächster Symbolanschluss bis 0,85 mm (Verteilerbox: Leitungen
   enden 0,8 mm vor dem Anschluss wie an Klemmstellen); sonst Verweisspitze. Anschlusslage: Element Feld 13 (0,1 mm)
   verschiebt den Anschluss je Option waagerecht (Lage + Feld 13 × Option; „Leistungskontakt“ Option 2: −7/0/+7 mm,
-  „Sicherung“). Der Nachbau zeichnet diese Verschiebung bei Symbolen noch nicht (offen).
+  „Sicherung“). Zeichnen, Fang und Enden nutzen dieselbe Lage, siehe „Versatz je Option“.
 - Abweichungen in W2: eine Leitung endet 9 mm hinter der (später gekürzten) Schiene und trägt sie weiter als Ziel;
   zwei Verbindungen aus nur einem Punkt im Innern einer Schiene tragen am Ende Anschluss 1. Das Original prüft
   gespeicherte Enden nicht nach; der Nachbau lässt ein unbewegtes Ende stehen, solange sein Ziel ein unverändertes
@@ -410,3 +410,30 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 - Klemmstelle im Vergleich mit W2: OBJ (Feld 4 = 0x2FFFF, 8 = KLM-Kennung, 9/10 Nummer/Position, Byte 0x2C Etage,
   0x2D Schalter, TIT „%O%B.%C“), KLM (Feld 13 Kennung, 18/19 nächste Nummer), KFO (Klemmstelle, Blatt, Nummer,
   Position) und Klemmplan-Blatt (BLT Feld 32 ab Bit 8 = KLM-Kennung) entsprechen dem Aufbau in W2.
+
+## Versatz je Option – mehrpolige Symbole (src/symbols.rs `Versatz`, 22.11.2026)
+- Jedes Zeichenelement (0x50 Byte) trägt in Feld 13 (0x34) und Feld 14 (0x38) einen Versatz in 0,1 mm. Das
+  Original verschiebt **alle** Punkte des Elements um Feld 13/14 × Option (Bild): Dekompilat 0x469bec (Umriss eines
+  Elements: `x += Feld13 * Option`, `y += Feld14 * Option`, für alle Elementarten) und 0x4916b4 (Umriss des Symbols
+  im Symboleditor, Punkte 0–3 jedes Elements + Versatz × gewählte Seite); beim Laden alter Zeichendaten („Ver1“)
+  setzt es 0x34/0x38 für Anschlüsse aus Feld 7/8, für die übrigen Elemente 0 (Laderoutine um Zeile 96031).
+- Bibliothek (fixtures/Datenbank): 319 Elemente mit Versatz in 14 Symbolen, alle Elementarten (Linie, Kurve,
+  Rechteck, Dreieck, Ellipse, Text, Anschluss, Titel- und Wertanker). Waagerecht: Leistungskontakt, Sicherung,
+  Thermoschutz, Motorschutz (−3,5 mm), easy SPS (+2 mm); senkrecht: Logikgatter (+3 mm je Option, mehr Eingänge),
+  S7 IO Baugruppe; beides: NOT-AUS PNOZ10.1, Gleichrichter.
+- Mehrpolige Darstellung entsteht **nicht durch Wiederholen**: jeder Pol hat eigene Elemente mit eigener
+  Sichtbarkeit. W2/Bibliothek „Leistungskontakt“ (Seiten „1 polig“, „2 polig“, „3 polig“): Pol 1 (Anschlüsse 2/3,
+  Texte „1“/„2“) ab Option 0 bei x = 0 mit −3,5 mm; Pol 2 (4/5, „3“/„4“) ab Option 1 bei x = 7 mm mit −3,5 mm;
+  Pol 3 (6/7, „5“/„6“) nur Option 2 bei x = 7 mm ohne Versatz; Wirklinie je Option eigenes Element; Hilfskontakt
+  (Zusatzoption, Anschlüsse 8/9) mit +3,5 mm rechts neben dem letzten Pol. Ergebnis Option n: n + 1 Pole,
+  symmetrisch um den Bezugspunkt (Option 2: −7/0/+7 mm). „Sicherung“ ebenso (−3,5 bzw. −2,5 mm).
+- Prüfung an W2 (tests/anschlussversatz_w2.rs): 199 Leitungsenden der Art 1 an 61 Symbolen mit Option > 0 liegen
+  alle auf einem gezeichneten Anschluss mit der gespeicherten Nummer, 54 davon nur mit Versatz. Der gespeicherte
+  Umriss (VSY Feld 32–35) enthält die versetzten Anschlüsse; er umfasst nur die Elemente der gesetzten
+  Zusatzoptionen (Leistungskontakt 3-polig mit Hilfskontakt: Elemente 37,0–57,0, Umriss 36,5–58,3; mit allen
+  Zusatzoptionen wären es 66,0) – der Nachbau berechnet ihn für neue Symbole ebenso (`symbols::bounds_ext`).
+- Im Nachbau eine Quelle: `symbols::prim_lage`, `pin_lage`, `anschluss_lagen`, `title_lage`/`value_lage`; benutzt
+  von Zeichnen (canvas::draw_symbol_full, Variantenrad), Anschlussfang (`canvas::obj_pins` → pin_near, automatische
+  Verbindungen, Mitziehen, Prüfen), Umriss/Treffer, Klemmplan, BMK-Lage neuer Symbole und vbg_enden.rs. Der
+  Symboleditor zeigt die Elemente in der Lage für Option 0 und erhält den Versatz beim Speichern (offen: Anzeige
+  der Seiten mit Versatz wie im Original-Editor).

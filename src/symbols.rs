@@ -86,6 +86,95 @@ pub struct SymDef {
     /// Eigene Stifte des Symbols (GRD › SIT): Stiftnummer ab 4 und Stift; Elemente nennen ihn in Feld 0x40
     #[serde(default)]
     pub pens: Vec<(u32, crate::model::Stift)>,
+    /// Versatz je Option (Element Feld 13/14), siehe [`Versatz`]
+    #[serde(default, skip_serializing_if = "Versatz::ist_leer")]
+    pub versatz: Versatz,
+}
+
+/// Versatz je Option (Bild) in mm: Element Feld 13 (waagerecht) und Feld 14 (senkrecht), je 0,1 mm. Das Original
+/// verschiebt jedes Element eines Symbols – Linien, Texte, Anschlüsse, Titel- und Wertanker – um Feld × Option
+/// (Dekompilat 0x469bec und 0x4916b4: alle Punkte + Feld 13/14 × Option). Mehrpolige Darstellungen entstehen so
+/// aus einzeln gezeichneten Polen (nicht durch Wiederholen): „Leistungskontakt“ 1-/2-/3-polig hat je Pol eigene
+/// Elemente (Pol 1 ab Option 0, Pol 2 ab Option 1, Pol 3 nur Option 2), Feld 13 = −3,5 mm zentriert die Pole
+/// (Option 2: −7/0/+7 mm), die Hilfskontakt-Elemente mit +3,5 mm rücken rechts neben den letzten Pol.
+/// „Logikgatter“ verschiebt Eingänge mit Feld 14 je Option nach unten.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct Versatz {
+    /// je Grundelement (parallel zu `prims`)
+    #[serde(default)]
+    pub prims: Vec<P>,
+    /// je Anschluss (parallel zu `pins`)
+    #[serde(default)]
+    pub pins: Vec<P>,
+    /// Titelanker (Element Typ 9) und Wertanker (Typ 10)
+    #[serde(default)]
+    pub title: P,
+    #[serde(default)]
+    pub value: P,
+}
+
+impl Versatz {
+    pub fn ist_leer(&self) -> bool {
+        let null = |p: &P| p.x == 0.0 && p.y == 0.0;
+        self.prims.iter().all(null) && self.pins.iter().all(null) && null(&self.title) && null(&self.value)
+    }
+}
+
+/// `p` um `v` × Option verschoben.
+fn mal(p: P, v: Option<&P>, option: u16) -> P {
+    match v {
+        Some(v) if option > 0 => P::new(p.x + v.x * option as f32, p.y + v.y * option as f32),
+        _ => p,
+    }
+}
+
+impl Prim {
+    /// Um `d` verschoben.
+    pub fn verschoben(&self, d: P) -> Prim {
+        let m = |p: &P| p.add(d);
+        match self {
+            Prim::Line(a, b, s) => Prim::Line(m(a), m(b), *s),
+            Prim::Poly(v, s) => Prim::Poly(v.iter().map(m).collect(), *s),
+            Prim::Bezier(a, b, c, e, s) => Prim::Bezier(m(a), m(b), m(c), m(e), *s),
+            Prim::Ellipse(a, b, s) => Prim::Ellipse(m(a), m(b), *s),
+            Prim::Arc(c, r, a0, a1) => Prim::Arc(m(c), *r, *a0, *a1),
+            Prim::Text(c, t, s) => Prim::Text(m(c), t.clone(), *s),
+            Prim::TextBox(a, b, t, al) => Prim::TextBox(m(a), m(b), t.clone(), *al),
+        }
+    }
+}
+
+/// Grundelement `i` in der Lage für die Option (eine Quelle für Zeichnen, Umriss und Vorschau).
+pub fn prim_lage(def: &SymDef, i: usize, option: u16) -> std::borrow::Cow<'_, Prim> {
+    let pr = &def.prims[i];
+    match def.versatz.prims.get(i) {
+        Some(v) if option > 0 && (v.x != 0.0 || v.y != 0.0) => std::borrow::Cow::Owned(pr.verschoben(P::new(v.x * option as f32, v.y * option as f32))),
+        _ => std::borrow::Cow::Borrowed(pr),
+    }
+}
+
+/// Lage des Anschlusses `i` (Index in `def.pins`) für die Option, im Symbolsystem.
+pub fn pin_lage(def: &SymDef, i: usize, option: u16) -> P {
+    mal(def.pins[i], def.versatz.pins.get(i), option)
+}
+
+/// Sichtbare Anschlüsse (Index in `def.pins`, Lage im Symbolsystem) für Option und Zusatzoptionen – die eine
+/// Quelle für Zeichnen, Anschlussfang, automatische Verbindungen, Klemmplan und Leitungsenden (vbg_enden.rs).
+pub fn anschluss_lagen(def: &SymDef, option: u16, flags: u32) -> Vec<(usize, P)> {
+    (0..def.pins.len())
+        .filter(|i| visible(option, def.pin_vis.get(*i)) && flag_visible(flags, def.pin_info.get(*i).map(|x| &x.1)))
+        .map(|i| (i, pin_lage(def, i, option)))
+        .collect()
+}
+
+/// Titelanker (Element Typ 9) für die Option.
+pub fn title_lage(def: &SymDef, option: u16) -> Option<P> {
+    def.title.map(|t| mal(t, Some(&def.versatz.title), option))
+}
+
+/// Wertanker (Element Typ 10) für die Option.
+pub fn value_lage(def: &SymDef, option: u16) -> Option<P> {
+    def.value_pos.map(|t| mal(t, Some(&def.versatz.value), option))
 }
 
 fn frg_default() -> (bool, bool) {
@@ -150,8 +239,13 @@ pub fn bounds(def: &SymDef) -> (P, P) {
     bounds_opt(def, 0)
 }
 
-/// Lokaler Umriss (min, max) eines Symbols in einer Option.
+/// Lokaler Umriss (min, max) eines Symbols in einer Option (Elemente aller Zusatzoptionen).
 pub fn bounds_opt(def: &SymDef, option: u16) -> (P, P) {
+    bounds_ext(def, option, None)
+}
+
+/// Lokaler Umriss in einer Option, mit `flags` nur die Elemente dieser Zusatzoptionen (`None` = alle).
+pub fn bounds_ext(def: &SymDef, option: u16, flags: Option<u32>) -> (P, P) {
     let mut mn = P::new(f32::MAX, f32::MAX);
     let mut mx = P::new(f32::MIN, f32::MIN);
     let mut add = |q: P| {
@@ -160,11 +254,11 @@ pub fn bounds_opt(def: &SymDef, option: u16) -> (P, P) {
         mx.x = mx.x.max(q.x);
         mx.y = mx.y.max(q.y);
     };
-    for (i, pr) in def.prims.iter().enumerate() {
-        if !visible(option, def.vis.get(i)) {
+    for i in 0..def.prims.len() {
+        if !visible(option, def.vis.get(i)) || flags.is_some_and(|f| !flag_visible(f, def.flag.get(i))) {
             continue;
         }
-        match pr {
+        match &*prim_lage(def, i, option) {
             Prim::Line(a, b, _) | Prim::Ellipse(a, b, _) => {
                 add(*a);
                 add(*b)
@@ -186,9 +280,9 @@ pub fn bounds_opt(def: &SymDef, option: u16) -> (P, P) {
             Prim::TextBox(..) => {}
         }
     }
-    for (i, q) in def.pins.iter().enumerate() {
-        if visible(option, def.pin_vis.get(i)) {
-            add(*q);
+    for i in 0..def.pins.len() {
+        if visible(option, def.pin_vis.get(i)) && flags.is_none_or(|f| flag_visible(f, def.pin_info.get(i).map(|x| &x.1))) {
+            add(pin_lage(def, i, option));
         }
     }
     if mn.x > mx.x {
@@ -387,6 +481,7 @@ pub fn load_db(dir: &Path) -> Result<Vec<SymDef>, String> {
             text_mode: el.text_mode,
             fill: el.fill,
             pens: crate::symbol_stifte::aus_bibliothek(&data[1..]),
+            versatz: el.versatz,
         });
     }
     if out.is_empty() {
@@ -408,6 +503,7 @@ pub struct Elements {
     pub text_idx: Vec<u32>,
     pub text_mode: Vec<u8>,
     pub fill: Vec<bool>,
+    pub versatz: Versatz,
 }
 
 /// Zeichendaten "Ver1"/"Ver2": Kopf 0x3c Byte, Elemente zu je 0x50 Byte, danach die Texttabelle und Optionsnamen.
@@ -451,7 +547,7 @@ pub fn split_strings(b: &[u8]) -> Vec<String> {
 
 /// Elementliste (je 0x50 Byte) in Zeichenelemente umsetzen. Texte: 1-basiert, Text 1 = BMK-Vorlage.
 pub fn parse_elements(data: &[u8], texts: &[String]) -> Elements {
-    let mut el = Elements { prims: vec![], vis: vec![], pins: vec![], pin_vis: vec![], pin_info: vec![], title: None, value_pos: None, options: vec![], flag: vec![], text_idx: vec![], text_mode: vec![], fill: vec![] };
+    let mut el = Elements { prims: vec![], vis: vec![], pins: vec![], pin_vis: vec![], pin_info: vec![], title: None, value_pos: None, options: vec![], flag: vec![], text_idx: vec![], text_mode: vec![], fill: vec![], versatz: Versatz::default() };
     for e in data.chunks_exact(0x50) {
         let v = |i: usize| i32_at(e, i * 4) as f32 / 10.0;
         let pt = |i: usize| P::new(v(2 * i), v(2 * i + 1));
@@ -468,8 +564,11 @@ pub fn parse_elements(data: &[u8], texts: &[String]) -> Elements {
         let tidx = if t == 6 { i32_at(e, 7 * 4).max(0) as u32 } else { 0 };
         let tmode = if t == 6 { i32_at(e, 8 * 4).clamp(0, 2) as u8 } else { 0 };
         let filled = matches!(t, 3 | 4 | 5) && i32_at(e, 10 * 4) & 0xff != 0;
+        // Versatz je Option: Feld 13/14 (0,1 mm), siehe `Versatz`
+        let vs = P::new(v(13), v(14));
         let mut push = |p: Prim| {
             el.prims.push(p);
+            el.versatz.prims.push(vs);
             el.vis.push(vv);
             el.flag.push(page as u32);
             el.text_idx.push(tidx);
@@ -506,11 +605,18 @@ pub fn parse_elements(data: &[u8], texts: &[String]) -> Elements {
                     push(Prim::Line(a, b, 0));
                 }
                 el.pins.push(a);
+                el.versatz.pins.push(vs);
                 el.pin_vis.push(vv);
                 el.pin_info.push((i32_at(e, 5 * 4).max(0) as u32, page as u32));
             }
-            9 => el.title = Some(pt(0)),
-            10 => el.value_pos = Some(pt(0)),
+            9 => {
+                el.title = Some(pt(0));
+                el.versatz.title = vs;
+            }
+            10 => {
+                el.value_pos = Some(pt(0));
+                el.versatz.value = vs;
+            }
             _ => {}
         }
     }
@@ -549,6 +655,7 @@ fn def(key: &str, name: &str, group: &[&str], bmk: &str, prims: Vec<Prim>, pins:
         fill: vec![],
         pens: vec![],
         options: vec![],
+        versatz: Versatz::default(),
     }
 }
 
@@ -735,6 +842,11 @@ impl SymDef {
         self.fill.resize(n, false);
         self.pin_vis.resize(self.pins.len(), (0, 1));
         self.pin_info.resize(self.pins.len(), (0, 0));
+        // Versatz nur führen, wenn das Symbol einen hat (sonst bleibt die Liste leer)
+        if !self.versatz.prims.is_empty() || !self.versatz.pins.is_empty() {
+            self.versatz.prims.resize(n, P::default());
+            self.versatz.pins.resize(self.pins.len(), P::default());
+        }
     }
 
     /// Nächste freie Textnummer (Text 1 ist die BMK-Vorlage).
@@ -752,6 +864,9 @@ impl SymDef {
         self.text_idx.push(t);
         self.text_mode.push(text_mode);
         self.fill.push(fill);
+        if !self.versatz.prims.is_empty() {
+            self.versatz.prims.push(P::default());
+        }
         self.raw.clear();
         self.prims.len() - 1
     }
@@ -768,8 +883,21 @@ impl SymDef {
         self.text_idx.remove(i);
         self.text_mode.remove(i);
         self.fill.remove(i);
+        if i < self.versatz.prims.len() {
+            self.versatz.prims.remove(i);
+        }
         self.raw.clear();
         Ok(())
+    }
+
+    /// Anschluss entfernen (mit seinen parallelen Angaben).
+    pub fn remove_pin(&mut self, k: usize) {
+        self.pins.remove(k);
+        self.pin_vis.remove(k);
+        self.pin_info.remove(k);
+        if k < self.versatz.pins.len() {
+            self.versatz.pins.remove(k);
+        }
     }
 
     /// Neue Seite (Bildvariante) anhängen; Rückgabe: Nummer. Ohne Seiten entsteht zuerst "Standard".
@@ -805,9 +933,7 @@ impl SymDef {
         while k < self.pins.len() {
             let v = self.pin_vis[k];
             if v.0 == page && v.1 == 0 {
-                self.pins.remove(k);
-                self.pin_vis.remove(k);
-                self.pin_info.remove(k);
+                self.remove_pin(k);
                 continue;
             }
             if v.0 > page {
@@ -904,6 +1030,7 @@ impl SymDef {
             text_mode: vec![],
             fill: vec![],
             pens: vec![],
+            versatz: Versatz::default(),
         }
     }
 }
