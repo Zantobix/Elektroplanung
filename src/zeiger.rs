@@ -291,7 +291,9 @@ pub fn zusatz(p: &egui::Painter, c: Pos2, z: Zusatz) {
             spitze(p, s + d * 10.5, d, 2.2);
         }
         Zusatz::Punkt => {
-            p.rect_filled(egui::Rect::from_center_size(c, Vec2::splat(3.0)), 0.0, Color32::BLACK);
+            // Raute in der Mitte wie Ressource 2 des Originals (Pfeil, Raute, vier Pfeilspitzen)
+            let raute = vec![c - y * 3.0, c + x * 3.0, c + y * 3.0, c - x * 3.0];
+            p.add(Shape::convex_polygon(raute, Color32::BLACK, Stroke::new(1.0, Color32::WHITE)));
             for d in [x, -x, y, -y] {
                 spitze(p, c + d * 7.5, d, 2.2);
             }
@@ -356,6 +358,40 @@ mod tests {
         let mut s = zustand(None);
         s.gesperrt = true;
         assert_eq!(waehlen(&s).zusatz, Some(Zusatz::Gesperrt));
+    }
+
+    #[test]
+    fn klemmstelle_leitungszeiger_zeichenobjekt_kreuz_und_raute() {
+        // Original 0x415e9e: Sonderobjekt Art 0 (Klemmstelle) → Zeiger 2 (Leitung); 0x415f30: Zeichenobjekt nur mit
+        // Punktindex → Zeiger 5 (Raute), Körper → Zeiger 100 (Verschiebekreuz)
+        use crate::model::{Obj, Project, SheetRef};
+        let mut app = crate::blatt_tasten::test_app();
+        app.project = Project::new_default();
+        app.tabs = vec![SheetRef { anlage: 0, sheet: 0 }];
+        app.active = 0;
+        let obj = |id, kind| Obj { id, kind, pen: 0, fixed: false, group: None, raw: None };
+        let klemme = |pos| Kind::Terminal { pos, leiste: "X1".into(), nr: 1, level: 0, text_off: None, tpl: String::new(), opt: Default::default() };
+        // freie Klemmstelle und eine in eine Leitung eingesetzte
+        let (frei, drin) = (P::new(40.0, 40.0), P::new(100.0, 60.0));
+        let (l1, l2) = crate::klemme_leitung::teilen(&[P::new(80.0, 60.0), P::new(140.0, 60.0)], 0, drin);
+        app.with_sheet(|s, _| {
+            s.objects.push(obj(1, klemme(frei)));
+            s.objects.push(obj(2, Kind::Wire { pts: l1, leitung: 0, bez: vec![], opts: 0 }));
+            s.objects.push(obj(3, Kind::Wire { pts: l2, leitung: 0, bez: vec![], opts: 0 }));
+            s.objects.push(obj(4, klemme(drin)));
+            s.objects.push(obj(5, Kind::Rect { a: P::new(40.0, 100.0), b: P::new(80.0, 120.0) }));
+        });
+        let tol = 1.5;
+        let zusatz = |m: P| waehlen(&app.zeiger_zustand(m, tol, 2.0, app.vormarkierung(m, tol, 2.0), false)).zusatz;
+        for m in [frei, P::new(40.6, 40.4), drin, P::new(100.5, 60.3)] {
+            assert_eq!(zusatz(m), Some(Zusatz::Anschluss), "{m:?}");
+        }
+        // Rechteck: Rand → Verschiebekreuz, Ecke → Raute
+        assert_eq!(zusatz(P::new(60.0, 100.3)), Some(Zusatz::Verschieben));
+        assert_eq!(zusatz(P::new(80.3, 119.8)), Some(Zusatz::Punkt));
+        // Leitung abseits der Klemme: Verschiebekreuz ohne Vormarkierungsrechteck
+        assert_eq!(zusatz(P::new(125.0, 60.2)), Some(Zusatz::Verschieben));
+        assert!(app.vormarkierung(P::new(125.0, 60.2), tol, 2.0).and_then(|z| z.umriss()).is_none());
     }
 
     #[test]

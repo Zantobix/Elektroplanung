@@ -243,14 +243,25 @@ impl crate::app::App {
         let Some(sheet) = self.sheet() else { return weg };
         let da = anschluss_richtung(sheet, &self.lib, f.start());
         let db = anschluss_richtung(sheet, &self.lib, ende);
+        // Symbole als Hindernisse (M29, leitung_hindernis.rs), auch Start- und Zielsymbol; die Zugrichtung bleibt
+        let hind: Vec<_> = crate::leitung_hindernis::umrisse(sheet, &self.lib).into_iter().map(|u| u.r).collect();
+        let umgehen = |w: &[P], da: Option<P>| crate::leitung_hindernis::umgehen(w, da, db, &hind, self.raster(), true);
         // Ziehen vom Anschluss: stetige Führung mit Hysterese (leitung_zug.rs)
         if !f.klickbetrieb && f.schiene.is_none() {
-            return f.zugweg(ende, da, db, self.raster() / 2.0);
+            return umgehen(&f.zugweg(ende, da, db, self.raster() / 2.0), da);
         }
         // im Klickbetrieb bleiben die gesetzten Eckpunkte (Anfang + Ecken = pts.len() - 1 Teilstücke davor)
         let frei_ab = if f.klickbetrieb { f.pts.len() - 1 } else { 0 };
         // Stich ein halbes Raster (Original unter Wine: deutlich kürzer als ein Raster; genaue Länge offen)
-        wegfuehrung(weg, frei_ab, da, db, self.raster() / 2.0)
+        let w = wegfuehrung(weg, frei_ab, da, db, self.raster() / 2.0);
+        if frei_ab == 0 {
+            return umgehen(&w, da);
+        }
+        // nur das Stück ab dem letzten gesetzten Eckpunkt
+        let Some(j) = w.iter().rposition(|q| q.dist(f.letzter()) < 0.01) else { return w };
+        let mut out = w[..j].to_vec();
+        out.extend(umgehen(&w[j..], None));
+        crate::leitung_fuehrung::bereinigen(out)
     }
 }
 

@@ -18,6 +18,12 @@ Kleinere Angleichungen an das Original:
   beim Kontextmenü.
 - Sammelschienen mit „Einspeisung“ zeigen am Anfang kein gefülltes Quadrat mehr; das Original zeichnet dort keins.
 
+Leitungen um Symbole herum:
+- Wird eine Leitung beim Verschieben eines Symbols neu geführt, läuft sie nicht mehr quer durch andere Symbole:
+  das Mittelstück bzw. ein Knick weicht um die kleinste freie Rasterweite aus. Beim Zeichnen gilt dasselbe, ohne
+  die gewählte Zugrichtung (Leertaste) zu ändern.
+- Der Zeiger über Punkten von Zeichenobjekten zeigt in der Mitte eine Raute wie im Original.
+
 Fehler melden und Wünsche äußern:
 - Neu im Menü Hilfe: „Fehler melden…“ und „Wunsch äußern…“. Ein kleines Fenster mit einem Textfeld öffnet ein
   fertig ausgefülltes Issue auf GitHub (Version und Betriebssystem auf Wunsch angehängt) oder kopiert den Text in
