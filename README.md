@@ -191,6 +191,10 @@ nicht. Gemessen werden stattdessen:
   neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
 - Bewusste Erweiterungen gegenüber dem Original (bleiben, auch wenn das Original sie nicht hat):
+  - Rasterweite je Projekt: Die gewählte Weite wird je Datei gemerkt; ist keine gemerkt, stellt das Öffnen die
+    Weite ein, in der das Projekt gezeichnet ist (`src/raster.rs`, `raster_erkennen`).
+  - Eine markierte und als Ganzes verschobene Leitung bleibt an nicht verschobenen Schienen, Klemmstellen und
+    Anschlüssen hängen (`src/schiene_halten.rs`).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).
