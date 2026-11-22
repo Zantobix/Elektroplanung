@@ -9,6 +9,10 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Behoben (kleinere offene Punkte):
+- Einfügen (Strg+V) speichert die eingefügten Objekte mit neuen Kennungen; bisher standen OBJ/VBG/VSY-Kennungen der
+  Vorlage doppelt in der .epr-Datei
+
 Behoben (Maustest 22.11.2026):
 - Leitung ziehen: führt aus dem Anschluss in dessen Richtung heraus und tritt am Ziel von außen ein (Z-Führung
   über die Mitte wie im Original), statt durch das eigene Symbol zu laufen und dabei andere Anschlüsse zu treffen

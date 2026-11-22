@@ -919,6 +919,9 @@ impl App {
         let mut gmap: HashMap<u64, u64> = HashMap::new();
         for mut o in clip {
             o.id = self.project.alloc_id();
+            // ohne Originalblock: beim Speichern neuer Block mit neuer Kennung (sonst stünden OBJ/VBG/VSY-Kennungen
+            // doppelt in der Datei, wie beim Rechts-Ziehen)
+            o.raw = None;
             if let Some(g) = o.group {
                 let ng = *gmap.entry(g).or_insert_with(|| 1_000_000 + o.id);
                 o.group = Some(ng);
