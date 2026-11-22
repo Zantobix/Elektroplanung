@@ -184,7 +184,10 @@ impl App {
             return None;
         }
         let l = self.leitung;
-        Some(self.add_obj(Kind::Wire { pts, leitung: l, bez: vec![], opts: 0 }))
+        let id = self.add_obj(Kind::Wire { pts, leitung: l, bez: vec![], opts: 0 });
+        // liegt sie teilweise auf vorhandenen: doppelte Strecke weglassen (leitung_vereinigen.rs)
+        self.leitungen_vereinigen(&[id]);
+        self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == id)).then_some(id)
     }
 }
 
