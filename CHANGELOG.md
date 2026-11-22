@@ -14,6 +14,8 @@ Behoben (kleinere offene Punkte):
   Vorlage doppelt in der .epr-Datei
 - Schriftfeld „Geändert“: Blätter ohne Änderungsdatum (z. B. die Klemmpläne in W2) zeigen „---------“ wie das
   Original statt des Projektdatums
+- Kennzeichnung (BMK) und Wert der Symbole in der Schriftgröße der Anlage („Titel“/„Wert“ als Bildpunkte bei
+  96 dpi: 10 → 2,65 mm, 8 → 2,12 mm) statt fest 2,5/2,2 mm; im Ausdruck des Originals 2,62 mm
 
 Behoben (Maustest 22.11.2026):
 - Leitung ziehen: führt aus dem Anschluss in dessen Richtung heraus und tritt am Ziel von außen ein (Z-Führung

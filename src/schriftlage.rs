@@ -11,8 +11,11 @@
 //!   „2“ der Steckdose passt zu 0,72 × Höhe, „SPD“, „M“, „Dusch/WC“ sind im Ausdruck 7–20 % größer) und bleiben
 //!   vorerst bei 0,72 (canvas.rs).
 //! - Spaltenleiste: Strompfad-Nummern in 12 pt, unabhängig vom Blattformat.
-//! - Noch offen: Kennzeichnungen (BMK) stehen im Ausdruck mit 2,62 mm Geviert (7,5 pt, vermutlich
-//!   Anlageneinstellung „Titel“ 10 als Bildpunkte bei 96 dpi), der Nachbau zeichnet 2,5 mm; Lage stimmt.
+//! - Kennzeichnung (BMK) und Wert eines Symbols: Schriftgröße aus der Anlage („Titel“ ANL Feld 46, „Wert“ Feld 47;
+//!   die Zeichenroutine 0x438b94 reicht ANL +0xb8 bzw. +0xbc an die Textroutine 0x491eec). Diese setzt
+//!   lfHeight = −Größe (Geviert) und rechnet die Größe mit 254/96 in 0,1 mm um (0x492572: Größe × 254 × 1/96 ×
+//!   Maßstab) – die Größe zählt also in Bildpunkten bei 96 dpi: Titel 10 = 2,646 mm (Ausdruck: 2,62 mm,
+//!   gerundet auf Druckerpunkte), Wert 8 = 2,117 mm. Bisher zeichnete der Nachbau fest 2,5 bzw. 2,2 mm.
 
 /// Einzug des Textes in der Textbox in mm (in Schreibrichtung und quer dazu)
 pub const TEXTBOX_RAND: f32 = 0.2;
@@ -25,6 +28,16 @@ pub const FELD_SCHRIFT: f32 = 0.88;
 
 /// Schriftgröße der Strompfad-Nummern in der Spaltenleiste in mm (12 pt, Original-Ausdruck)
 pub const SPALTEN_SCHRIFT: f32 = 12.0 * 25.4 / 72.0;
+
+/// Schriftgröße (Geviert, mm) der Symbolbeschriftungen aus einer Anlageneinstellung (Titel/Wert/Verbindungen):
+/// Bildpunkte bei 96 dpi (siehe Modulbeschreibung).
+pub fn anlage_schrift(groesse: i32) -> f32 {
+    groesse.max(1) as f32 * 25.4 / 96.0
+}
+
+/// Vorgaben (Titel 10, Wert 8 wie in W2 und neuen Projekten) als Schriftgröße in mm
+pub const TITEL_SCHRIFT: f32 = 10.0 * 25.4 / 96.0;
+pub const WERT_SCHRIFT: f32 = 8.0 * 25.4 / 96.0;
 
 /// Zeilenabstand einer Textbox in mm bei Schriftgröße `size` (mm).
 pub fn textbox_zeile(size: f32) -> f32 {
@@ -48,5 +61,9 @@ mod tests {
         // Feld „%Name“ 9 mm hoch: „Neubau EG“ mit 7,92 mm Geviert
         assert!((feld_schrift(9.0, 1) - 7.92).abs() < 0.01);
         assert!((feld_schrift(9.0, 2) - 3.96).abs() < 0.01);
+        // Titel 10: im Ausdruck 2,62 mm Geviert
+        assert!((anlage_schrift(10) - 2.62).abs() < 0.03);
+        assert!((anlage_schrift(10) - TITEL_SCHRIFT).abs() < 1e-6);
+        assert!((anlage_schrift(8) - WERT_SCHRIFT).abs() < 1e-6);
     }
 }

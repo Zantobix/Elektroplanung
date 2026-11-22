@@ -17,9 +17,9 @@ pub const RAND: f32 = 1.0;
 /// kleinster und größter Symbolmaßstab (wie beim Lesen des .epr)
 pub const MIN_SCALE: f32 = 0.05;
 pub const MAX_SCALE: f32 = 20.0;
-/// Schrifthöhen der Beschriftungen (wie canvas.rs)
-pub const TITEL_H: f32 = 2.5;
-pub const WERT_H: f32 = 2.2;
+/// Schrifthöhen der Beschriftungen (Vorgaben der Anlage, siehe schriftlage.rs)
+pub const TITEL_H: f32 = crate::schriftlage::TITEL_SCHRIFT;
+pub const WERT_H: f32 = crate::schriftlage::WERT_SCHRIFT;
 
 /// Wird die Markierung proportional skaliert (ein einzelnes Symbol bzw. ein einzelner Text ohne Box)?
 pub fn proportional(objs: &[Obj]) -> bool {
