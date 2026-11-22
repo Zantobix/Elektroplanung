@@ -384,6 +384,11 @@ impl App {
             self.opt = o;
         }
         self.apply_start_options();
+        // Startprojekt (noch ohne Datei) bekommt wie „Datei › Neu“ die Projektvorgaben (Rand Links 20 mm)
+        if self.path.is_none() {
+            self.project.anlagen[0].set = self.opt.anlage();
+            crate::rahmen::abgleichen(&mut self.project);
+        }
         if let Some(st) = cc.storage {
             if let Some(f) = st.get_string("favs") {
                 for l in f.lines() {
