@@ -60,6 +60,13 @@ pub fn follow_wire(pts: &[P], ends: [bool; 2], d: P, rund: &dyn Fn(P) -> P) -> V
 /// Wie `follow_wire`, mit Richtung nach außen an den Enden (`dirs`, für Neuführung und die Prüfung „läuft in das
 /// Symbol“), Profil an/aus und Stichlänge `stich` der Neuführung.
 pub fn folgen(pts: &[P], ends: [bool; 2], d: P, dirs: [Option<P>; 2], profil: bool, stich: f32, rund: &dyn Fn(P) -> P) -> Vec<P> {
+    folgen_um(pts, ends, d, dirs, profil, stich, &[], rund)
+}
+
+/// Wie `folgen`; eine Neuführung umgeht dabei die Symbol-Umrisse `hind` (leitung_hindernis.rs, Maus-Befund M29,
+/// Schrittweite zwei Stiche = ein Raster). Formerhaltende Fälle (Profil) bleiben unverändert.
+#[allow(clippy::too_many_arguments)]
+pub fn folgen_um(pts: &[P], ends: [bool; 2], d: P, dirs: [Option<P>; 2], profil: bool, stich: f32, hind: &[crate::leitung_hindernis::Rechteck], rund: &dyn Fn(P) -> P) -> Vec<P> {
     if pts.len() < 2 || !(ends[0] || ends[1]) {
         return pts.to_vec();
     }
@@ -69,15 +76,15 @@ pub fn folgen(pts: &[P], ends: [bool; 2], d: P, dirs: [Option<P>; 2], profil: bo
     }
     if ends[1] {
         let rev: Vec<P> = pts.iter().rev().copied().collect();
-        let mut out = folgen_anfang(&rev, d, [dirs[1], dirs[0]], profil, stich, rund);
+        let mut out = folgen_anfang(&rev, d, [dirs[1], dirs[0]], profil, stich, hind, rund);
         out.reverse();
         return out;
     }
-    folgen_anfang(pts, d, dirs, profil, stich, rund)
+    folgen_anfang(pts, d, dirs, profil, stich, hind, rund)
 }
 
 /// Anfang um `d` verschieben: Profil, sonst Neuführung bzw. Endstück (siehe Modulkommentar).
-fn folgen_anfang(pts: &[P], d: P, dirs: [Option<P>; 2], profil: bool, stich: f32, rund: &dyn Fn(P) -> P) -> Vec<P> {
+fn folgen_anfang(pts: &[P], d: P, dirs: [Option<P>; 2], profil: bool, stich: f32, hind: &[crate::leitung_hindernis::Rechteck], rund: &dyn Fn(P) -> P) -> Vec<P> {
     use crate::leitung_profil::{nachfuehren, Ergebnis};
     use crate::leitung_route::{laeuft_hinein, mit_stichen};
     // doppelte Punkte (in W2 z. B. am Anfang) würden das Endstück verdecken
@@ -87,7 +94,7 @@ fn folgen_anfang(pts: &[P], d: P, dirs: [Option<P>; 2], profil: bool, stich: f32
     if !profil {
         return follow_start(pts, d, rund);
     }
-    let neu_fuehren = || mit_stichen(neu, dirs[0], ende, dirs[1], stich);
+    let neu_fuehren = || crate::leitung_hindernis::umgehen(&mit_stichen(neu, dirs[0], ende, dirs[1], stich), dirs[0], dirs[1], hind, 2.0 * stich, false);
     let out = match nachfuehren(pts, neu, rund) {
         Ergebnis::Form(p) => p,
         Ergebnis::Neufuehren => return neu_fuehren(),
@@ -211,6 +218,14 @@ fn ende_richtung(sheet: &Sheet, lib: &[SymDef], p: P, nb: P) -> Option<P> {
     }
 }
 
+/// Hindernisse für die Neuführung der mitgezogenen Leitung `w` nach der Verschiebung `d`: alle Symbol-Umrisse
+/// (`umrisse` nach dem Verschieben) außer den Symbolen, an denen die Leitung endet – darunter das bewegte.
+pub fn hindernisse(umrisse: &[crate::leitung_hindernis::Umriss], w: &Mitzieh, d: P) -> Vec<crate::leitung_hindernis::Rechteck> {
+    let n = w.pts.len();
+    let enden = [if w.ends[0] { w.pts[0].add(d) } else { w.pts[0] }, if w.ends[1] { w.pts[n - 1].add(d) } else { w.pts[n - 1] }];
+    crate::leitung_hindernis::hindernisse(umrisse, &[], &enden)
+}
+
 /// Kennung einer in eine Leitung eingesetzten Klemmstelle, deren Kreis `p` berührt (Mittelpunkt oder eines der
 /// Leitungsenden 0,8 mm davor): Klemme und beide Teilleitungen verhalten sich beim Greifen wie eine Einheit.
 pub fn eingesetzte_klemme_bei(sheet: &Sheet, p: P) -> Option<u64> {
@@ -258,9 +273,15 @@ impl App {
         let stich = self.raster() / 2.0;
         // Abgriff an einer Sammelschiene wandert mit (schiene_halten.rs)
         let sch = self.sheet().map(|s| crate::schiene_halten::schienen(s, &[])).unwrap_or_default();
+        // Symbole als Hindernisse der Neuführung (M29); die Symbole sind schon verschoben
+        let umrisse = self.sheet().map(|s| crate::leitung_hindernis::umrisse(s, &self.lib)).unwrap_or_default();
         let neu: Vec<(u64, Vec<P>, bool)> = f
             .iter()
-            .map(|w| (w.id, crate::schiene_halten::abgreifen(&folgen(&w.pts, w.ends, d, w.dirs, w.profil, stich, &|p| self.snap(p)), &sch), w.ends[0] && w.ends[1]))
+            .map(|w| {
+                let hind = hindernisse(&umrisse, w, d);
+                let pts = folgen_um(&w.pts, w.ends, d, w.dirs, w.profil, stich, &hind, &|p| self.snap(p));
+                (w.id, crate::schiene_halten::abgreifen(&pts, &sch), w.ends[0] && w.ends[1])
+            })
             .collect();
         self.with_sheet(|s, _| {
             for (id, pts, ganz) in neu {
