@@ -9,6 +9,12 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Brückenbögen an Kreuzungen (bewusste Erweiterung, das Original zeichnet keine):
+- Kreuzen sich zwei Leitungen, ohne verbunden zu sein, springt die waagerechtere in einem kleinen Halbkreis über
+  die andere (Bildschirm, Druck, PDF, Bildexport). Keine Bögen an Verbindungen (Leitungsende oder Klemmstelle im
+  Kreuzungspunkt). Neue Option „Brückenbögen an Kreuzungen“ (Programmverhalten, Standard ein). Die .epr bleibt
+  unverändert.
+
 Mehrpolige Symbole wie im Original:
 - Symbole mit Versatz je Bild (Element Feld 13/14) werden in der gewählten Variante richtig gezeichnet: Leistungs-
   kontakt, Sicherung, Motorschutz, Thermoschutz 2-/3-polig zeigen alle Pole um den Bezugspunkt verteilt (vorher

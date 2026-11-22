@@ -81,7 +81,7 @@ pub fn blatt_bild(
     let origin = Pos2::new(-200000.0, -200000.0);
     let painter = egui::Painter::new(ctx.clone(), layer, Rect::from_min_size(origin, egui::Vec2::new(sw * z, sh * z)));
     let xf = Xf { origin, z };
-    let dc = DrawCtx { painter: &painter, xf, lib, project, images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage) };
+    let dc = DrawCtx { painter: &painter, xf, lib, project, images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage), bruecken: crate::bruecken::karte(&sheet.objects) };
     let colors = SheetColors { sheet: Color32::WHITE, grid: Color32::WHITE, print: true };
     canvas::draw_sheet_base(&dc, sheet, anlage, &colors, None);
     for o in &sheet.objects {

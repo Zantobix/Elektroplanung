@@ -33,6 +33,8 @@ pub struct Optionen {
     pub pruefen_vor_druck: bool,
     /// beim Platzieren eines Symbols mit mehreren Bildern das Variantenrad zeigen (Original: immer)
     pub variantenrad: bool,
+    /// Brückenbögen an Kreuzungen von Leitungen zeichnen (Nachbau-Erweiterung, `bruecken.rs`)
+    pub brueckenboegen: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
     pub sym_hoehe: f32,
@@ -93,6 +95,7 @@ impl Default for Optionen {
             backup: true,
             pruefen_vor_druck: true,
             variantenrad: true,
+            brueckenboegen: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
             blatt_farbe: [238, 221, 221],
@@ -306,6 +309,7 @@ impl App {
                                     mark(ui, &mut o.backup, "Backup-Datei erzeugen!");
                                     mark(ui, &mut o.pruefen_vor_druck, "Vor dem Drucken Projekt prüfen");
                                     mark(ui, &mut o.variantenrad, "Variantenrad beim Platzieren");
+                                    mark(ui, &mut o.brueckenboegen, "Brückenbögen an Kreuzungen");
                                 });
                                 egui::Frame::group(ui.style()).show(ui, |ui| {
                                     ui.set_width(330.0);

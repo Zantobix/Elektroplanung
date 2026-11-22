@@ -190,6 +190,12 @@ nicht. Gemessen werden stattdessen:
 - Bewusste Abweichungen in der Bedienung: Einfügen (Strg+V) versetzt die Kopie um ein Rasterfeld und vergibt eine
   neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
+- Bewusste Erweiterungen gegenüber dem Original (bleiben, auch wenn das Original sie nicht hat):
+  - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
+    Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
+    unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).
+  - Leitung verschieben: Das Ziehen an einem Teilstück ändert die Führung, die Enden bleiben angeschlossen (das
+    Original verhindert das Verschieben angeschlossener Leitungen).
 - Klemmplan: "Von Ziel"/"Nach Ziel" nach den vier Anschlussrichtungen wie im Original, mit "Ziel Wechsel",
   Eigentümer-Kennung und Funktion (Regeln in `src/klemmplan.rs`); Brücken als Ketten in Spuren wie in den
   Original-Ausdrucken (Seiten 12, 13, 20–22, 39; je Anschlussrichtung höchstens eine Brücke), die

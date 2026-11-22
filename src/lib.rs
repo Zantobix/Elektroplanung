@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod baum;
+pub mod bruecken;
 pub mod baum_klappen;
 pub mod bauteil_darstellung;
 pub mod bauteilliste;

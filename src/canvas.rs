@@ -339,6 +339,8 @@ pub struct DrawCtx<'a> {
     pub bmk: symbols::BmkCtx,
     /// Anlage des Blattes (Einstellungen der Sammelschienen)
     pub anlage: Option<&'a Anlage>,
+    /// Brückenbögen der Leitungen dieses Blattes (`bruecken::karte`), leer = keine
+    pub bruecken: crate::bruecken::Karte,
 }
 
 /// Blattangaben für `DrawCtx::bmk`.
@@ -806,7 +808,12 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             let col = color_override.unwrap_or_else(|| l.map(|l| c32(l.color)).unwrap_or(Color32::BLACK));
             let w = l.map(|l| l.width_mm).unwrap_or(0.25);
             let st = if opts & WIRE_BRUECKE != 0 { 1 } else { l.map(|l| l.style).unwrap_or(0).min(3) };
-            styled_line(p, &sp(pts), Stroke::new((w * z).max(1.0), col), st, z);
+            // Brückenbögen an Kreuzungen (bewusste Erweiterung, `bruecken.rs`)
+            let gezeichnet = match dc.bruecken.get(&o.id) {
+                Some(x) => crate::bruecken::mit_boegen(pts, x),
+                None => pts.clone(),
+            };
+            styled_line(p, &sp(&gezeichnet), Stroke::new((w * z).max(1.0), col), st, z);
             // Zielführung: Pfeil am Anfang (Links/Oben) bzw. Ende (Rechts/Unten)
             let arrow = |tip: P, from: P| {
                 let d = tip.sub(from);

@@ -1005,7 +1005,7 @@ impl App {
             // Objekte im Editor zeichnen mit den Stiften des Symbols
             let _stifte = crate::symbol_stifte::Ersatz::setzen(self.edit_stifte());
             self.draw_edit_base(&clip, xf);
-            let dc = DrawCtx { painter: &clip, xf, lib: &self.lib, project: &self.project, images: &self.images, bmk: Default::default(), anlage: None };
+            let dc = DrawCtx { painter: &clip, xf, lib: &self.lib, project: &self.project, images: &self.images, bmk: Default::default(), anlage: None, bruecken: Default::default() };
             for o in &e.sheet.objects {
                 if !symbols::visible(e.option, e.vis.get(&o.id)) || !e.flag_shown(o.id) {
                     continue;
@@ -1039,7 +1039,7 @@ impl App {
         let Some(r) = self.cur() else { return };
         let Some(anlage) = self.project.anlagen.get(r.anlage) else { return };
         let Some(sheet) = anlage.sheets.get(r.sheet) else { return };
-        let dc = DrawCtx { painter: &clip, xf, lib: &self.lib, project: &self.project, images: &self.images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage) };
+        let dc = DrawCtx { painter: &clip, xf, lib: &self.lib, project: &self.project, images: &self.images, bmk: canvas::bmk_ctx(anlage, sheet), anlage: Some(anlage), bruecken: crate::bruecken::karte(&sheet.objects) };
         let colors = SheetColors { sheet: self.sheet_color, grid: self.grid_color, print: false };
         crate::blatt_tasten::mit_heute(self.zeigt_heute(r), || {
             canvas::draw_sheet_base(&dc, sheet, anlage, &colors, self.grid.then(|| (self.raster(), self.raster_ursprung(), self.opt.rand_ursprung)))
@@ -2432,6 +2432,7 @@ impl eframe::App for App {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        crate::bruecken::setzen(self.opt.brueckenboegen);
         // Ränder der Anlagen in die Blätter: geänderte Anlagen-Eigenschaften ändern den Rahmen sofort
         crate::rahmen::abgleichen(&mut self.project);
         self.handle_shot(&ctx);
