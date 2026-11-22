@@ -1514,6 +1514,10 @@ impl App {
                             return;
                         }
                     }
+                    // auf einer nicht markierten Sammelschiene: Leitung beginnen (schiene_leitung.rs)
+                    if !ctrl && self.leitung_an_schiene_beginnen(m, tol) {
+                        return;
+                    }
                     if let Some(id) = self.hit_top(m, tol) {
                         if ctrl {
                             if let Some(i) = self.selection.iter().position(|s| *s == id) {
@@ -1674,7 +1678,9 @@ impl App {
                 }
                 Drag::Wire { mut f } => {
                     let end = self.leitungsende(&f, m, xf.z);
-                    if end.dist(f.start()) > 0.01 {
+                    if self.schiene_loslassen(&f, end) {
+                        // von einer Schiene ohne Ziel: Schiene markiert, keine Leitung
+                    } else if end.dist(f.start()) > 0.01 {
                         // gezogen: Knick nach der ersten Zugrichtung
                         let l = self.leitung;
                         let pts = self.leitungsweg(&f, end);

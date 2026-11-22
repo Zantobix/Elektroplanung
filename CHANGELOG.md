@@ -23,6 +23,11 @@ Behoben (Maustest 22.11.2026):
   (oben gestapelt wie in W2). Bisher entstand eine Leitung mit Text, und Ziehen aus dem Baum ging nicht
 - Sammelschienen-Dialog: Potential „Keine Zuordnung“ wählbar und Vorgabe; neue Schienen mit Kürzel „L<n>“, ohne Pfeile
   (Vorgaben des Originals)
+- Leitung von einer Sammelschiene zu einem Bauteil ziehen: Ziehen auf einer nicht markierten Schiene beginnt eine
+  Leitung, der Leiter verlässt die Schiene senkrecht in der Flucht des Ziels (bisher entstand nichts)
+- Verbindungsknoten: Punkte auch an Abgriffen von Sammelschienen; Knoten folgen beim Verschieben der Geometrie, und
+  beim Speichern trägt das Leitungsende die Anschlussart des Originals (VBG Art 3 auf Leitung bzw. 2 an Schiene mit
+  Kennung des Ziels), ein verwaister Knoten wird gelöscht (src/knoten.rs, src/schiene_leitung.rs)
 - Doppelklick auf eine Anlage im Projektbaum öffnet ihre Eigenschaften (wie im Original) statt sie zuzuklappen
 - Neue Klemmleisten wie im Original: Name „Klemme n“, Titel „Xn“ – eingesetzte Klemmstellen heißen „X1.1“ statt
   „Klemme 1.1“

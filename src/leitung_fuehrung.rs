@@ -79,11 +79,29 @@ pub struct Fuehrung {
     pub richtung: Option<Richtung>,
     /// Klickbetrieb wie im Original (nach einem Klick auf den Anschluss ohne Ziehen)
     pub klickbetrieb: bool,
+    /// Beginn auf einer Sammelschiene (Höhe, waagerechte Ausdehnung): der Anfang wandert auf der Schiene in die
+    /// Flucht des Ziels bzw. des ersten Eckpunkts, der Leiter verlässt die Schiene senkrecht
+    pub schiene: Option<(f32, f32, f32)>,
 }
 
 impl Fuehrung {
     pub fn neu(start: P) -> Self {
-        Fuehrung { pts: vec![start], richtung: None, klickbetrieb: false }
+        Fuehrung { pts: vec![start], richtung: None, klickbetrieb: false, schiene: None }
+    }
+
+    /// Leitung, die auf einer Sammelschiene `schiene` (Höhe, x von, x bis) bei `m` beginnt.
+    pub fn von_schiene(m: P, schiene: (f32, f32, f32)) -> Self {
+        let (y, x1, x2) = schiene;
+        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), klickbetrieb: false, schiene: Some(schiene) }
+    }
+
+    /// Beginnt die Leitung auf einer Schiene und ist noch kein Eckpunkt gesetzt: Anfang in die Flucht von `ziel`
+    /// legen (senkrecht von der Schiene ab, Knoten am Abgriff).
+    pub fn anfang_zu(&mut self, ziel: P) {
+        if let (Some((y, x1, x2)), 1) = (self.schiene, self.pts.len()) {
+            self.pts[0] = P::new(ziel.x.clamp(x1, x2), y);
+            self.richtung = Some(Richtung::Senkrecht);
+        }
     }
 
     pub fn start(&self) -> P {
@@ -97,7 +115,7 @@ impl Fuehrung {
     /// Beim Ziehen die Maus `m` verfolgen: die erste Bewegung über `schwelle` (mm) hinaus legt die Richtung des
     /// ersten Teilstücks fest; liegt die Maus wieder innerhalb der Schwelle um den Anfang, wird neu entschieden.
     pub fn bewegen(&mut self, m: P, schwelle: f32) {
-        if self.klickbetrieb {
+        if self.klickbetrieb || self.schiene.is_some() {
             return;
         }
         let d = m.sub(self.start());
@@ -111,9 +129,12 @@ impl Fuehrung {
     /// Leitungsverlauf bis `ende` (Vorschau und Ergebnis): beim Ziehen ein Knick nach der Zugrichtung, im
     /// Klickbetrieb die gesetzten Punkte und ein Knick nach der Regel des Originals zum Ende.
     pub fn weg(&self, ende: P) -> Vec<P> {
-        let mut pts = self.pts.clone();
+        let mut f = self.clone();
+        f.anfang_zu(ende);
+        let erst = if f.schiene.is_some() && f.pts.len() == 1 { Some(Richtung::Senkrecht) } else { None };
+        let mut pts = f.pts.clone();
         let l = pts.pop().unwrap();
-        let erst = if self.klickbetrieb { None } else { self.richtung };
+        let erst = erst.or(if self.klickbetrieb { None } else { self.richtung });
         pts.extend(knick(l, ende, erst));
         bereinigen(pts)
     }
@@ -121,6 +142,15 @@ impl Fuehrung {
     /// Eckpunkt-Klick bei `m` im Klickbetrieb (Regel des Originals, `min` = 6 px in mm). Liefert, ob sich die
     /// Punktliste geändert hat.
     pub fn klick(&mut self, m: P, min: f32) -> bool {
+        // erster Eckpunkt nach dem Beginn auf einer Schiene: senkrecht unter/über dem Klick von der Schiene ab
+        if self.schiene.is_some() && self.pts.len() == 1 {
+            if (m.y - self.start().y).abs() < min {
+                return false;
+            }
+            self.anfang_zu(m);
+            self.pts.push(P::new(self.start().x, m.y));
+            return true;
+        }
         let l = self.letzter();
         if (m.x - l.x).abs() < min && (m.y - l.y).abs() < min {
             return false;
