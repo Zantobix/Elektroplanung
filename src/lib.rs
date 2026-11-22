@@ -56,6 +56,7 @@ pub mod leitung_hindernis;
 pub mod leitung_knick;
 pub mod leitung_route;
 pub mod leitung_stift;
+pub mod leitung_vereinigen;
 pub mod leitung_zug;
 pub mod listen;
 pub mod mcp;

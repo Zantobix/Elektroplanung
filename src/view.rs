@@ -1693,6 +1693,8 @@ impl App {
         if released_l {
             // Zustände, die über das Loslassen hinaus bestehen (Kurve zwischen den Klicks, Leitung im Klickbetrieb)
             let mut bleibt = false;
+            // übereinanderliegende Leitungen vereinigen (Teilstück/Knick gezogen, verschoben; leitung_vereinigen.rs)
+            self.nach_ziehen_vereinigen();
             match self.drag.clone() {
                 Drag::Rubber { start } => {
                     let (mn, mx) = canvas::norm_rect(start, m);
