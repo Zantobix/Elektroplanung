@@ -14,6 +14,8 @@
 //!   kleinen Mausbewegungen nur wenig.
 //! - Der Weg verlässt einen Anschluss mit Richtung **immer** zuerst mit einem Stich in Anschlussrichtung, auch wenn
 //!   das erste Teilstück quer dazu gewählt ist (Maus-Befund M27); die Knickrichtung betrifft die Teilstücke danach.
+//! - Ebenso tritt die Leitung in einen Zielanschluss mit Richtung immer von außen mit dem Stich ein (M28): geführt
+//!   wird bis vor den Stich des Ziels, das letzte Stück läuft in Anschlussrichtung hinein.
 //! - Die Regeln aus `leitung_route.rs` bleiben: läuft der Weg trotzdem an einem Ende in das Symbol (Ziel genau
 //!   hinter dem Anschluss, Zielanschluss von der falschen Seite), wird er mit Stichen und Z über die Mitte gelegt.
 //!
@@ -31,11 +33,30 @@ fn skalar(a: P, b: P) -> f32 {
 /// Weg beim Ziehen von `a` (Richtung nach außen `da`) nach `b` (Zielanschluss mit `db`), erstes Teilstück in
 /// Richtung `erst`, Stichlänge `s`.
 pub fn zugweg(a: P, da: Option<P>, b: P, db: Option<P>, erst: Richtung, s: f32) -> Vec<P> {
+    if a.dist(b) < 0.01 {
+        return vec![a, b];
+    }
+    // Zielanschluss mit Richtung (Maus-Befund M28): bis vor den Stich des Ziels führen und von außen in
+    // Anschlussrichtung eintreten, auch wenn das letzte Teilstück quer dazu liefe
+    let ziel = db.map(|d| P::new(b.x + d.x * s, b.y + d.y * s)).unwrap_or(b);
+    let mut w = bis_ziel(a, da, ziel, erst, s);
+    if db.is_some() {
+        w.push(b);
+        w = bereinigen(w);
+    }
+    if laeuft_hinein(&w, da, db) {
+        return mit_stichen(a, da, b, db, s);
+    }
+    w
+}
+
+/// Weg von `a` (Richtung nach außen `da`) bis `b` mit erstem Teilstück in Richtung `erst` (Stich am Anfang).
+fn bis_ziel(a: P, da: Option<P>, b: P, erst: Richtung, s: f32) -> Vec<P> {
     let entlang = |d: P| match erst {
         Richtung::Waagerecht => d.x.abs() > 0.5,
         Richtung::Senkrecht => d.y.abs() > 0.5,
     };
-    let w = match da {
+    match da {
         Some(d) if entlang(d) => {
             // mindestens einen Stich nach außen, dann quer bis in die Flucht des Ziels und zum Ziel
             let t = skalar(b.sub(a), d).max(s);
@@ -52,11 +73,7 @@ pub fn zugweg(a: P, da: Option<P>, b: P, db: Option<P>, erst: Richtung, s: f32) 
             bereinigen(w)
         }
         None => bereinigen(knick(a, b, Some(erst))),
-    };
-    if laeuft_hinein(&w, da, db) {
-        return mit_stichen(a, da, b, db, s);
     }
-    w
 }
 
 impl Fuehrung {
@@ -197,6 +214,30 @@ mod tests {
     }
 
     #[test]
+    fn ziel_von_aussen_in_anschlussrichtung() {
+        // Maus-Befund M28: -Q1:14 (unten) nach -E1:1 (oben, 2,5 Raster tiefer, 7 Raster rechts), erst nach unten
+        // gezogen: Stich aus 14, waagerecht über dem Ziel, von oben in Anschluss 1 – nicht seitlich hinein
+        let (a, b) = (p(40.0, 100.0), p(75.0, 112.5));
+        let w = zugweg(a, UNTEN, b, OBEN, Richtung::Senkrecht, STICH);
+        assert_eq!(w, vec![a, p(40.0, 110.0), p(75.0, 110.0), b]);
+        // erst waagerecht gezogen: Stich runter, quer, von oben hinein
+        let w = zugweg(a, UNTEN, b, OBEN, Richtung::Waagerecht, STICH);
+        assert_eq!(w, vec![a, p(40.0, 102.5), p(75.0, 102.5), b]);
+        // seitlicher Zielanschluss (zeigt nach links): waagerecht von links hinein
+        let w = zugweg(a, UNTEN, b, Some(p(-1.0, 0.0)), Richtung::Senkrecht, STICH);
+        assert_eq!(w, vec![a, p(40.0, 112.5), b]);
+        let w = zugweg(a, UNTEN, b, Some(p(-1.0, 0.0)), Richtung::Waagerecht, STICH);
+        assert!(!laeuft_hinein(&w, UNTEN, Some(p(-1.0, 0.0))) && w[w.len() - 2].y == b.y && w[w.len() - 2].x < b.x, "{w:?}");
+        // über die ganze Mausbahn: jede Vorschau tritt von oben in das Ziel ein
+        let mut f = Fuehrung::neu(a);
+        for m in [p(40.0, 107.5), p(60.0, 107.5), p(75.0, 107.5), b] {
+            f.bewegen(m, SCHWELLE);
+        }
+        let w = f.zugweg(b, UNTEN, OBEN, STICH);
+        assert!(w[w.len() - 2].y < b.y && (w[w.len() - 2].x - b.x).abs() < 0.01, "{w:?}");
+    }
+
+    #[test]
     fn regeln_aus_leitung_route_bleiben() {
         // M1: unterer Anschluss zu höherem oberen Zielanschluss, senkrecht aufgezogen: Stich, Z über die Mitte, von oben
         let w = zugweg(p(40.0, 100.0), UNTEN, p(100.0, 90.0), OBEN, Richtung::Senkrecht, 5.0);
@@ -205,8 +246,8 @@ mod tests {
         // Ziel genau über dem unteren Anschluss: seitlich ausweichen statt durch das Symbol
         let w = zugweg(p(40.0, 100.0), UNTEN, p(40.0, 80.0), None, Richtung::Senkrecht, 5.0);
         assert!(w.iter().any(|q| q.x > 40.0) && !laeuft_hinein(&w, UNTEN, None));
-        // tiefer liegendes Ziel unter einem unteren Anschluss: einfacher Knick
-        assert_eq!(zugweg(p(40.0, 100.0), UNTEN, p(60.0, 130.0), OBEN, Richtung::Senkrecht, 5.0), vec![p(40.0, 100.0), p(40.0, 130.0), p(60.0, 130.0)]);
+        // tiefer liegendes Ziel (oberer Anschluss) unter einem unteren Anschluss: von oben in das Ziel (M28)
+        assert_eq!(zugweg(p(40.0, 100.0), UNTEN, p(60.0, 130.0), OBEN, Richtung::Senkrecht, 5.0), vec![p(40.0, 100.0), p(40.0, 125.0), p(60.0, 125.0), p(60.0, 130.0)]);
         // ohne Anschlussrichtung: Knick wie bisher
         assert_eq!(zugweg(p(0.0, 0.0), None, p(10.0, 4.0), None, Richtung::Senkrecht, 5.0), vec![p(0.0, 0.0), p(0.0, 4.0), p(10.0, 4.0)]);
     }
