@@ -363,6 +363,12 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   den Rasterpunkt der Maus; Enter ohne Wirkung; Pfeiltasten mit Umschalt 0,1 mm, Strg+A alles markieren.
 - Schriftfeld %Geändert (0x4876d8, Fall 8): auf dem Bildschirm „Heute“, wenn das Blatt in der Rückgängig-Liste steht
   (in dieser Sitzung geändert), sonst Datum BLT @120 bzw. „---------“; %Datum = heute, %Erstellt = BLT @112.
+  Kein Rückgriff auf das Projektdatum (W2: alle Klemmpläne ohne BLT @120 → „---------“). Texte aus 0x5b9457:
+  „---“, „---------“, „Projekt ist abgeschlossen“, „Projekt wird bearbeitet“, „Heute“. Kennzeichen „Bildschirm“
+  = Zeichenkontext +8, gesetzt von 0x4910ac nur, wenn die Zeichenfläche die der PaintBox bzw. des Bildpuffers
+  (Form +0x7cc) ist; der Druck (0x45d26c) übergibt Fläche 0 → +8 = 0 → Druck/PDF zeigen das Datum, nie „Heute“.
+- Symbolbeschriftung: Titel/Wert in der Schriftgröße der Anlage (ANL +0xb8/+0xbc), Textroutine 0x491eec:
+  lfHeight = −Größe, Umrechnung Größe × 254/96 in 0,1 mm → Bildpunkte bei 96 dpi (10 → 2,646 mm).
 
 ## Verbindungsknoten (src/knoten.rs, 22.11.2026)
 - Knoten sind keine eigenen Objekte: VBG Byte 0 (Anfang) bzw. 0x14 (Ende) = Anschlussart 1 Symbol, 2 Sammelschiene,
