@@ -26,6 +26,8 @@ Leitung ziehen – Führung folgt von Anfang an der Maus (nach KiCad):
   bisher.
 - Die Leitung verlässt einen Anschluss immer zuerst mit dem Stich in Anschlussrichtung, auch wenn die erste
   Mausbewegung quer dazu geht (vorher z. B. seitlich aus einem oberen Anschluss).
+- Ebenso tritt sie in einen Zielanschluss immer von außen in dessen Richtung ein (Stich), statt seitlich
+  hineinzulaufen (z. B. von oben in den oberen Anschluss einer Lampe).
 - Bewusste Erweiterung: Leertaste oder „/“ kippt während des Ziehens die Knickrichtung (wie „posture“ in KiCad);
   im Klickbetrieb wechselt die Leertaste weiter wie im Original zum vorigen Blatt.
 
