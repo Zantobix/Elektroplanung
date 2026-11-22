@@ -20,6 +20,34 @@ use crate::model::*;
 /// Abstand der Leitungsenden vom Mittelpunkt der Klemmstelle (mm).
 pub const KLEMME_R: f32 = 0.8;
 
+/// Mittelpunkt der Klemmstelle, in deren Kreis (Halbmesser `KLEMME_R`) `p` liegt.
+pub fn klemme_zu(sheet: &Sheet, p: P) -> Option<P> {
+    let r = KLEMME_R + crate::mitziehen::PIN_TOL;
+    sheet.objects.iter().find_map(|o| match &o.kind {
+        // nur Klemmstellen auf Blättern (im Symboleditor sind es Anschlüsse ohne Bezeichnung)
+        Kind::Terminal { pos, text_off: Some(_), .. } if pos.dist(p) <= r => Some(*pos),
+        _ => None,
+    })
+}
+
+/// Neue Leitung: Enden im Mittelpunkt einer Klemmstelle rücken wie im Original an den Kreis (`KLEMME_R` entlang
+/// des ersten bzw. letzten Stücks), sofern das Stück länger ist.
+pub fn enden_an_klemmen(sheet: &Sheet, mut pts: Vec<P>) -> Vec<P> {
+    let n = pts.len();
+    if n < 2 {
+        return pts;
+    }
+    let mitte = |p: P| sheet.objects.iter().any(|o| matches!(&o.kind, Kind::Terminal { pos, text_off: Some(_), .. } if pos.dist(p) <= crate::mitziehen::PIN_TOL));
+    for (i, j) in [(0, 1), (n - 1, n - 2)] {
+        let (a, b) = (pts[i], pts[j]);
+        let len = a.dist(b);
+        if mitte(a) && len > KLEMME_R + 0.01 {
+            pts[i] = P::new(a.x + (b.x - a.x) / len * KLEMME_R, a.y + (b.y - a.y) / len * KLEMME_R);
+        }
+    }
+    pts
+}
+
 /// Teilung einer Leitung an der Stelle `q` auf Abschnitt `i`: (erster Teil, zweiter Teil).
 pub fn teilen(pts: &[P], i: usize, q: P) -> (Vec<P>, Vec<P>) {
     let (a, b) = (pts[i], pts[i + 1]);
@@ -126,6 +154,37 @@ impl App {
             let neu = Obj { id: neu_id, kind: zweite, pen: o.pen, fixed: o.fixed, group: o.group, raw };
             s.objects.push(neu);
         });
+    }
+}
+
+/// Liegt der Zug `pts` ganz auf vorhandenen Leitungen (doppelte Verbindung)? Geprüft in Schritten von 0,5 mm.
+pub fn liegt_auf_leitungen(sheet: &Sheet, pts: &[P]) -> bool {
+    let auf = |q: P| {
+        sheet.objects.iter().any(|o| match &o.kind {
+            Kind::Wire { pts, .. } => pts.windows(2).any(|w| seg_dist(q, w[0], w[1]) <= crate::mitziehen::PIN_TOL),
+            _ => false,
+        })
+    };
+    pts.len() >= 2
+        && pts.windows(2).all(|w| {
+            let n = (w[0].dist(w[1]) / 0.5).ceil().max(1.0) as usize;
+            (0..=n).all(|k| {
+                let t = k as f32 / n as f32;
+                auf(P::new(w[0].x + (w[1].x - w[0].x) * t, w[0].y + (w[1].y - w[0].y) * t))
+            })
+        })
+}
+
+impl App {
+    /// Gezeichnete Leitung anlegen; eine Leitung, die ganz auf vorhandenen liegt, entsteht nicht (Maustest Runde 11:
+    /// von der Schiene zur Klemme, deren Zuleitung schon dort abgreift, lag die neue genau auf der alten).
+    pub fn neue_leitung(&mut self, pts: Vec<P>) -> Option<u64> {
+        if self.sheet().is_some_and(|s| liegt_auf_leitungen(s, &pts)) {
+            self.info = "Diese Verbindung besteht bereits".into();
+            return None;
+        }
+        let l = self.leitung;
+        Some(self.add_obj(Kind::Wire { pts, leitung: l, bez: vec![], opts: 0 }))
     }
 }
 

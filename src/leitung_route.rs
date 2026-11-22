@@ -239,6 +239,14 @@ impl crate::app::App {
 
     /// Weg der gerade gezeichneten Leitung `f` bis `ende` mit Anschlussrichtungen (Vorschau und Ergebnis).
     pub fn leitungsweg(&self, f: &crate::leitung_fuehrung::Fuehrung, ende: P) -> Vec<P> {
+        let w = self.leitungsweg_roh(f, ende);
+        match self.sheet() {
+            Some(s) => crate::klemme_leitung::enden_an_klemmen(s, w),
+            None => w,
+        }
+    }
+
+    fn leitungsweg_roh(&self, f: &crate::leitung_fuehrung::Fuehrung, ende: P) -> Vec<P> {
         let weg = f.weg(ende);
         let Some(sheet) = self.sheet() else { return weg };
         let da = anschluss_richtung(sheet, &self.lib, f.start());

@@ -225,7 +225,13 @@ impl App {
             }
             sep(ui, 5.0);
             static_text(ui, "Klemmleiste", 89.0);
-            let ks = self.klemmleisten();
+            // angezeigt wird wie im Original der Name der Leiste („Klemme 1“), gewählt der Titel („X1“)
+            let anl = self.cur().and_then(|r| self.project.anlagen.get(r.anlage));
+            let ks: Vec<String> = self
+                .klemmleisten()
+                .into_iter()
+                .map(|t| anl.and_then(|a| a.klemmen.iter().find(|k| k.name == t)).map(|k| k.intern.clone()).filter(|n| !n.is_empty()).unwrap_or(t))
+                .collect();
             let mut ki = self.klemme.min(ks.len().saturating_sub(1));
             let kr = ui.scope(|ui| auswahl(ui, "klemme", 105.0, &ks, &mut ki));
             kr.response.on_hover_text("Klemmenliste der aktuellen Anlage");
@@ -1347,8 +1353,7 @@ impl App {
                             let pts = self.leitungsweg(&f, pin);
                             self.drag = Drag::None;
                             if pts.len() >= 2 {
-                                let l = self.leitung;
-                                self.add_obj(Kind::Wire { pts, leitung: l, bez: vec![], opts: 0 });
+                                self.neue_leitung(pts);
                             }
                         }
                         _ => {
@@ -1630,7 +1635,7 @@ impl App {
                     self.checkpoint();
                     // angeschlossene Leitungen im Zustand vor dem Verschieben merken
                     self.move_follow = self.wire_followers(&movable);
-                    self.move_halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &movable)).unwrap_or_default();
+                    self.move_halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &self.lib, &movable)).unwrap_or_default();
                 }
                 self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| movable.contains(&o.id)).for_each(|o| o.kind.translate(d)));
                 // Leitungsenden folgen den Anschlüssen (gleicher Rückgängig-Schritt, aus der Gesamtverschiebung)
@@ -1705,9 +1710,8 @@ impl App {
                         // von einer Schiene ohne Ziel: Schiene markiert, keine Leitung
                     } else if end.dist(f.start()) > 0.01 {
                         // gezogen: Knick nach der ersten Zugrichtung
-                        let l = self.leitung;
                         let pts = self.leitungsweg(&f, end);
-                        self.add_obj(Kind::Wire { pts, leitung: l, bez: vec![], opts: 0 });
+                        self.neue_leitung(pts);
                     } else {
                         // Klick auf den Anschluss ohne Ziehen: Klickbetrieb wie im Original
                         f.klickbetrieb = true;
@@ -2242,7 +2246,7 @@ impl App {
             self.checkpoint();
             let sel: Vec<u64> = self.selected_objs().iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
             let follow = self.wire_followers(&sel);
-            let halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &sel)).unwrap_or_default();
+            let halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &self.lib, &sel)).unwrap_or_default();
             self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| sel.contains(&o.id)).for_each(|o| o.kind.translate(d)));
             // angeschlossene Leitungen mitziehen, markierte Leitungen bleiben an ihren Schienen
             self.apply_followers(&follow, d);

@@ -74,20 +74,71 @@ fn binden(v: &mut Vec<P>, s: Schiene) {
     }
 }
 
-/// Leitung einer verschobenen Markierung, deren Enden an nicht verschobenen Schienen hängen.
-#[derive(Clone, Debug)]
+/// Leitung einer verschobenen Markierung, deren Enden an nicht verschobenen Schienen bzw. Anschlüssen hängen.
+#[derive(Clone, Debug, Default)]
 pub struct Halt {
     pub id: u64,
     pub pts: Vec<P>,
     pub schienen: [Option<Schiene>; 2],
+    /// Ende an einem festen Punkt (Anschluss eines nicht verschobenen Symbols, Kreis einer nicht verschobenen
+    /// Klemmstelle, nicht verschobene Leitung): bleibt dort (Nutzer-Befund Runde 11, Leitung löste sich von der
+    /// Klemmstelle)
+    pub punkte: [Option<P>; 2],
 }
 
-/// Leitungen unter `moved`, deren Anfang oder Ende auf einer Schiene liegt, die nicht mit verschoben wird.
-pub fn finden(sheet: &Sheet, moved: &[u64]) -> Vec<Halt> {
-    let sch = schienen(sheet, moved);
-    if sch.is_empty() {
-        return vec![];
+/// Ende `v[0]` (schon verschoben) wieder mit dem festen Punkt `q` verbinden. `alt` = Richtung des ersten Stücks
+/// vor dem Verschieben (vom Ende weg). Läuft die Verschiebung vom Anschluss weg, wird das Endstück in seiner
+/// Richtung länger und ein Querstück schließt an; sonst entsteht das Querstück am Anschluss und das Endstück wird
+/// kürzer (Rückläufer verschmelzen in `bereinigen`).
+fn anbinden(v: &mut Vec<P>, q: P, alt: Option<P>) {
+    let p0 = v[0];
+    let d = p0.sub(q);
+    if d.x.abs() < EPS && d.y.abs() < EPS {
+        return;
     }
+    match alt {
+        Some(r) => {
+            let entlang = d.x * r.x + d.y * r.y;
+            let ecke = if entlang >= 0.0 { q.add(P::new(r.x * entlang, r.y * entlang)) } else { q.add(P::new(d.x - r.x * entlang, d.y - r.y * entlang)) };
+            v.insert(0, ecke);
+            v.insert(0, q);
+        }
+        None => v.insert(0, q),
+    }
+}
+
+/// Achsenrichtung des ersten Stücks (Einheitsvektor) oder `None` (schräg bzw. Länge 0).
+fn achse(a: P, b: P) -> Option<P> {
+    let d = b.sub(a);
+    if d.x.abs() < EPS && d.y.abs() >= EPS {
+        Some(P::new(0.0, d.y.signum()))
+    } else if d.y.abs() < EPS && d.x.abs() >= EPS {
+        Some(P::new(d.x.signum(), 0.0))
+    } else {
+        None
+    }
+}
+
+/// Leitungen unter `moved`, deren Anfang oder Ende auf einer Schiene bzw. an einem festen Anschluss liegt, der
+/// nicht mit verschoben wird.
+pub fn finden(sheet: &Sheet, lib: &[crate::symbols::SymDef], moved: &[u64]) -> Vec<Halt> {
+    use crate::mitziehen::PIN_TOL;
+    let sch = schienen(sheet, moved);
+    let fest: Vec<&crate::model::Obj> = sheet.objects.iter().filter(|o| !moved.contains(&o.id)).collect();
+    let pins: Vec<P> = fest.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).flat_map(|o| crate::canvas::obj_pins(o, lib)).collect();
+    let klemmen: Vec<P> = fest.iter().filter_map(|o| if let Kind::Terminal { pos, .. } = &o.kind { Some(*pos) } else { None }).collect();
+    let r = crate::klemme_leitung::KLEMME_R + PIN_TOL;
+    let fester_punkt = |e: P| -> bool {
+        pins.iter().any(|q| q.dist(e) <= PIN_TOL)
+            || klemmen.iter().any(|k| k.dist(e) <= r)
+            || fest.iter().any(|o| match &o.kind {
+                // Abzweig auf einer festen Leitung; Ende an Ende zählt nicht (die andere Leitung folgt, mitziehen.rs)
+                Kind::Wire { pts, .. } if pts.len() >= 2 => {
+                    e.dist(pts[0]) > PIN_TOL && e.dist(pts[pts.len() - 1]) > PIN_TOL && pts.windows(2).any(|w| crate::model::seg_dist(e, w[0], w[1]) <= PIN_TOL)
+                }
+                _ => false,
+            })
+    };
     sheet
         .objects
         .iter()
@@ -97,23 +148,31 @@ pub fn finden(sheet: &Sheet, moved: &[u64]) -> Vec<Halt> {
             if pts.len() < 2 {
                 return None;
             }
-            let schienen = [schiene_bei(pts[0], &sch), schiene_bei(pts[pts.len() - 1], &sch)];
-            (schienen[0].is_some() || schienen[1].is_some()).then(|| Halt { id: o.id, pts: pts.clone(), schienen })
+            let enden = [pts[0], pts[pts.len() - 1]];
+            let schienen = enden.map(|e| schiene_bei(e, &sch));
+            let punkte = [0, 1].map(|i| (schienen[i].is_none() && fester_punkt(enden[i])).then_some(enden[i]));
+            let halt = schienen.iter().any(|s| s.is_some()) || punkte.iter().any(|p| p.is_some());
+            halt.then(|| Halt { id: o.id, pts: pts.clone(), schienen, punkte })
         })
         .collect()
 }
 
 /// Punkte der Leitung nach dem Verschieben um `d` (gesamt): Enden an den Schienen bleiben dort.
 pub fn verschoben(h: &Halt, d: P, alle: &[Schiene]) -> Vec<P> {
+    let n = h.pts.len();
     let mut v: Vec<P> = h.pts.iter().map(|p| p.add(d)).collect();
     if let Some(s) = h.schienen[0] {
         binden(&mut v, s);
+    } else if let Some(q) = h.punkte[0] {
+        anbinden(&mut v, q, achse(h.pts[0], h.pts[1]));
     }
+    v.reverse();
     if let Some(s) = h.schienen[1] {
-        v.reverse();
         binden(&mut v, s);
-        v.reverse();
+    } else if let Some(q) = h.punkte[1] {
+        anbinden(&mut v, q, achse(h.pts[n - 1], h.pts[n - 2]));
     }
+    v.reverse();
     abgreifen(&v, alle)
 }
 
@@ -272,7 +331,7 @@ mod tests {
 
     #[test]
     fn markierung_verschoben_bleibt_an_schiene() {
-        let h = Halt { id: 1, pts: vec![p(80.0, 20.0), p(80.0, 150.0), p(60.0, 150.0)], schienen: [Some(L2), None] };
+        let h = Halt { id: 1, pts: vec![p(80.0, 20.0), p(80.0, 150.0), p(60.0, 150.0)], schienen: [Some(L2), None], ..Default::default() };
         // schräg nach rechts unten: senkrechtes Stück bleibt senkrecht, Anfang auf der Schiene
         let v = verschoben(&h, p(10.0, 30.0), &[L2]);
         assert_eq!(v, vec![p(90.0, 20.0), p(90.0, 180.0), p(70.0, 180.0)]);
@@ -283,7 +342,7 @@ mod tests {
 
     #[test]
     fn ueber_das_schienenende_hinaus() {
-        let h = Halt { id: 1, pts: vec![p(290.0, 20.0), p(290.0, 100.0)], schienen: [Some(L2), None] };
+        let h = Halt { id: 1, pts: vec![p(290.0, 20.0), p(290.0, 100.0)], schienen: [Some(L2), None], ..Default::default() };
         let v = verschoben(&h, p(30.0, 10.0), &[L2]);
         assert_eq!(v[0], p(300.0, 20.0));
         assert!(v.windows(2).all(|w| (w[0].x - w[1].x).abs() < EPS || (w[0].y - w[1].y).abs() < EPS), "{v:?}");

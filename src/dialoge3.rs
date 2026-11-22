@@ -43,7 +43,8 @@ pub enum Dlg3 {
 const DIRS: &[&str] = &["Links nach Rechts", "Rechts nach Links", "Oben nach Unten", "Unten nach Oben"];
 const BILD_ARTEN: &[&str] = &["Zentriert", "Eingepasst", "Gestreckt"];
 const KL_ALIGN: &[&str] = &["Links", "Mittig", "Rechts"];
-const EBENEN: &[&str] = &["1", "2", "3", "4"];
+/// Ebenen wie im Original „Nummer/Buchstabe“
+const EBENEN: &[&str] = &["1/A", "2/B", "3/C", "4/D"];
 
 fn num(s: &str) -> Option<f32> {
     s.trim().replace(',', ".").parse().ok()
@@ -371,16 +372,37 @@ impl App {
             ui.spacing_mut().item_spacing = Vec2::new(4.0, 5.0);
             match &mut d {
                 Dlg3::BusbarObj { sliste, sel, einsp, auto, unten, offset, tx, ty, px, py, laenge, .. } => {
+                    // Anzeige wie im Original „Name (Kürzel)“, z. B. „Schiene 1 (L1)“
+                    let anl = self.cur().and_then(|r| self.project.anlagen.get(r.anlage));
+                    let anzeige: Vec<String> = sliste
+                        .iter()
+                        .map(|k| match anl.and_then(|a| a.schienen.get(k)).map(|s| s.name.clone()).filter(|n| !n.is_empty() && n != k) {
+                            Some(n) => format!("{n} ({k})"),
+                            None => k.clone(),
+                        })
+                        .collect();
                     ui.horizontal(|ui| {
                         lbl(ui, 76.0, "S-Schiene");
-                        combo(ui, "sms", sliste, sel, 150.0);
+                        combo(ui, "sms", &anzeige, sel, 150.0);
                         // Knopf "Bearbeiten" (SammelS1NeuClick): Einstellungen der gewählten Schiene
                         let btn = egui::Button::image(crate::icons::image(crate::icons::Icon::EditSammelschiene, 20.0));
                         if ui.add(btn.min_size(Vec2::new(31.0, 24.0))).on_hover_text("Bearbeiten").clicked() {
                             rail_edit = sliste.get(*sel).cloned();
                         }
                     });
-                    ui.checkbox(einsp, RichText::new("Einspeisung").font(bold(13.0)));
+                    // Einspeisung ist eine Eigenschaft der Schiene (Knopf „Bearbeiten“); hier wie im Original nur die
+                    // Anzeige (Kreis, gefüllt = mit Einspeisung) der gewählten Schiene
+                    *einsp = sliste.get(*sel).and_then(|k| anl.and_then(|a| a.schienen.get(k))).is_some_and(|s| s.einspeisung);
+                    ui.horizontal(|ui| {
+                        ui.add_space(40.0);
+                        ui.label(RichText::new("Einspeisung").font(bold(13.0)));
+                        let (r, p) = ui.allocate_painter(Vec2::splat(16.0), egui::Sense::hover());
+                        let c = r.rect.center();
+                        p.circle_stroke(c, 6.0, egui::Stroke::new(1.5, egui::Color32::BLACK));
+                        if *einsp {
+                            p.circle_filled(c, 3.5, egui::Color32::BLACK);
+                        }
+                    });
                     ui.group(|ui| {
                         ui.label(RichText::new("Positionierung").font(bold(12.0)));
                         ui.horizontal(|ui| {
@@ -397,14 +419,16 @@ impl App {
                         ui.add_space(30.0);
                         ui.label("Y in mm");
                     });
-                    for (t, a, b) in [("Titelposition", tx, ty), ("Startpunkt", px, py)] {
+                    // mit „Auto“ legt das Programm Startpunkt und Länge fest (im Original dann gesperrt)
+                    let frei = !*auto;
+                    for (t, a, b, an) in [("Titelposition", tx, ty, true), ("Startpunkt", px, py, frei)] {
                         ui.horizontal(|ui| {
                             lbl(ui, 96.0, t);
-                            ui.add(egui::TextEdit::singleline(a).desired_width(70.0));
-                            ui.add(egui::TextEdit::singleline(b).desired_width(70.0));
+                            ui.add_enabled(an, egui::TextEdit::singleline(a).desired_width(70.0));
+                            ui.add_enabled(an, egui::TextEdit::singleline(b).desired_width(70.0));
                         });
                     }
-                    field(ui, 96.0, "Länge", laenge, 70.0);
+                    ui.add_enabled_ui(frei, |ui| field(ui, 96.0, "Länge", laenge, 70.0));
                 }
                 Dlg3::Schiene { name, set, pots, stifte, .. } => {
                     // Name = freier Name (SMS Byte 0), Kürzel = Schlüssel der Schiene (TIT, steht auf dem Blatt)
@@ -480,9 +504,18 @@ impl App {
                 }
                 Dlg3::Tab(t) => crate::tabelle::dialog_ui(ui, t),
                 Dlg3::Klemme { id, leisten, leiste, titel, gr_auto, align, tx, ty, nummer, auto, korr, position, posk, ebene, funktion, ziel_wechsel } => {
+                    // Anzeige wie im Original „Name (Titel)“, z. B. „Klemme 1 (X1)“; gewählt wird weiter der Titel
+                    let anl = self.cur().and_then(|r| self.project.anlagen.get(r.anlage));
+                    let anzeige: Vec<String> = leisten
+                        .iter()
+                        .map(|t| match anl.and_then(|a| a.klemmen.iter().find(|k| &k.name == t)) {
+                            Some(k) if !k.intern.is_empty() && k.intern != *t => format!("{} ({t})", k.intern),
+                            _ => t.clone(),
+                        })
+                        .collect();
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Klemmleiste");
-                        combo(ui, "kleiste", leisten, leiste, 170.0);
+                        combo(ui, "kleiste", &anzeige, leiste, 170.0);
                     });
                     ui.group(|ui| {
                         ui.label(RichText::new("Titel").font(bold(12.0)));
@@ -507,14 +540,15 @@ impl App {
                             ui.add_enabled(!*auto, egui::TextEdit::singleline(nummer).desired_width(50.0));
                             ui.checkbox(korr, "Korrektur");
                         });
+                        // „Automatisch“ sperrt Nummer, Position und Ebene (Original unter Wine, Runde 11)
                         ui.horizontal(|ui| {
                             lbl(ui, 60.0, "Position");
-                            ui.add(egui::TextEdit::singleline(position).desired_width(50.0));
+                            ui.add_enabled(!*auto, egui::TextEdit::singleline(position).desired_width(50.0));
                             ui.checkbox(posk, "Korrektur");
                         });
                         ui.horizontal(|ui| {
                             lbl(ui, 60.0, "Ebene");
-                            combo(ui, "kebene", &strs(EBENEN), ebene, 60.0);
+                            ui.add_enabled_ui(!*auto, |ui| combo(ui, "kebene", &strs(EBENEN), ebene, 60.0));
                         });
                     });
                     ui.group(|ui| {
@@ -635,7 +669,7 @@ impl App {
                             nrs.truncate(n);
                         }
                         lbl(ui, 60.0, "Ebenen");
-                        combo(ui, "kleb", &strs(EBENEN), ebenen, 50.0);
+                        combo(ui, "kleb", &strs(&["1", "2", "3", "4"]), ebenen, 50.0);
                     });
                     ui.label(RichText::new("Indexübersicht").font(bold(12.0)));
                     let mut rows: Vec<Vec<String>> = nrs.iter().map(|n| vec![n.clone()]).collect();
@@ -920,9 +954,8 @@ impl App {
         match d {
             Dlg3::BusbarObj { id, sliste, sel, einsp, auto, unten, offset, tx, ty, px, py, laenge } => {
                 let name = sliste.get(sel).cloned().unwrap_or_default();
-                if let Some(r) = r {
-                    self.project.anlagen[r.anlage].schienen.entry(name.clone()).or_default().einspeisung = einsp;
-                }
+                // Einspeisung wird im Schienen-Dialog („Bearbeiten“) geändert, hier nur angezeigt
+                let _ = einsp;
                 let off = num(&offset).unwrap_or(0.0);
                 let abstand = self.opt.sms_abstand;
                 let schriftfeld = self.project.title_h();

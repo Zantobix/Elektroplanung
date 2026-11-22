@@ -692,7 +692,9 @@ impl App {
                 }
             }
         }
-        best.map(|b| b.1)
+        // Klemmstelle = ein Anschluss: die Leitungsenden an ihrem Kreis (0,8 mm vor dem Mittelpunkt) fangen auf
+        // die Klemme selbst (Nutzer-Befund Runde 11: drei Fangpunkte je Klemme)
+        best.map(|b| crate::klemme_leitung::klemme_zu(sheet, b.1).unwrap_or(b.1))
     }
 
     pub fn with_sheet<R>(&mut self, f: impl FnOnce(&mut Sheet, &mut u64) -> R) -> Option<R> {
@@ -1466,7 +1468,10 @@ impl App {
 
     pub fn hit_top(&self, m: P, tol: f32) -> Option<u64> {
         let s = self.sheet()?;
-        s.objects.iter().rev().find(|o| self.selectable(o) && canvas::hit(o, m, tol, &self.lib)).map(|o| o.id)
+        let treffer = |o: &&Obj| self.selectable(o) && canvas::hit(o, m, tol, &self.lib);
+        // Klemmstelle vor den Leitungen, die an ihrem Kreis enden (Maustest Runde 11: Doppelklick und Kontextmenü
+        // an der Klemme trafen die Leitung)
+        s.objects.iter().rev().filter(|o| matches!(o.kind, Kind::Terminal { .. })).find(treffer).or_else(|| s.objects.iter().rev().find(treffer)).map(|o| o.id)
     }
 
     /// Lässt sich das Objekt markieren? Im Editor nur sichtbare; mit „Fixierung aktivieren“ keine fixierten

@@ -9,6 +9,21 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Klemmstellen und Sammelschienen (Nutzer-Befunde und Gegenprobe im Original):
+- Eine markierte und als Ganzes verschobene Leitung bleibt an Klemmstellen, Symbolanschlüssen und Leitungen hängen,
+  die nicht mitverschoben werden (bisher nur an Sammelschienen); das Endstück wird länger bzw. kürzer, ein
+  Querstück schließt an.
+- Eine Klemmstelle ist ein einziger Fangpunkt: Mitte und Leitungsenden an ihrem Kreis fangen auf die Klemme (bisher
+  drei Punkte). Neue Leitungen enden wie im Original am Kreis, 0,8 mm vor der Mitte.
+- Doppelklick und Kontextmenü an einer Klemmstelle treffen die Klemme, nicht die Leitung, die an ihr endet.
+- Eine gezeichnete Leitung, die ganz auf vorhandenen liegt (z. B. von der Schiene zu einer schon angeschlossenen
+  Klemme), entsteht nicht mehr; die Statuszeile meldet „Diese Verbindung besteht bereits“.
+- Klemmen-Dialog wie im Original: „Automatisch“ sperrt Nummer, Position und Ebene; Ebenen heißen „1/A“ bis „4/D“;
+  die Klemmleiste erscheint als „Name (Titel)“, z. B. „Klemme 1 (X1)“, die Werkzeugleiste zeigt den Namen.
+- Sammelschienen-Dialog wie im Original: S-Schiene als „Name (Kürzel)“; „Einspeisung“ nur als Anzeige (geändert
+  wird sie über „Bearbeiten“); mit „Auto“ sind Startpunkt und Länge gesperrt. Die Werte bleiben in mm mit Komma
+  (das Original zeigt hier 0,1 mm ohne Komma unter der Überschrift „in mm“).
+
 Kleinere Angleichungen an das Original:
 - Bauteilliste: Ein Symbol bzw. eine Klemmstelle kann wie im Original mehrere Bauteile führen. Die Liste zeigt
   alle, Ablegen hängt eine Zeile an, „Zeile löschen“ entfernt die gewählte; gespeichert wird je Bauteil ein
