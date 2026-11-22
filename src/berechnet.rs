@@ -284,8 +284,10 @@ pub fn folgeblaetter_anlegen(p: &mut Project, r: SheetRef) -> Result<usize, Stri
     for k in 1..=(noetig - vorhanden) {
         let sub = sub0 as usize + k;
         if sub > 255 || a.sheets.iter().any(|x| x.number == nr && x.subindex as usize == sub) {
-            let was = if art == 1 { "'s Inhaltsverzeichnis" } else { " die Liste" };
-            return Err(format!("Es kann kein Folgeblatt für{was} erstellt werden da die dafür\nbenötigte Seite: {nr}.{sub} schon vergeben ist!\n(Blattnummer: {nr}     Subindex: {sub})"));
+            // Wortlaut des Originals (Blatt1Blatt_AnlageChange 0x4a427e); für Listen sinngemäß
+            use crate::meldungen::{FB_INHALT, FB_VERGEBEN};
+            let kopf = if art == 1 { FB_INHALT.to_string() } else { FB_INHALT.replace("'s Inhaltsverzeichnis", " die Liste") };
+            return Err(format!("{kopf}{nr}.{sub}{FB_VERGEBEN}(Blattnummer: {nr}     Subindex: {sub})"));
         }
         let mut sh = Sheet::new(nr);
         sh.subindex = sub as u8;

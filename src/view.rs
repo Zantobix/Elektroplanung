@@ -252,9 +252,13 @@ impl App {
             (Tool::Table, Icon::Tabelle, "Neue Tabelle"),
             (Tool::Image, Icon::Bild, "Neues Bild"),
         ];
+        // im Symboleditor setzt „Neue Klemmstelle“ einen Anschluss: Hinweis „Neuer Kontakt“ wie im Original
+        // (0x47689c: Verbg.Hint im Symbolmodus)
+        let im_editor = self.sym_edit.is_some();
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             for (t, ic, hint) in tools {
+                let hint = if im_editor && t == Tool::Klemmstelle { crate::meldungen::SE_NEUER_KONTAKT } else { hint };
                 if tool_button(ui, ic, hint, true, self.tool == t && self.placing.is_none() && !self.zoom_tool).clicked() {
                     self.tool = t;
                     self.placing = None;
@@ -1364,6 +1368,8 @@ impl App {
         // Symbol aus der Bibliothek platzieren (Klick oder Ziehen aus dem Baum)
         if let Some(key) = self.placing.clone() {
             if inside && (pressed_l || (released_l && (dragging || self.lib_drag))) {
+                // schon im Projekt (gleiche Kennung): Projektsymbol, bei anderem Stand mit Rückfrage (bib_stand.rs)
+                let key = self.bibliothekssymbol_ablegen(key);
                 // Symbol mit Bildvarianten: erst das Variantenrad (Original: PaintBox1DragDrop)
                 let n = symbols::find(&self.lib, &key).map(crate::variantenrad::bilder).unwrap_or(0);
                 if n > 0 && self.opt.variantenrad {

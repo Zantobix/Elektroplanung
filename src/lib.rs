@@ -10,6 +10,7 @@ pub mod bauteilliste;
 pub mod bezeichner;
 pub mod berechnet;
 pub mod bib_gruppen;
+pub mod bib_stand;
 pub mod bildexport;
 pub mod blatt_tasten;
 pub mod blattnummer;

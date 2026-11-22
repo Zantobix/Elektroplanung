@@ -660,6 +660,10 @@ pub struct Project {
     pub tb_hoehe: f32,
     #[serde(default)]
     pub tb_absolut: bool,
+    /// Änderungsdatum (Delphi-Datum, SYM @104) aus der Bibliothek übernommener Projektsymbole je Kennung
+    /// (bib_stand.rs: Rückfrage „Das Symbol aus der Bibliothek ist älter/neuer …“ mit Ja)
+    #[serde(default)]
+    pub sym_geaendert: std::collections::BTreeMap<u64, f64>,
     /// Gelesene Originaldatei (.epr) – Grundlage für das Zurückschreiben
     #[serde(skip)]
     pub raw: Option<Box<crate::eprfile::EprFile>>,
@@ -740,6 +744,7 @@ impl Project {
             bilder: vec![],
             tb_hoehe: 0.0,
             tb_absolut: false,
+            sym_geaendert: Default::default(),
             raw: None,
         }
     }

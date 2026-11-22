@@ -977,7 +977,7 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
                         ui.label(bt(crate::meldungen::TA_ORIGINAL));
                         for k in 0..s.alt.len() {
                             // Kontextmenü wie TTextAbfrage: Alternativtext löschen
-                            ui.label(bt(&format!("{}{}", crate::meldungen::TA_WAHL, k + 1))).context_menu(|ui| {
+                            ui.label(bt(&crate::meldungen::wahl_kopf(k))).context_menu(|ui| {
                                 if ui.button("Zeile Löschen").clicked() {
                                     del = Some(k);
                                     ui.close();
