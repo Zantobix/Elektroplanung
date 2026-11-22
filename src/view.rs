@@ -1763,10 +1763,17 @@ impl App {
         }
         let (released_r, down_r) = ui.input(|i| (i.pointer.button_released(PointerButton::Secondary), i.pointer.button_down(PointerButton::Secondary)));
         let (mut los_ohne_kopie, mut kopiert) = (false, false);
+        // rechte Taste auf freier Fläche: vergrößerte Ansicht verschieben (rechts_ziehen.rs)
+        if down_r {
+            if let Some(h) = hover {
+                self.rechts_schieben(h, area);
+            }
+        }
         if released_r || !down_r {
             match self.rechts_los(m, h) {
                 crate::rechts_ziehen::Los::Menue => los_ohne_kopie = released_r,
-                crate::rechts_ziehen::Los::Kopie => kopiert = true,
+                // nach Kopie oder Verschieben kein Kontextmenü
+                crate::rechts_ziehen::Los::Kopie | crate::rechts_ziehen::Los::Verschoben => kopiert = true,
                 crate::rechts_ziehen::Los::Nichts => {}
             }
         }

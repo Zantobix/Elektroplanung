@@ -683,9 +683,10 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
             let set = set_ref.cloned().unwrap_or_default();
             let line_style = if set.stift > 0 { dc.project.stifte.get(set.stift).map(|s| s.style).unwrap_or(0) } else if *bs != 0 { *bs } else { style };
             styled_line(p, &sp(&[*a, b]), st, line_style, z);
-            if set.einspeisung {
-                p.rect_filled(Rect::from_center_size(xf.s(*a), Vec2::splat(1.2 * z)), 0.0, tc);
-            }
+            // „Einspeisung“ (SMS 0x38 ≠ 0) zeichnet das Original nicht als Quadrat am Anfang: In der Blattzeichnung
+            // (0x438b94, Zweig Sammelschiene) gibt es dort nur Kreise (Ellipse 0x548c94) – an den Abgriffen bei
+            // „Klemmen“ und für die Einspeisung nur bei „Klemmen“ auf dem Blatt, dessen Kennung in SMS +0x40 steht.
+            // Das frühere Quadrat des Nachbaus war erfunden und entfällt.
             let (xin, xout) = if set.quer { (xin.clone(), xout.clone()) } else { (String::new(), String::new()) };
             let (xin, xout) = (&xin, &xout);
             let pfeile = set.pfeile;

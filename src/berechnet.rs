@@ -56,8 +56,9 @@ pub fn blatt_pfad(s: &Sheet, x: f32) -> String {
 pub fn artikel_rows(p: &Project, a: &Anlage) -> Vec<Vec<String>> {
     let mut n: std::collections::BTreeMap<usize, usize> = Default::default();
     for o in a.sheets.iter().flat_map(|s| &s.objects) {
-        if let Some(i) = p.part_of.get(&o.id) {
-            *n.entry(*i).or_default() += 1;
+        // alle Bauteile der Bauteilliste des Objekts
+        for i in crate::bauteilliste::liste(p, o.id) {
+            *n.entry(i).or_default() += 1;
         }
     }
     let mut rows: Vec<Vec<String>> = n.into_iter().filter_map(|(i, c)| p.bauteile.get(i).map(|b| vec![c.to_string(), b.name.clone(), b.typ.clone(), b.firma.clone(), b.artikel.clone()])).collect();
@@ -81,8 +82,8 @@ pub fn stueckliste(p: &Project, a: &Anlage, zusatz: u8) -> (Vec<&'static str>, V
     let mut teile: std::collections::BTreeMap<usize, Vec<String>> = Default::default();
     for s in &a.sheets {
         for o in &s.objects {
-            if let Some(i) = p.part_of.get(&o.id).filter(|i| **i < p.bauteile.len()) {
-                teile.entry(*i).or_default().push(kennzeichen(&p.anlagen, a, s, o));
+            for i in crate::bauteilliste::liste(p, o.id).into_iter().filter(|i| *i < p.bauteile.len()) {
+                teile.entry(i).or_default().push(kennzeichen(&p.anlagen, a, s, o));
             }
         }
     }

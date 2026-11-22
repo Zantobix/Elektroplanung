@@ -1396,12 +1396,7 @@ impl App {
                 self.checkpoint();
                 let i = *i;
                 self.project.bauteile.remove(i);
-                self.project.part_of.retain(|_, v| *v != i);
-                for v in self.project.part_of.values_mut() {
-                    if *v > i {
-                        *v -= 1;
-                    }
-                }
+                crate::bauteilliste::bauteil_entfernt(&mut self.project, i);
             }
             ("Löschen", TAction::Platz(i)) => {
                 self.checkpoint();

@@ -636,6 +636,10 @@ pub struct Project {
     /// Bauteilzuordnung: Objekt-Id des Symbols → Index in `bauteile`
     #[serde(default)]
     pub part_of: std::collections::BTreeMap<u64, usize>,
+    /// Weitere Bauteile desselben Objekts nach dem ersten (`part_of`) – die Bauteilliste des Originals führt
+    /// beliebig viele (VSY/OBJ › IDL je Bauteil, bauteilliste.rs)
+    #[serde(default)]
+    pub weitere_bauteile: std::collections::BTreeMap<u64, Vec<usize>>,
     #[serde(default)]
     pub platzhalter: Vec<Platzhalter>,
     /// Standardschrift des Projekts (leer = Times New Roman), "Alter Klemmenplan", Datum des letzten Ausdrucks
@@ -727,6 +731,7 @@ impl Project {
             titleblock: vec![],
             bauteile: vec![],
             part_of: Default::default(),
+            weitere_bauteile: Default::default(),
             platzhalter: vec![],
             schrift: String::new(),
             alter_klemmenplan: false,

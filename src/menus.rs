@@ -183,7 +183,7 @@ impl App {
                 if ids.iter().any(|i| self.project.part_of.contains_key(i)) {
                     self.checkpoint();
                     ids.iter().for_each(|i| {
-                        self.project.part_of.remove(i);
+                        crate::bauteilliste::zuordnung_entfernen(&mut self.project, *i);
                     });
                     self.dirty = true;
                 }
