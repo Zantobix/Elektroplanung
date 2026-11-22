@@ -56,13 +56,6 @@ thread_local! {
     static PLAN: RefCell<Plan> = RefCell::new(Plan::default());
 }
 
-/// Jetzt als Delphi-Datum (Tage seit 30.12.1899) – Kennungen des Originals sind Erstellungszeitpunkte.
-fn delphi_now() -> f64 {
-    let base = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
-    let now = chrono::Local::now().naive_local();
-    (now - base).num_milliseconds() as f64 / 86_400_000.0
-}
-
 fn id_at(b: &Block, at: usize) -> u64 {
     b.data.get(at..at + 8).map(|d| u64::from_le_bytes(d.try_into().unwrap())).unwrap_or(0)
 }
@@ -92,11 +85,7 @@ fn jpeg_aus_datei(path: &str) -> Option<Vec<u8>> {
 /// und Schienen planen. `base` = Originaldatei bzw. Vorlage.
 pub fn vorbereiten(project: &Project, base: &EprFile) {
     let mut plan = Plan::default();
-    let mut stamp = delphi_now();
-    let mut next = || {
-        stamp += 1.0 / 86_400_000.0;
-        stamp.to_bits()
-    };
+    let next = crate::kennungen::neu;
     for (ai, a) in project.anlagen.iter().enumerate() {
         if a.raw.is_none() {
             plan.anlagen.insert(ai, next());
@@ -152,6 +141,9 @@ pub fn vorbereiten(project: &Project, base: &EprFile) {
 /// Kennung eines Objekts im Originalformat (OBJ Feld 0/1 bzw. VBG Feld 10/11): aus dem Originalblock oder die
 /// beim Speichern vergebene. 0 = keine.
 pub fn kennung(o: &Obj) -> u64 {
+    if let Some(k) = crate::kennungen::umbenannt(o) {
+        return k;
+    }
     if let Some(r) = o.raw.as_deref() {
         return if r.block.is("OBJ") {
             id_at(&r.block, 0)
@@ -367,9 +359,8 @@ pub fn nachfuehren(project: &Project, o: &Obj, b: &mut Block) {
             b.data[40..48].copy_from_slice(&kennung(o).to_le_bytes());
             b.set_i32(13, leitung_id(project, *leitung));
             bezeichnungen(b, bez);
-            verweis_enden(project, o, b);
-            // Knoten an Leitungen und Sammelschienen (knoten.rs)
-            crate::knoten::enden_nachfuehren(project, o, b, None);
+            // Anschlussart, Ziel und Anschluss beider Enden aus der Geometrie (vbg_enden.rs)
+            crate::vbg_enden::schreiben(project, o, b, None);
         }
     }
     if b.is("VSY") {
@@ -384,46 +375,6 @@ pub fn nachfuehren(project: &Project, o: &Obj, b: &mut Block) {
             crate::parameter::sync_vsy_kids(b, &ext.params, &ext.texts);
             // Eigentümer (OWR) neu, auch ein OWR der Vorlage entfernen
             crate::eigentuemer::owr_schreiben(project, b, ext.eigentuemer);
-        }
-    }
-}
-
-/// VBG-Feld der Kennung am Anfang (Feld 2/3, Anschlussnummer Feld 4) bzw. Ende (Feld 6/7, Anschluss Feld 8).
-pub const VBG_ENDEN: [usize; 2] = [2, 6];
-
-/// Leitungsenden an der Pfeilspitze eines Verweises: Kennung des Verweises (OBJ Feld 0/1) in VBG Feld 2/3 bzw.
-/// 6/7, Anschluss 0 in Feld 4 bzw. 8 – so verweisen die Verbindungen in W2 auf Klemmstellen und Sammelschienen
-/// (ebenfalls OBJ-Blöcke). Ein Ende, das einen Verweis dieses Blattes verlassen hat, verliert die Kennung.
-/// Ebenso Enden an Klemmstellen: die Leitung endet dort (wie alle 111 Klemmstellen in W2) am Kreis, 0,8 mm vom
-/// Mittelpunkt (klemme_leitung.rs).
-fn verweis_enden(project: &Project, o: &Obj, b: &mut Block) {
-    let Kind::Wire { pts, .. } = &o.kind else { return };
-    let Some(sheet) = project.find_obj(o.id).and_then(|(r, _)| project.sheet(r)) else { return };
-    let verweise: Vec<(P, u64, f32)> = sheet
-        .objects
-        .iter()
-        .filter_map(|v| match &v.kind {
-            Kind::Verweis { pos, .. } => Some((*pos, kennung(v), 0.05)),
-            Kind::Terminal { pos, .. } => Some((*pos, crate::klemmen::uid(v), crate::klemme_leitung::KLEMME_R + 0.05)),
-            _ => None,
-        })
-        .collect();
-    for (ende, feld) in [pts.first(), pts.last()].into_iter().zip(VBG_ENDEN) {
-        let Some(p) = ende else { continue };
-        let at = feld * 4;
-        if b.data.len() < at + 12 {
-            continue;
-        }
-        match verweise.iter().find(|(q, k, r)| *k != 0 && q.dist(*p) <= *r) {
-            Some((_, k, _)) => {
-                b.data[at..at + 8].copy_from_slice(&k.to_le_bytes());
-                b.set_i32(feld + 2, 0);
-            }
-            None if verweise.iter().any(|(_, k, _)| *k != 0 && *k == id_at(b, at)) => {
-                b.data[at..at + 8].fill(0);
-                b.set_i32(feld + 2, 0);
-            }
-            None => {}
         }
     }
 }
@@ -499,17 +450,14 @@ pub fn patch_more(project: &Project, o: &Obj, old: &Kind, b: &mut Block) {
         }
     }
     if b.is("VBG") {
-        if let (Kind::Wire { leitung, bez, pts, .. }, Kind::Wire { leitung: ol, bez: ob, pts: op, .. }) = (&o.kind, old) {
+        if let (Kind::Wire { leitung, bez, .. }, Kind::Wire { leitung: ol, bez: ob, pts: op, .. }) = (&o.kind, old) {
             if leitung != ol {
                 b.set_i32(13, leitung_id(project, *leitung));
             }
             if bez != ob {
                 bezeichnungen(b, bez);
             }
-            if (pts.first(), pts.last()) != (op.first(), op.last()) {
-                verweis_enden(project, o, b);
-            }
-            crate::knoten::enden_nachfuehren(project, o, b, Some(op));
+            crate::vbg_enden::schreiben(project, o, b, Some(op));
         }
     }
     // Eigentümer (OWR) nur bei Änderung, damit ein OWR auf ein nicht gefundenes Symbol erhalten bleibt

@@ -308,8 +308,8 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 ## Nachtrag 21.11.2026 (3) – Vormarkierung, Zeiger, Textmaße, Leitungen an Verweisen
 - VBG Feld 2/3 (Anfang) und 6/7 (Ende) = Kennung des verbundenen Objekts: VSY Byte 96 bei Symbolen, OBJ Feld 0/1
   bei Klemmstellen und Sammelschienen; Feld 4 bzw. 8 = Anschlussnummer (Klemmstelle 0), −1 = Ende auf einer anderen
-  Leitung (W2: 364 Verbindungen an OBJ-Blöcken). In W2 hängt keine Leitung an einem Verweis; der Nachbau schreibt
-  für Enden an der Pfeilspitze eines Verweises dessen OBJ-Kennung und Anschluss 0 (`epr_neu::verweis_enden`).
+  Leitung (W2: 364 Verbindungen an OBJ-Blöcken). In W2 hängt keine Leitung an einem Verweis; Enden an der
+  Pfeilspitze eines Verweises: Art 6, OBJ-Kennung, Anschluss 0 (siehe „Leitungsenden“ unten, `vbg_enden.rs`).
 - Verweis drehen: nur die Richtung (Feld 14) ändert sich, der Text bleibt an seiner Stelle (Feld 2/3 relativ zur
   Pfeilspitze, die beim Drehen stehen bleibt).
 - Symbol vergrößern (VSY Feld 19): Titel (10/11) und Wert (13/14) bleiben auf dem Blatt stehen, ihr Versatz zur
@@ -382,3 +382,31 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   Zielleitung; kein Anfang der Art 3.
 - Brücken an Kreuzungen: das Original zeichnet keine (kein Arc-Aufruf im Programm, nur Ellipse/PolyBezier;
   Bildschirmfoto docs/reference/original_main.png: kreuzende Leiter ohne Bogen und ohne Punkt).
+
+## Leitungsenden und Kennungen (src/vbg_enden.rs, src/kennungen.rs, 22.11.2026, Maus-Befund M21)
+- Anschlussart beim Zeichnen (Dekompilat MouseDown um 0x41d0xx für den Anfang, MouseUp um 0x40a9xx für das Ende):
+  Treffer Symbolanschluss → Art 1, Ziel = Symbol +0x60 (VSY Byte 96), Anschluss = Anschlusselement +0x10
+  (**Feld 4 des Elements Typ 7** in SYM › GRD › GRS, nicht der Index: „SPD“ 1, 2, 5, 6, 7). Treffer OBJ → je nach
+  OBJ Byte 0x14: 1 Sammelschiene → Art 2, 2 Verweis → Art 6, sonst (Klemmstelle) Art 5; Ziel = OBJ-Kennung;
+  Anschluss am Anfang 0, am Ende 1, wenn ein Unterelement getroffen ist (+0x960 ≠ 0), sonst 0. Beim Ende an einer
+  Klemmstelle zählt das Original einen Laufzeitzähler der Klemmleiste hoch (KLM im Speicher +100, liegt hinter den
+  80 gespeicherten Byte – nicht in der Datei).
+- Prüfung an W2 (tests/vbg_enden_w2.rs): alle 1754 Enden aus der Geometrie neu bestimmt, 1751 gleich. Regeln:
+  Symbolanschluss genau getroffen; sonst Sammelschiene (Anschluss 1 nur am Ende der Verbindung, wenn es am Ende der
+  Schiene liegt – 22 Fälle, alle waagerecht einlaufend, dort ohne Knotenpunkt); sonst Klemmstelle bis 0,85 mm;
+  sonst Inneres einer anderen Leitung (Art 3); sonst nächster Symbolanschluss bis 0,85 mm (Verteilerbox: Leitungen
+  enden 0,8 mm vor dem Anschluss wie an Klemmstellen); sonst Verweisspitze. Anschlusslage: Element Feld 13 (0,1 mm)
+  verschiebt den Anschluss je Option waagerecht (Lage + Feld 13 × Option; „Leistungskontakt“ Option 2: −7/0/+7 mm,
+  „Sicherung“). Der Nachbau zeichnet diese Verschiebung bei Symbolen noch nicht (offen).
+- Abweichungen in W2: eine Leitung endet 9 mm hinter der (später gekürzten) Schiene und trägt sie weiter als Ziel;
+  zwei Verbindungen aus nur einem Punkt im Innern einer Schiene tragen am Ende Anschluss 1. Das Original prüft
+  gespeicherte Enden nicht nach; der Nachbau lässt ein unbewegtes Ende stehen, solange sein Ziel ein unverändertes
+  Objekt der passenden Art ist, alle anderen folgen der Geometrie.
+- Bytes 1–3 und Feld 1 bzw. Bytes 0x15–0x17 des VBG sind ungenutzt (in W2 Speicherreste) und bleiben unverändert.
+- Kennungen: eine streng steigende Folge (Delphi-Zeitstempel, je 1 ms) für alle neuen OBJ, VBG, VSY, SMS, SYM und
+  ANL eines Speichervorgangs, ohne die in Grundlage und Projekt belegten. Vorher vergaben epr_neu, klemmen und
+  epr_write je „jetzt + n ms“ – Klemmstelle und erstes Teilstück der Leitung bekamen dieselbe Kennung. Doppelte
+  Kennungen geladener Dateien ersetzt das Speichern (Verbindung vor Symbol vor OBJ).
+- Klemmstelle im Vergleich mit W2: OBJ (Feld 4 = 0x2FFFF, 8 = KLM-Kennung, 9/10 Nummer/Position, Byte 0x2C Etage,
+  0x2D Schalter, TIT „%O%B.%C“), KLM (Feld 13 Kennung, 18/19 nächste Nummer), KFO (Klemmstelle, Blatt, Nummer,
+  Position) und Klemmplan-Blatt (BLT Feld 32 ab Bit 8 = KLM-Kennung) entsprechen dem Aufbau in W2.

@@ -224,24 +224,17 @@ thread_local! {
     static UIDS: std::cell::RefCell<HashMap<u64, u64>> = Default::default();
 }
 
-/// Jetzt als Delphi-Datum (Tage seit 30.12.1899).
-fn delphi_now() -> f64 {
-    let base = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
-    (chrono::Local::now().naive_local() - base).num_milliseconds() as f64 / 86_400_000.0
-}
-
 /// OBJ-Kennung einer Klemmstelle: aus dem Originalblock, sonst einmalig neu vergeben (Zeitstempel).
 pub fn uid(o: &Obj) -> u64 {
+    if let Some(k) = crate::kennungen::umbenannt(o) {
+        return k;
+    }
     if let Some(r) = o.raw.as_deref() {
         if let Some(b) = r.block.data.get(0..8) {
             return u64::from_le_bytes(b.try_into().unwrap());
         }
     }
-    UIDS.with(|m| {
-        let mut m = m.borrow_mut();
-        let n = m.len() as f64;
-        *m.entry(o.id).or_insert_with(|| (delphi_now() + (n + 1.0) / 86_400_000.0).to_bits())
-    })
+    UIDS.with(|m| *m.borrow_mut().entry(o.id).or_insert_with(crate::kennungen::neu))
 }
 
 /// Kennung eines Blattes (BLT Byte 72) – aus dem Original, sonst wie `epr_write` sie für neue Blätter vergibt.

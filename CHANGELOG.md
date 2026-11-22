@@ -9,6 +9,18 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Leitungsenden wie im Original (Maus-Befund M21, Klemmplan im Original leer):
+- Beim Speichern bestimmt der Nachbau Art, Ziel und Anschluss jedes Endes neuer und geänderter Verbindungen aus der
+  Geometrie: Symbolanschluss (Art 1, VSY-Kennung, Anschlussnummer aus Feld 4 des Anschlusselements, auch bei
+  mehrpoligen Symbolen mit Versatz je Option), Sammelschiene (Art 2), Leitung (Art 3), Klemmstelle (Art 5), Verweis
+  (Art 6); freie Enden Art 0. Geprüft an allen 1754 Enden in W2 (1751 gleich, 3 begründete Abweichungen)
+- Vom Nachbau früher geschriebene Dateien mit Enden ohne Ziel werden beim Speichern berichtigt; unveränderte
+  Verbindungen aus Originaldateien bleiben byteidentisch
+- Kennungen neuer Objekte (OBJ, VBG, VSY, SMS, SYM) kommen aus einer gemeinsamen Folge und sind eindeutig; die
+  Klemmstelle und das erste Leitungsteilstück trugen vorher dieselbe Kennung. Doppelte Kennungen in geladenen
+  Dateien werden beim Speichern ersetzt
+- Neu geschriebene Projektsymbole tragen Anschlussnummern (Element Feld 4)
+
 Laufzeittexte wie im Original (Verhaltensmetrik M5):
 - Speichern über eine temporäre Datei im Zielordner wie das Original; Meldungen „Die Temporäre Datendatei: … kann
   nicht in den gewollten Dateinamen geändert werden!“, „Fehler in den gespeicherten Daten“, „Fehler beim abspeichern
