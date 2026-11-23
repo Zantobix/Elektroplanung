@@ -1092,6 +1092,17 @@ impl App {
                 }
             }
         }
+        // Hilfslinien an den Anschlüssen gezogener Symbole (hilfslinien.rs, nach QElectroTech)
+        if self.opt.hilfslinien && matches!(self.drag, Drag::Move { moved: true, .. }) {
+            for l in crate::hilfslinien::linien(sheet, &self.lib, &self.selection) {
+                let farbe = match l.art {
+                    crate::hilfslinien::Art::Quer => Color32::from_gray(150),
+                    crate::hilfslinien::Art::Flucht => Color32::from_rgb(0, 0, 139),
+                    crate::hilfslinien::Art::Treffer => Color32::from_rgb(0, 120, 0),
+                };
+                clip.line_segment([xf.s(l.a), xf.s(l.b)], Stroke::new(1.0, farbe));
+            }
+        }
         if let Some(hp) = hover {
             if area.contains(hp) && !self.zoom_tool && self.ring.is_none() {
                 self.draw_snap_points(&clip, xf, xf.m(hp));

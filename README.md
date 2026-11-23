@@ -213,6 +213,9 @@ nicht. Gemessen werden stattdessen:
   - Suche nach neuer Version: Hilfe › Nach neuer Version suchen und (abschaltbar unter Optionen ›
     Programmverhalten) einmal beim Start; fragt mit dem `curl` des Systems das neueste Release auf GitHub ab und zeigt
     bei einer neueren Version einen Hinweis mit Link, lädt aber nichts herunter (`src/update_pruefung.rs`).
+  - Hilfslinien beim Verschieben (nach QElectroTech): graue Linie quer durch jeden Anschluss des gezogenen Symbols,
+    an freien Anschlüssen die Flucht in Anschlussrichtung (blau), grün bis zu einem freien Gegenanschluss in Flucht
+    (`src/hilfslinien.rs`, abschaltbar unter Optionen › Programmverhalten).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).

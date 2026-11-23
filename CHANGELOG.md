@@ -17,6 +17,8 @@ erhält der Abschnitt deren Nummer.
 - Hilfe › Nach neuer Version suchen; beim Start sucht das Programm einmal im Hintergrund nach einem neueren
   Release auf GitHub und zeigt dann einen Hinweis mit Link (Optionen › Programmverhalten, abschaltbar; es wird nichts
   heruntergeladen).
+- Hilfslinien beim Verschieben von Symbolen (nach QElectroTech): graue Linie quer durch jeden Anschluss, an freien
+  Anschlüssen die Flucht in Anschlussrichtung, grün bis zu einem freien Gegenanschluss (abschaltbar).
 - Leitungen: Eine gerade Leitung bleibt gerade, wenn ein Symbol entlang ihr verschoben wird (vorher U-Umweg bzw.
   Haken nach hin und zurück); die Strompfadausrichtung rundet auf 0,1 mm wie die Datei.
 
