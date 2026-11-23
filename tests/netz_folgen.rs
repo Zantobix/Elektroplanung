@@ -389,3 +389,29 @@ fn rueckkehr_behaelt_neue_leitung() {
     geste(&mut app, lampe, &[p(-35.0, 0.0)]);
     assert!(leitungen(&app).iter().any(|(id, _)| *id == 999), "neue Leitung verschwand bei der Rückkehr");
 }
+
+/// Nach QElectroTech `autoBreakConductors`: ein freies Symbol auf eine Leitung verschoben wird eingebunden.
+#[test]
+fn verschobenes_symbol_wird_in_leitung_eingebunden() {
+    let mut app = app_mit(vec![wire(1, &[(105.0, 45.0), (105.0, 185.0)]), schliesser(2, 155.0, 105.0)]);
+    app.lib = elektroplanung::symbols::builtin();
+    app.selection = vec![2];
+    app.checkpoint();
+    app.netz_merken();
+    app.netz_verschieben(&[2], p(-50.0, 0.0));
+    app.drag = elektroplanung::app::Drag::Move { start: p(155.0, 105.0), applied: p(-50.0, 0.0), moved: true };
+    app.verschoben_einbinden();
+    let mut w: Vec<Vec<P>> = app.sheet().unwrap().objects.iter().filter_map(|o| match &o.kind { Kind::Wire { pts, .. } => Some(pts.clone()), _ => None }).collect();
+    w.sort_by(|a, b| a[0].y.total_cmp(&b[0].y));
+    assert_eq!(w, vec![vec![p(105.0, 45.0), p(105.0, 98.0)], vec![p(105.0, 112.0), p(105.0, 185.0)]]);
+    // ausgeschaltet: bleibt liegen
+    let mut app = app_mit(vec![wire(1, &[(105.0, 45.0), (105.0, 185.0)]), schliesser(2, 155.0, 105.0)]);
+    app.lib = elektroplanung::symbols::builtin();
+    app.opt.einbinden_beim_verschieben = false;
+    app.selection = vec![2];
+    app.netz_merken();
+    app.netz_verschieben(&[2], p(-50.0, 0.0));
+    app.drag = elektroplanung::app::Drag::Move { start: p(155.0, 105.0), applied: p(-50.0, 0.0), moved: true };
+    app.verschoben_einbinden();
+    assert_eq!(pts(&app, 1), vec![p(105.0, 45.0), p(105.0, 185.0)]);
+}

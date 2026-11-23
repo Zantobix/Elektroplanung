@@ -1716,6 +1716,8 @@ impl App {
             // Zustände, die über das Loslassen hinaus bestehen (Kurve zwischen den Klicks, Leitung im Klickbetrieb)
             let mut bleibt = false;
             // übereinanderliegende Leitungen vereinigen (Teilstück/Knick gezogen, verschoben; leitung_vereinigen.rs)
+            // verschobenes Symbol auf einer Leitung abgelegt: einbinden (symbol_in_leitung.rs, nach QElectroTech)
+            self.verschoben_einbinden();
             self.nach_ziehen_vereinigen();
             match self.drag.clone() {
                 Drag::Rubber { start } => {

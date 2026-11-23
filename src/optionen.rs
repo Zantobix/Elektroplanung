@@ -39,6 +39,9 @@ pub struct Optionen {
     pub update_pruefen: bool,
     /// Hilfslinien an den Anschlüssen beim Verschieben von Symbolen (Nachbau-Erweiterung, `hilfslinien.rs`)
     pub hilfslinien: bool,
+    /// ein verschobenes Symbol ohne Leitungen, das auf eine Leitung abgelegt wird, in sie einbinden (Nachbau-
+    /// Erweiterung nach QElectroTech, `symbol_in_leitung.rs`)
+    pub einbinden_beim_verschieben: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
     pub sym_hoehe: f32,
@@ -102,6 +105,7 @@ impl Default for Optionen {
             brueckenboegen: true,
             update_pruefen: true,
             hilfslinien: true,
+            einbinden_beim_verschieben: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
             blatt_farbe: [238, 221, 221],
@@ -322,6 +326,7 @@ impl App {
                                     mark(ui, &mut o.variantenrad, "Variantenrad beim Platzieren");
                                     mark(ui, &mut o.brueckenboegen, "Brückenbögen an Kreuzungen");
                                     mark(ui, &mut o.hilfslinien, "Hilfslinien beim Verschieben");
+                                    mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
                                 });
                                 egui::Frame::group(ui.style()).show(ui, |ui| {

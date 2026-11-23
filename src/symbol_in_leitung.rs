@@ -108,3 +108,30 @@ mod tests {
         assert!(durchquerungen(&blatt(vec![P::new(12.0, 0.0), P::new(12.0, 10.0)]), mn, mx).is_empty());
     }
 }
+
+impl crate::app::App {
+    /// Nach QElectroTech `autoBreakConductors` (bewusste Erweiterung, Option „Verschobenes Symbol in Leitung
+    /// einbinden“): wird ein einzelnes Symbol ohne angeschlossene Leitungen so abgelegt, dass seine Anschlüsse auf
+    /// einem Leitungsstück liegen, wird die Leitung wie beim Setzen aufgetrennt und über das Symbol geführt
+    /// (gleicher Rückgängig-Schritt wie das Verschieben).
+    pub fn verschoben_einbinden(&mut self) {
+        if !self.opt.einbinden_beim_verschieben || !matches!(self.drag, crate::app::Drag::Move { moved: true, .. }) || self.selection.len() != 1 {
+            return;
+        }
+        let Some(s) = self.sheet() else { return };
+        let Some(o) = s.objects.iter().find(|o| o.id == self.selection[0] && matches!(o.kind, Kind::Symbol { .. })) else { return };
+        let pins = crate::canvas::obj_pins(o, &self.lib);
+        if pins.len() < 2 {
+            return;
+        }
+        let frei = |q: &P| {
+            !s.objects.iter().any(|w| match &w.kind {
+                Kind::Wire { pts, .. } if pts.len() >= 2 => [pts[0], pts[pts.len() - 1]].iter().any(|e| e.dist(*q) <= crate::mitziehen::PIN_TOL),
+                _ => false,
+            })
+        };
+        if pins.iter().all(frei) {
+            self.insert_into_wire(&pins);
+        }
+    }
+}
