@@ -316,15 +316,30 @@ impl crate::app::App {
         // läge ein Teilstück auf einer vorhandenen Leitung oder Schiene (Maustest Runde 11: W2 erweitert, die neue
         // Leitung lief senkrecht auf der Leitung von -E7.6 zum Abgriff), die andere Winkelführung nehmen, wenn sie
         // frei ist und kein Symbol durchquert; im Klickbetrieb bleiben die gesetzten Ecken
-        let w = if !f.klickbetrieb && f.bahn.is_empty() && ueberlappt(s, &w) {
+        // Nachzeichnen 24.11.2026: ebenso, wenn der Weg über einen fremden Anschluss läuft; die Ersatzwege dürfen
+        // das auch nicht, und neben den beiden Winkeln gibt es Z-Wege auf anderen Höhen (nächstgelegene zuerst) –
+        // vorher lief eine Leitung in den Nachbarpol eines LS waagerecht über dessen ersten Pol
+        let am_anschluss = anschluss_richtung(s, &self.lib, ende).is_some() || liegt_auf_leitung(s, ende);
+        let w = if !f.klickbetrieb && f.bahn.is_empty() && (ueberlappt(s, &w) || am_anschluss && ueber_fremdem_anschluss(s, &self.lib, &w)) {
             let hind: Vec<_> = crate::leitung_hindernis::umrisse(s, &self.lib).into_iter().map(|u| u.r).collect();
             let hind = crate::leitung_hindernis::wirksam(&hind, f.start(), ende);
             let (a, e) = (f.start(), ende);
             let (da, db) = (anschluss_richtung(s, &self.lib, a), anschluss_richtung(s, &self.lib, e));
-            [vec![a, P::new(a.x, e.y), e], vec![a, P::new(e.x, a.y), e]]
-                .into_iter()
+            // Ende auf einer Leitung/Schiene: senkrecht darauf zulaufen (wie im Rohweg)
+            let db = db.or_else(|| richtung_auf_leitung(s, e, f.bahn.last().copied().unwrap_or(a)));
+            let mut kand = vec![vec![a, P::new(a.x, e.y), e], vec![a, P::new(e.x, a.y), e]];
+            kand.extend(z_wege(a, da, e, db, self.stich_frei(s, a, e), self.raster(), &w));
+            // längere Stiche: endet der Stich auf einer fremden Leitung (Nachzeichnen 24.11.2026: PE-Pin nach oben,
+            // Stich genau auf der L-Leitung über der Anschlussreihe – PE und L wurden verbunden)
+            kand.extend((2..=4).map(|k| self.leitungsweg_roh_mit(f, ende, self.stich() * k as f32)));
+            kand.into_iter()
                 .map(crate::leitung_fuehrung::bereinigen)
-                .find(|c| !ueberlappt(s, c) && crate::leitung_hindernis::kreuzungen(c, &hind) == 0 && !laeuft_hinein(c, da, db))
+                .find(|c| {
+                    !ueberlappt(s, c)
+                        && crate::leitung_hindernis::kreuzungen(c, &hind) == 0
+                        && !laeuft_hinein(c, da, db)
+                        && !ueber_fremdem_anschluss(s, &self.lib, c)
+                })
                 .unwrap_or(w)
         } else {
             w
@@ -336,6 +351,49 @@ impl crate::app::App {
     }
 
     fn leitungsweg_roh(&self, f: &crate::leitung_fuehrung::Fuehrung, ende: P) -> Vec<P> {
+        // Stich so lang, dass sein Ende nicht auf (oder dicht neben) einer fremden Leitung liegt (Nachzeichnen
+        // 24.11.2026: PE-Pin nach oben, die L-Leitung lief genau einen Stich über der Anschlussreihe – der Weg
+        // begann auf ihr und wurde mit ihr verbunden)
+        let stich = self.sheet().map(|s| self.stich_frei(s, f.start(), ende)).unwrap_or_else(|| self.stich());
+        self.leitungsweg_roh_mit(f, ende, stich)
+    }
+
+    /// Kleinste Stichlänge ab `stich()` (in Rasterschritten, höchstens 20), bei der die Stichenden am Anfang `a` und
+    /// am Ende `e` mindestens 1,5 mm von jeder Leitung und Schiene entfernt sind, die nicht durch diesen Punkt bzw.
+    /// den Anschluss selbst läuft.
+    pub fn stich_frei(&self, s: &Sheet, a: P, e: P) -> f32 {
+        let basis = self.stich();
+        let schritt = self.raster().max(0.5);
+        let (da, db) = (anschluss_richtung(s, &self.lib, a), anschluss_richtung(s, &self.lib, e));
+        let mut strecken: Vec<(P, P)> = vec![];
+        for o in &s.objects {
+            match &o.kind {
+                Kind::Wire { pts, .. } => strecken.extend(pts.windows(2).map(|w| (w[0], w[1]))),
+                Kind::Busbar { a, x2, .. } => strecken.push((*a, P::new(*x2, a.y))),
+                _ => {}
+            }
+        }
+        let abstand = |q: P, u: P, v: P| {
+            let (x, y) = (q.x.clamp(u.x.min(v.x), u.x.max(v.x)), q.y.clamp(u.y.min(v.y), u.y.max(v.y)));
+            q.dist(P::new(x, y))
+        };
+        let frei = |p: P, d: Option<P>, l: f32| {
+            let Some(d) = d else { return true };
+            let q = P::new(p.x + d.x * l, p.y + d.y * l);
+            strecken.iter().filter(|(u, v)| abstand(p, *u, *v) > 0.05).all(|(u, v)| abstand(q, *u, *v) >= 1.5)
+        };
+        let mut l = basis;
+        for _ in 0..20 {
+            if frei(a, da, l) && frei(e, db, l) {
+                return l;
+            }
+            l += schritt;
+        }
+        basis
+    }
+
+    /// Wie `leitungsweg_roh` mit der Stichlänge `stich`.
+    fn leitungsweg_roh_mit(&self, f: &crate::leitung_fuehrung::Fuehrung, ende: P, stich: f32) -> Vec<P> {
         let weg = f.weg(ende);
         let Some(sheet) = self.sheet() else { return weg };
         let da = anschluss_richtung(sheet, &self.lib, f.start());
@@ -347,12 +405,12 @@ impl crate::app::App {
         let umgehen = |w: &[P], da: Option<P>| crate::leitung_hindernis::umgehen(w, da, db, &hind, self.raster(), true);
         // Ziehen vom Anschluss: stetige Führung mit Hysterese (leitung_zug.rs)
         if !f.klickbetrieb && f.schiene.is_none() {
-            return umgehen(&f.zugweg(ende, da, db, self.raster() / 2.0), da);
+            return umgehen(&f.zugweg(ende, da, db, stich), da);
         }
         // im Klickbetrieb bleiben die gesetzten Eckpunkte (Anfang + Ecken = pts.len() - 1 Teilstücke davor)
         let frei_ab = if f.klickbetrieb { f.pts.len() - 1 } else { 0 };
         // Stich ein halbes Raster (Original unter Wine: deutlich kürzer als ein Raster; genaue Länge offen)
-        let w = wegfuehrung(weg, frei_ab, da, db, self.raster() / 2.0);
+        let w = wegfuehrung(weg, frei_ab, da, db, stich);
         if frei_ab == 0 {
             return umgehen(&w, da);
         }
@@ -484,4 +542,91 @@ mod tests {
         assert_eq!(richtung_am_umriss(p(10.0, 20.0), p(0.0, 0.0), p(10.0, 20.0), 0.2), UNTEN);
         assert_eq!(richtung_am_umriss(p(5.0, 10.0), p(0.0, 0.0), p(10.0, 20.0), 0.2), None);
     }
+}
+
+/// Liegt ein Anschluss eines Symbols (außer Anfang und Ende des Weges) auf dem Weg `w`?
+pub fn ueber_fremdem_anschluss(sheet: &Sheet, lib: &[SymDef], w: &[P]) -> bool {
+    let (Some(&a), Some(&e)) = (w.first(), w.last()) else { return false };
+    let auf = |q: P, u: P, v: P| {
+        let t = 0.05;
+        q.x >= u.x.min(v.x) - t && q.x <= u.x.max(v.x) + t && q.y >= u.y.min(v.y) - t && q.y <= u.y.max(v.y) + t
+    };
+    sheet
+        .objects
+        .iter()
+        .filter(|o| matches!(o.kind, Kind::Symbol { .. }))
+        .flat_map(|o| canvas::obj_pins(o, lib))
+        .filter(|q| q.dist(a) > 0.05 && q.dist(e) > 0.05)
+        .any(|q| w.windows(2).any(|s| auf(q, s[0], s[1])))
+}
+
+/// Z-Wege von `a` nach `e` mit Stichen in Anschlussrichtung und dem Querstück auf verschiedenen Höhen (bei
+/// senkrechten Anschlüssen) bzw. Fluchten (bei waagerechten) zwischen den Stichen, im Abstand max(Raster, Stich);
+/// die dem längsten Querstück von `bisher` nächstgelegenen zuerst.
+fn z_wege(a: P, da: Option<P>, e: P, db: Option<P>, stich: f32, raster: f32, bisher: &[P]) -> Vec<Vec<P>> {
+    let senk = |d: Option<P>| d.map(|d| d.y.abs() > 0.5).unwrap_or(true);
+    let waag = |d: Option<P>| d.map(|d| d.x.abs() > 0.5).unwrap_or(true);
+    let st = |p: P, d: Option<P>| d.map(|d| P::new(p.x + d.x * stich, p.y + d.y * stich)).unwrap_or(p);
+    let (sa, se) = (st(a, da), st(e, db));
+    let schritt = raster.max(stich).max(0.5);
+    let mut out = vec![];
+    for waagerechtes_querstueck in [true, false] {
+        if waagerechtes_querstueck && !(senk(da) && senk(db)) || !waagerechtes_querstueck && !(waag(da) && waag(db)) {
+            continue;
+        }
+        let quer = |s: &[P]| if waagerechtes_querstueck { (s[0].y - s[1].y).abs() < 0.01 } else { (s[0].x - s[1].x).abs() < 0.01 };
+        let (u0, u1) = if waagerechtes_querstueck { (sa.y, se.y) } else { (sa.x, se.x) };
+        let bezug = bisher
+            .windows(2)
+            .filter(|s| quer(s))
+            .max_by(|s, t| s[0].dist(s[1]).total_cmp(&t[0].dist(t[1])))
+            .map(|s| if waagerechtes_querstueck { s[0].y } else { s[0].x })
+            .unwrap_or((u0 + u1) / 2.0);
+        let (lo, hi) = (u0.min(u1), u0.max(u1));
+        let mut stufen = vec![];
+        let mut u = hi;
+        while u >= lo - 0.01 && stufen.len() < 200 {
+            stufen.push(u);
+            u -= schritt;
+        }
+        stufen.sort_by(|x, y| (x - bezug).abs().total_cmp(&(y - bezug).abs()));
+        for u in stufen {
+            out.push(if waagerechtes_querstueck {
+                vec![a, sa, P::new(sa.x, u), P::new(se.x, u), se, e]
+            } else {
+                vec![a, sa, P::new(u, sa.y), P::new(u, se.y), se, e]
+            });
+        }
+    }
+    // U-Umwege seitlich um das eigene bzw. ein fremdes Symbol (beide Anschlüsse senkrecht bzw. beide waagerecht):
+    // vom Stich quer bis zur Flucht u, dort entlang bis zur Höhe des Zielstichs, dann zum Ziel (Nachzeichnen
+    // 24.11.2026: PE-Pin oben, Schiene unten – rechts versperrte die Nachbarsteckdose, links war frei)
+    let mut seitlich = vec![];
+    for k in 1..=30 {
+        for vz in [-1.0f32, 1.0] {
+            let d = vz * k as f32 * schritt;
+            if senk(da) && senk(db) {
+                let u = sa.x + d;
+                seitlich.push(vec![a, sa, P::new(u, sa.y), P::new(u, se.y), se, e]);
+            } else if waag(da) && waag(db) {
+                let u = sa.y + d;
+                seitlich.push(vec![a, sa, P::new(sa.x, u), P::new(se.x, u), se, e]);
+            }
+        }
+    }
+    out.extend(seitlich);
+    out
+}
+
+/// Liegt `q` auf einer Leitung oder Sammelschiene (Ende einer gezogenen Leitung, die dort anschließt)?
+pub fn liegt_auf_leitung(sheet: &Sheet, q: P) -> bool {
+    let auf = |u: P, v: P| {
+        let t = 0.05;
+        q.x >= u.x.min(v.x) - t && q.x <= u.x.max(v.x) + t && q.y >= u.y.min(v.y) - t && q.y <= u.y.max(v.y) + t
+    };
+    sheet.objects.iter().any(|o| match &o.kind {
+        Kind::Wire { pts, .. } => pts.windows(2).any(|w| auf(w[0], w[1])),
+        Kind::Busbar { a, x2, .. } => auf(*a, P::new(*x2, a.y)),
+        _ => false,
+    })
 }

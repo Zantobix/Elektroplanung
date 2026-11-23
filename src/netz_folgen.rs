@@ -792,7 +792,7 @@ impl crate::app::App {
         }
         let vorher = std::mem::take(&mut self.netz_vorher);
         let lib = self.lib.clone();
-        let stich = self.raster() / 2.0;
+        let stich = self.stich();
         let fix_active = self.fix_active;
         let (fang, no_snap, ursprung) = (self.fang(), self.no_snap, self.raster_ursprung());
         let rund = move |p: P| if fang > 0.0 && !no_snap { crate::raster::fang(p, fang, ursprung) } else { p };

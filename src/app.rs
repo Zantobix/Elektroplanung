@@ -606,6 +606,18 @@ impl App {
         RASTER[self.raster_idx.min(RASTER.len() - 1)].1
     }
 
+    /// Stichlänge an Anschlüssen beim Führen von Leitungen: ein halbes Raster, bei feinem Raster (unter 5 mm) aber
+    /// mindestens 2,5 mm und ein Vielfaches des Rasters (Nachzeichnen 24.11.2026: bei Raster 1 mm entstanden
+    /// 0,5-mm-Endstücke, und eine Leitung in den Nachbarpol lief auf Anschlusshöhe über den fremden Pol).
+    pub fn stich(&self) -> f32 {
+        let r = self.raster();
+        if r >= 5.0 {
+            r / 2.0
+        } else {
+            r * (2.5 / r).ceil()
+        }
+    }
+
     /// Wirksamer Rasterfang (mm): 0 = aus (Gitterknopf aus), dann nur Rundung auf 0,1 mm.
     pub fn fang(&self) -> f32 {
         if self.grid {

@@ -360,7 +360,7 @@ impl crate::app::App {
     pub fn rechtwinklig_halten(&mut self) {
         let (Some(r), Some(s)) = (self.cur(), self.sheet()) else { return };
         let Some(alt) = self.undo.last().and_then(|p| p.sheet(r)) else { return };
-        let stich = self.raster() / 2.0;
+        let stich = self.stich();
         let lib = &self.lib;
         let umr = crate::leitung_hindernis::umrisse(s, lib);
         let mut neu: Vec<(u64, Vec<P>)> = vec![];
