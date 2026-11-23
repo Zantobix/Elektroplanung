@@ -969,7 +969,7 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
     match s.tab {
         0 => {
             ui.horizontal_top(|ui| {
-                list(ui, "seiten", &mut s.seiten, &mut s.sel_seite, 280.0, "Seite Löschen", 1, (crate::meldungen::SE_SEITEN, None));
+                list(ui, "seiten", &mut s.seiten, &mut s.sel_seite, 280.0, "Seite Löschen", 0, (crate::meldungen::SE_SEITEN, None));
                 ui.add_space(12.0);
                 list(ui, "optionen", &mut s.optionen, &mut s.sel_option, 388.0, "Option Löschen", 0, (crate::meldungen::SE_OPTIONEN, Some(crate::meldungen::SE_OPTIONSNAME)));
             });
@@ -1026,6 +1026,18 @@ fn symeigen_ui(ui: &mut egui::Ui, s: &mut SymEigenProps) {
             });
             ui.horizontal(|ui| {
                 ui.add_space(264.0);
+                // Button5 wie im Original (Button5Click 0x4b26dc, Beschriftung 0x4b25a4): „<letzte Wahl> Löschen“
+                // entfernt den letzten Alternativtext; nur sichtbar, solange es einen gibt
+                if !s.alt.is_empty() {
+                    let k = s.alt.len() - 1;
+                    if ui.add(egui::Button::new(format!("{} Löschen", crate::meldungen::wahl_kopf(k))).min_size(Vec2::new(153.0, 25.0))).clicked() {
+                        s.alt.remove(k);
+                        if k < s.alt_rest.len() {
+                            s.alt_rest.remove(k);
+                        }
+                    }
+                }
+                // Ergänzung des Nachbaus (im Original nur über die Spalte „Neue Wahl“)
                 if ui.add_enabled(!s.text_cols.is_empty(), egui::Button::new("Neuer Alternativtext").min_size(Vec2::new(153.0, 25.0))).clicked() {
                     s.alt.push(vec![String::new(); s.text_cols.len()]);
                 }

@@ -1066,7 +1066,10 @@ impl App {
         self.checkpoint();
         let Some(anl) = self.project.anlagen.get_mut(a) else { return };
         let n = anl.sheets.iter().map(|s| s.number).max().unwrap_or(0) + 1;
-        anl.sheets.push(Sheet::new(n));
+        // Ausrichtung nach den Projektvorgaben (Original 0x403ce4: Blatt +0x80 = Option „Hochformat“)
+        let mut sh = Sheet::new(n);
+        sh.portrait = self.opt.hochformat;
+        anl.sheets.push(sh);
         crate::rahmen::abgleichen_anlage(anl);
         let r = SheetRef { anlage: a, sheet: anl.sheets.len() - 1 };
         self.open_sheet(r);
@@ -1119,8 +1122,12 @@ impl App {
         // Anlage 1 bekommt wie im Original die Projektvorgaben (Ränder, Strompfade, Schriftgrößen)
         self.project.anlagen[0].set = self.opt.anlage();
         crate::rahmen::abgleichen(&mut self.project);
-        if let Some(tb) = crate::extra::load_default_titleblock() {
+        if let Some(tb) = crate::optionen::schriftfeld_neues_projekt(&self.opt) {
             self.project.titleblock = tb;
+        }
+        // Standardschrift der Projektvorgaben (Original 0x4055d8: leer = Times New Roman)
+        if self.opt.schrift != "Times New Roman" {
+            self.project.schrift = self.opt.schrift.clone();
         }
         self.path = None;
         self.dirty = false;

@@ -378,13 +378,16 @@ pub struct Sheet {
     /// Ränder der Anlage (Kopie für `frame`, siehe `crate::rahmen`; nicht gespeichert)
     #[serde(skip, default = "crate::rahmen::raender_w2")]
     pub raender: [i32; 4],
+    /// Strompfadnummern ab 0 (Kopie der Anlagen-Einstellung „Ab '0'“, siehe `crate::rahmen`; nicht gespeichert)
+    #[serde(skip)]
+    pub ab_null: bool,
     #[serde(skip)]
     pub raw: Option<Box<RawSheet>>,
 }
 
 impl Sheet {
     pub fn new(number: u32) -> Self {
-        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, zusatz: 0, art_fest: false, pfad_linien: false, erstellt: today(), geaendert: String::new(), raender: crate::rahmen::RAENDER_W2, raw: None }
+        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, zusatz: 0, art_fest: false, pfad_linien: false, erstellt: today(), geaendert: String::new(), raender: crate::rahmen::RAENDER_W2, ab_null: false, raw: None }
     }
 
     /// Blattgröße in mm (A4 quer oder hoch).
@@ -415,7 +418,8 @@ impl Sheet {
     }
 
     pub fn col_label(&self, i: usize) -> String {
-        self.col_labels.get(i).filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| (i + 1).to_string())
+        // ohne eigene Bezeichnung: Nummer ab 1 bzw. ab 0 („Ab '0'“ der Anlage, Original 0x438b94 Anlage +0xc4 Bit 0)
+        self.col_labels.get(i).filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| (i + usize::from(!self.ab_null)).to_string())
     }
 
     /// Mitte des Strompfades, der `x` am nächsten liegt – dieselbe Teilung wie die Strompfad-Spaltenleiste

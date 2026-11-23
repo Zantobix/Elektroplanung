@@ -39,6 +39,7 @@ pub fn abgleichen_anlage(a: &mut Anlage) {
     let r = a.set.raender;
     for s in &mut a.sheets {
         s.raender = r;
+        s.ab_null = a.set.ab_null;
     }
 }
 

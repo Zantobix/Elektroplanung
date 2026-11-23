@@ -190,7 +190,10 @@ fn farbe(c: [u8; 3]) -> Color32 {
 /// Blattformate der Projektvorgaben: wie im Original (FormatChange 0x4a0918) A3, A4, A5 und Benutzerdefiniert
 /// (nur dann sind Breite/Höhe frei); A2/A1 sind Ergänzungen des Nachbaus.
 const FORMATE: &[(&str, (i32, i32))] = &[("A3", (2970, 4200)), ("A4", (2100, 2970)), ("A5", (1480, 2100)), ("A2", (4200, 5940)), ("A1", (5940, 8410)), ("Benutzerdefiniert", (0, 0))];
-const ZIEL: &[&str] = &["Ziel anzeigen", "Eigenschaften"];
+/// Auswahl „Doppelklick auf Verweise =“: Einträge wie im Original (TForm4 0x4a0856/0x4a086d: „Eigenschaften“,
+/// „Zielsprung“; Option1Click 0x4223cd speichert Index ≠ 0 = Zielsprung) als (gespeicherter Wert, Text);
+/// gespeichert bleibt 0 = Ziel anzeigen, 1 = Eigenschaften.
+const ZIEL: &[(usize, &str)] = &[(1, "Eigenschaften"), (0, "Zielsprung")];
 
 fn f1(v: f32) -> String {
     format!("{v:.1}").replace('.', ",")
@@ -302,9 +305,9 @@ impl App {
                                     mark(ui, &mut o.ungueltige_loeschen, "ungültige Verbindungen mit löschen");
                                     ui.horizontal(|ui| {
                                         ui.label(RichText::new("Doppelklick auf Verweise =").font(bold(13.0)));
-                                        egui::ComboBox::from_id_salt("optziel").width(110.0).selected_text(ZIEL[o.doppelklick_verweis.min(1)]).show_ui(ui, |ui| {
-                                            for (i, z) in ZIEL.iter().enumerate() {
-                                                ui.selectable_value(&mut o.doppelklick_verweis, i, *z);
+                                        egui::ComboBox::from_id_salt("optziel").width(110.0).selected_text(if o.doppelklick_verweis == 0 { ZIEL[1].1 } else { ZIEL[0].1 }).show_ui(ui, |ui| {
+                                            for (v, z) in ZIEL {
+                                                ui.selectable_value(&mut o.doppelklick_verweis, *v, *z);
                                             }
                                         });
                                     });
@@ -631,6 +634,39 @@ mod tests {
     }
 
     #[test]
+    fn projektvorgaben_fuer_neue_blaetter_und_projekte() {
+        let mut app = crate::blatt_tasten::test_app();
+        // Hochformat gilt für jedes neue Blatt (0x403ce4), nicht nur für das erste einer neuen Anlage
+        app.opt.hochformat = true;
+        app.new_sheet();
+        assert!(app.project.anlagen[0].sheets.last().unwrap().portrait);
+        // Standardschrift und Schriftfeld „aus Datei“ gelten für neue Projekte (0x4055d8)
+        let tb = vec![crate::titleblock::TbOwned::Line(0, 0, 100, 0)];
+        let f = std::env::temp_dir().join(format!("ep_sfd_test_{}.json", std::process::id()));
+        std::fs::write(&f, serde_json::to_string(&tb).unwrap()).unwrap();
+        app.opt.schrift = "Arial".into();
+        app.opt.schriftfeld = 1;
+        app.opt.schriftfeld_datei = f.display().to_string();
+        app.new_project();
+        let _ = std::fs::remove_file(&f);
+        assert_eq!(app.project.schrift, "Arial");
+        assert_eq!(app.project.titleblock, tb);
+        // Doppelklick-Auswahl in der Reihenfolge des Originals, Vorgabe Zielsprung
+        assert_eq!(ZIEL.iter().map(|z| z.1).collect::<Vec<_>>(), ["Eigenschaften", "Zielsprung"]);
+        assert_eq!(ZIEL.iter().find(|z| z.0 == Optionen::default().doppelklick_verweis).unwrap().1, "Zielsprung");
+    }
+
+    #[test]
+    fn strompfade_ab_null() {
+        let mut a = crate::model::Anlage { name: "A".into(), sheets: vec![Sheet::new(1)], sammelschienen: vec![], klemmleisten: vec![], klemmen: vec![], schienen: Default::default(), set: AnlSettings::neu(), raw: None };
+        crate::rahmen::abgleichen_anlage(&mut a);
+        assert_eq!(a.sheets[0].col_label(0), "1");
+        a.set.ab_null = true;
+        crate::rahmen::abgleichen_anlage(&mut a);
+        assert_eq!((a.sheets[0].col_label(0), a.sheets[0].col_label(7)), ("0".to_string(), "7".to_string()));
+    }
+
+    #[test]
     fn randvorgabe_wie_original() {
         // neue Anlage: Links 20 mm, die übrigen Ränder 5 mm (Original-Dialog orig_03)
         assert_eq!(Optionen::default().anlage().raender, [50, 50, 200, 50]);
@@ -660,4 +696,25 @@ pub fn schriftfeld_text(v: usize) -> &'static str {
         1 => crate::meldungen::OPT_SCHRIFTFELD_DATEI,
         _ => crate::meldungen::OPT_OHNE_SCHRIFTFELD,
     }
+}
+
+/// Schriftfeld eines neuen Projekts nach den Projektvorgaben (Original 0x4055d8: Feld 1 = Vorgabeschriftfeld,
+/// 2 = Schriftfeld aus Datei 0x4732d4). „Aus Datei“ liest hier die eigene Vorgabedatei (JSON) oder das
+/// Schriftfeld eines Projekts (.epr/.epj); Dateien im .eff-Format des Originals kann der Nachbau nicht lesen,
+/// dann gilt die Vorgabe. „Ohne Schriftfeld“ kennt das Modell nicht (leeres Schriftfeld = Vorgabe).
+pub fn schriftfeld_neues_projekt(o: &Optionen) -> Option<Vec<crate::titleblock::TbOwned>> {
+    if o.schriftfeld == 1 && !o.schriftfeld_datei.trim().is_empty() {
+        let p = std::path::Path::new(o.schriftfeld_datei.trim());
+        let ext = p.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        let tb = match ext.as_str() {
+            "json" => std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str::<Vec<crate::titleblock::TbOwned>>(&s).ok()),
+            "epr" => crate::epr::import(p).ok().map(|x| x.titleblock),
+            "epj" => std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str::<crate::model::Project>(&s).ok()).map(|x| x.titleblock),
+            _ => None,
+        };
+        if let Some(tb) = tb.filter(|t| !t.is_empty()) {
+            return Some(tb);
+        }
+    }
+    crate::extra::load_default_titleblock()
 }
