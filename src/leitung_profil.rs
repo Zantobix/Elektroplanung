@@ -142,7 +142,22 @@ pub fn nachfuehren(pts: &[P], neu: P, rund: &dyn Fn(P) -> P) -> Ergebnis {
             st = probe;
             continue;
         }
-        if verteilen(&mut st, &idx, diff).abs() >= EPS {
+        // ohne passende innere Teilstücke gleichmäßig auf alle – außer der Stich am bewegten Anfang schrumpfte dabei
+        // auf 0 und die übrigen (auch das Stück am festen Ende) können die Änderung allein aufnehmen (Nutzervideo
+        // 23.11.2026 19:04: Lampe nach unten, der Stich am unteren Anschluss verschwand, die Leitung lief seitlich
+        // aus dem Anschluss)
+        let mut probe = st.clone();
+        let rest = verteilen(&mut probe, &idx, diff);
+        if st[0].achse == achse && st[0].len.abs() >= EPS && probe[0].len.abs() < EPS {
+            let ohne_anfang: Vec<usize> = idx.iter().copied().filter(|&i| i != 0).collect();
+            let mut probe2 = st.clone();
+            if ohne_anfang.iter().any(|&i| probe2[i].len.abs() >= EPS) && verteilen(&mut probe2, &ohne_anfang, diff).abs() < EPS {
+                st = probe2;
+                continue;
+            }
+        }
+        st = probe;
+        if rest.abs() >= EPS {
             return Ergebnis::Unpassend;
         }
     }

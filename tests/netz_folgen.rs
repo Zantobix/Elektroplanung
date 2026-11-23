@@ -300,9 +300,10 @@ fn leitungen(app: &elektroplanung::app::App) -> Vec<(u64, Vec<P>)> {
 fn geste(app: &mut elektroplanung::app::App, id: u64, schritte: &[P]) {
     app.selection = vec![id];
     app.checkpoint();
+    app.stoesse_an_markierung_zusammenfassen();
     app.netz_merken();
     let p0 = match &app.sheet().unwrap().objects.iter().find(|o| o.id == id).unwrap().kind {
-        Kind::Symbol { pos, .. } => *pos,
+        Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } => *pos,
         _ => P::default(),
     };
     for d in schritte {
@@ -340,4 +341,34 @@ fn maustest_licht_lampe_hin_und_zurueck() {
         assert_eq!(w.len(), alt.len(), "Leitung {id}: {alt:?} → {w:?}");
         assert!(w[0].dist(alt[0]) < 0.01 && w[w.len() - 1].dist(alt[alt.len() - 1]) < 0.01, "Leitung {id}: {alt:?} → {w:?}");
     }
+}
+
+/// Nutzervideo 23.11.2026 19:04: Klemmstelle X1.1 auf ihrer eigenen Leitung nach oben gezogen – die untere Leitung
+/// lief in einer U-Schleife neben der oberen hoch, statt einfach länger zu werden (die obere wird kürzer).
+#[test]
+fn video_klemmstelle_auf_der_leitung_nach_oben() {
+    let Some((mut app, _)) = licht_maus() else { return };
+    let klemme = app.sheet().unwrap().objects.iter().find(|o| matches!(&o.kind, Kind::Terminal { pos, .. } if (pos.x - 22.9).abs() < 0.1 && (pos.y - 115.0).abs() < 0.1)).expect("X1.1").id;
+    let vorher = leitungen(&app);
+    for dy in [-10.0, -20.0, -30.0] {
+        let mut a2 = licht_maus().unwrap().0;
+        geste(&mut a2, klemme, &[p(0.0, dy / 3.0), p(0.0, dy * 2.0 / 3.0), p(0.0, dy)]);
+        for (id, w) in leitungen(&a2) {
+            let alt = vorher.iter().find(|(i, _)| *i == id).map(|(_, w)| w.clone()).unwrap_or_default();
+            assert!(w.len() <= alt.len().max(2), "dy {dy}: Leitung {id} bekam Knicke: {alt:?} → {w:?}");
+            assert!(w.iter().all(|q| (q.x - 22.9).abs() < 0.05) || alt.iter().any(|q| (q.x - 22.9).abs() > 0.05), "dy {dy}: Leitung {id} verlässt die Flucht: {alt:?} → {w:?}");
+        }
+    }
+    let _ = &mut app;
+}
+
+
+/// Dasselbe Video, zweiter Teil: -E1 danach nach unten – der Stich am unteren Anschluss verschwand, die Leitung lief
+/// seitlich aus dem Anschluss (Kriterium L14).
+#[test]
+fn video_lampe_nach_unten_stich_bleibt() {
+    let Some((mut app, lampe)) = licht_maus() else { return };
+    geste(&mut app, lampe, &[p(0.0, 10.0), p(0.0, 20.0)]);
+    let w = leitungen(&app).into_iter().find(|(_, w)| w[0].dist(p(22.9, 155.0)) < 0.05).expect("untere Leitung").1;
+    assert!((w[1].x - 22.9).abs() < 0.05 && w[1].y > 155.0 + 2.0, "Stich nach unten fehlt: {w:?}");
 }

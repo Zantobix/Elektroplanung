@@ -678,6 +678,38 @@ fn halten(vs: &Sheet, s: &mut Sheet, lib: &[SymDef], primaer: &[u64]) {
 }
 
 impl crate::app::App {
+    /// Vor dem Verschieben markierter Symbole, Klemmstellen und Verweise (nach dem Rückgängig-Punkt): Leitungen, die an
+    /// ihren Anschlüssen enden, mit stoßenden Leitungen in Flucht zu einer zusammenfassen. Nutzervideo 23.11.2026
+    /// 19:04: X1.1 auf ihrer Leitung nach oben gezogen – die Leitung darüber bestand aus drei Stücken; das kurze an
+    /// der Klemme hätte über die Stoßstelle zurücklaufen müssen und wurde als U-Schleife neben der Leitung geführt.
+    /// Als eine Leitung wird sie einfach kürzer.
+    pub fn stoesse_an_markierung_zusammenfassen(&mut self) {
+        let Some(s) = self.sheet() else { return };
+        // Anschlüsse mit Fangweite (Klemmstelle: Leitungen enden am Kreis, nicht in der Mitte)
+        let pins: Vec<(P, f32)> = s
+            .objects
+            .iter()
+            .filter(|o| self.selection.contains(&o.id) && matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. } | Kind::Verweis { .. }))
+            .flat_map(|o| canvas::obj_pins(o, &self.lib).into_iter().map(|q| (q, pin_tol(&o.kind))).collect::<Vec<_>>())
+            .collect();
+        if pins.is_empty() {
+            return;
+        }
+        let ids: Vec<u64> = s
+            .objects
+            .iter()
+            .filter(|o| !self.selection.contains(&o.id))
+            .filter(|o| match &o.kind {
+                Kind::Wire { pts, .. } if pts.len() >= 2 => [pts[0], pts[pts.len() - 1]].iter().any(|e| pins.iter().any(|(q, t)| q.dist(*e) <= *t)),
+                _ => false,
+            })
+            .map(|o| o.id)
+            .collect();
+        if !ids.is_empty() {
+            self.leitungen_zusammenfassen(&ids);
+        }
+    }
+
     /// Stand des aktuellen Blattes vor einer Änderung merken (Beginn des Ziehens, vor Drehen/Pfeiltaste).
     pub fn netz_merken(&mut self) {
         self.netz_vorher = self.sheet().map(|s| s.objects.clone()).unwrap_or_default();

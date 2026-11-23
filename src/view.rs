@@ -1664,7 +1664,9 @@ impl App {
             if (d.x.abs() > 1e-4 || d.y.abs() > 1e-4) && !movable.is_empty() {
                 if !moved {
                     self.checkpoint();
-                    // Stand vor dem Verschieben merken: das Leitungsnetz wird von dort aus nachgeführt (netz_folgen.rs)
+                    // Stoßstücke an den Anschlüssen zu einer Leitung, dann den Stand vor dem Verschieben merken: das
+                    // Leitungsnetz wird von dort aus nachgeführt (netz_folgen.rs)
+                    self.stoesse_an_markierung_zusammenfassen();
                     self.netz_merken();
                 }
                 // verschobene Objekte aus dem gemerkten Stand um die Gesamtverschiebung, Leitungen folgen bzw. bleiben
@@ -2278,6 +2280,7 @@ impl App {
             self.checkpoint();
             let sel: Vec<u64> = self.selected_objs().iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
             // angeschlossene Leitungen folgen, markierte Leitungen bleiben an festen Anschlüssen (netz_folgen.rs)
+            self.stoesse_an_markierung_zusammenfassen();
             self.netz_merken();
             self.netz_verschieben(&sel, d);
             self.aufraeumen();
