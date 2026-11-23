@@ -144,3 +144,17 @@ fn markierte_leitung_bleibt_an_der_schiene() {
         assert_eq!(*w.last().unwrap(), p(60.0, 150.0).add(d), "{d:?}: {w:?}");
     }
 }
+
+/// Nutzerbild 23.11.2026 (Runde 13): Lampe mit Abzweig nach oben verschoben – das Ende gleitet auf dem Wirt, statt
+/// kurz davor eine Ecke zu bilden.
+#[test]
+fn abzweig_ende_gleitet_auf_dem_wirt() {
+    let mut app = app_mit(vec![klemme(12, 45.0, 85.8), wire(1, &[(85.0, 15.0), (85.0, 105.0)]), wire(2, &[(45.0, 85.0), (45.0, 55.0), (85.0, 55.0)])]);
+    app.selection = vec![12];
+    app.netz_merken();
+    app.netz_verschieben(&[12], p(0.0, -40.0));
+    let w2 = pts(&app, 2);
+    assert_eq!(w2[0], p(45.0, 45.0), "{w2:?}");
+    assert!(seg_dist(*w2.last().unwrap(), p(85.0, 15.0), p(85.0, 105.0)) < 0.01, "{w2:?}");
+    assert!(w2.len() <= 3, "höchstens ein Knick: {w2:?}");
+}

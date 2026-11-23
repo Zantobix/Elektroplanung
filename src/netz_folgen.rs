@@ -218,7 +218,7 @@ pub struct Gefuehrt {
 /// Leitung `id` (Punkte vorher `alt`) mit den Enden an `ziel` führen. `vorher`/`jetzt` = Blatt vor bzw. nach der
 /// Änderung (für Richtungen, Hindernisse, andere Leitungen).
 #[allow(clippy::too_many_arguments)]
-pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P], ziel: [Option<P>; 2], opt: &NetzOpt) -> Option<Gefuehrt> {
+pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P], ziel: [Option<P>; 2], opt: &NetzOpt, bewegt_ids: &[u64]) -> Option<Gefuehrt> {
     use crate::leitung_hindernis as lh;
     let n = alt.len();
     if n < 2 {
@@ -278,7 +278,99 @@ pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P]
     let p = crate::schiene_halten::abgreifen(&p, &sch);
     // einfacher Weg mit weniger Knicken, wenn er nichts verschlechtert (leitung_kurz.rs)
     let p = crate::leitung_kurz::kuerzer(&p, dirs[0], dirs[1], opt.stich, &hind, &andere).unwrap_or(p);
+    // ein Ende auf einer anderen Leitung bzw. Schiene darf auf ihr gleiten, wenn das Knicke spart (Nutzerbild
+    // 23.11.2026: Abzweig mit Ecke kurz vor dem Wirt)
+    let p = gleiten(jetzt, lib, id, p, dirs, opt.stich, &umrisse, &andere, bewegt_ids);
     Some(Gefuehrt { pts: p, ganz: None })
+}
+
+/// Waagerechtes bzw. senkrechtes Stück einer anderen Leitung (nicht `ohne`) bzw. Schiene, in dessen Innerem `e`
+/// liegt (Wirt eines Abzweigs).
+pub fn wirt_bei(sheet: &Sheet, ohne: u64, e: P) -> Option<(u64, P, P)> {
+    const R: f32 = 0.05;
+    for o in sheet.objects.iter().filter(|o| o.id != ohne) {
+        let stuecke: Vec<(P, P)> = match &o.kind {
+            Kind::Wire { pts, .. } => pts.windows(2).map(|w| (w[0], w[1])).collect(),
+            Kind::Busbar { a, x2, .. } => vec![(P::new(a.x.min(*x2), a.y), P::new(a.x.max(*x2), a.y))],
+            _ => continue,
+        };
+        for (a, b) in stuecke {
+            let innen = if waag(a, b) && !senk(a, b) {
+                (e.y - a.y).abs() < R && e.x > a.x.min(b.x) + R && e.x < a.x.max(b.x) - R
+            } else if senk(a, b) && !waag(a, b) {
+                (e.x - a.x).abs() < R && e.y > a.y.min(b.y) + R && e.y < a.y.max(b.y) - R
+            } else {
+                false
+            };
+            if innen {
+                return Some((o.id, a, b));
+            }
+        }
+    }
+    None
+}
+
+/// Bewertung eines Weges: Knicke, dann Kreuzungen mit anderen Leitungen, dann Länge (Nutzer: „möglichst immer die
+/// Anzahl an Ecken und Kreuzungen und Längen minimieren“).
+pub fn bewertung(w: &[P], andere: &[(P, P)]) -> (usize, usize, i64) {
+    let l: f32 = w.windows(2).map(|v| v[0].dist(v[1])).sum();
+    (crate::leitung_kurz::knicke(w), crate::leitung_kurz::kreuzungen_mit(w, andere), (l * 10.0).round() as i64)
+}
+
+/// Endet bzw. beginnt die Leitung `p` (Kennung `id`) im Innern einer anderen Leitung bzw. auf einer Schiene, darf
+/// dieses Ende auf dem Wirt gleiten: Stellen in der Flucht des anderen Endes, seines Stichs und der Knicke werden
+/// geprüft (`leitung_kurz::bester`: kein Symbol durchquert, nicht auf einer Leitung, nicht in einen Anschluss
+/// hinein); genommen wird der Weg mit der besten `bewertung`, wenn er besser ist. An Stellen, an denen schon etwas
+/// am Wirt hängt, gleitet das Ende nicht (sonst entstünde eine neue Verbindung).
+#[allow(clippy::too_many_arguments)]
+/// Auf Leitungen in `bewegt_ids` (in diesem Schritt selbst geführt, im Blatt noch in alter Lage) gleitet nichts.
+pub fn gleiten(jetzt: &Sheet, lib: &[SymDef], id: u64, p: Vec<P>, dirs: [Option<P>; 2], stich: f32, umrisse: &[crate::leitung_hindernis::Umriss], andere: &[(P, P)], bewegt_ids: &[u64]) -> Vec<P> {
+    use crate::leitung_hindernis as lh;
+    let n = p.len();
+    if n < 3 {
+        return p;
+    }
+    let mut best = p.clone();
+    let mut wert = bewertung(&p, andere);
+    // Anschlüsse und Leitungsenden anderer Objekte (dort darf das Ende nicht hingleiten)
+    let belegt: Vec<P> = jetzt.objects.iter().filter(|o| o.id != id).flat_map(|o| canvas::obj_pins(o, lib)).collect();
+    for k in [1usize, 0] {
+        let e = if k == 1 { p[n - 1] } else { p[0] };
+        let Some((wid, a, b)) = wirt_bei(jetzt, id, e) else { continue };
+        if bewegt_ids.contains(&wid) {
+            continue;
+        }
+        let h = waag(a, b);
+        let (anf, da) = if k == 1 { (p[0], dirs[0]) } else { (p[n - 1], dirs[1]) };
+        // Lagen entlang des Wirts: Flucht des anderen Endes, seines Stichs und aller Punkte des Weges
+        let mut lagen: Vec<f32> = p.iter().map(|q| if h { q.x } else { q.y }).collect();
+        if let Some(d) = da {
+            let s1 = anf.add(P::new(d.x * stich, d.y * stich));
+            lagen.push(if h { s1.x } else { s1.y });
+        }
+        let (lo, hi) = if h { (a.x.min(b.x), a.x.max(b.x)) } else { (a.y.min(b.y), a.y.max(b.y)) };
+        for l in lagen {
+            if l <= lo + 0.05 || l >= hi - 0.05 {
+                continue;
+            }
+            let q = if h { P::new(l, a.y) } else { P::new(a.x, l) };
+            if q.dist(e) > 0.01 && belegt.iter().any(|x| x.dist(q) < 0.1) {
+                continue;
+            }
+            let dq = crate::leitung_route::richtung_auf_leitung_ohne(jetzt, q, anf, id);
+            let hind = lh::wirksam(&lh::hindernisse(umrisse, &[], &[]), anf, q);
+            let Some(mut w) = crate::leitung_kurz::bester(anf, da, q, dq, stich, &hind, andere) else { continue };
+            if k == 0 {
+                w.reverse();
+            }
+            let v = bewertung(&w, andere);
+            if v < wert {
+                wert = v;
+                best = w;
+            }
+        }
+    }
+    best
 }
 
 /// Wo hängt das Ende `e` der primär geänderten Leitung `id` fest (vor der Änderung, an einem Objekt, das sich nicht
@@ -340,6 +432,8 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
             }
         }
         let mut neu: Vec<(u64, Gefuehrt)> = vec![];
+        // Leitungen, die in diesem Schritt (letzter Durchlauf) selbst geführt werden
+        let bewegt_ids: Vec<u64> = folger.iter().map(|(id, _)| *id).collect();
         for o in vorher.iter().filter(|o| folger_von(o)) {
             let Kind::Wire { pts, .. } = &o.kind else { continue };
             let n = pts.len();
@@ -347,7 +441,7 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
             if ziel == [None, None] {
                 continue;
             }
-            if let Some(g) = fuehren(&vs, s, lib, o.id, pts, ziel, opt) {
+            if let Some(g) = fuehren(&vs, s, lib, o.id, pts, ziel, opt, &bewegt_ids) {
                 neu.push((o.id, g));
             }
         }

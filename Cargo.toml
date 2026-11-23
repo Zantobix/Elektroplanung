@@ -33,6 +33,9 @@ path = "src/lib.rs"
 # Linux: Fensteranbindung für X11 und Wayland (unter Windows/macOS nicht nötig)
 [target.'cfg(target_os = "linux")'.dependencies]
 eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "persistence", "links", "x11", "wayland"] }
+# Wayland (GNOME zeichnet keine Fensterrahmen): Rahmen im Adwaita-Stil mit Titel und üblichen Knöpfen statt des
+# schlichten grauen Rahmens ohne Titel
+winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita"] }
 
 # Windows: Programmsymbol und Versionsangaben in die Exe einbetten (build.rs)
 [target.'cfg(windows)'.build-dependencies]

@@ -81,6 +81,8 @@ impl App {
             Drag::Create { tool, .. } => Some(self.create_end(*tool, m, z)),
             Drag::None if self.placing.is_none() => match self.tool {
                 Tool::Klemmstelle => Some(self.klemmstelle_lage(m, 6.0 / z)),
+                // Umschalt über einer Leitung: dort beginnt ein Abzweig (leitung_anschluss.rs)
+                Tool::Select if self.no_snap && self.sym_edit.is_none() => self.abzweig_anfang(m, 6.0 / z),
                 Tool::Select | Tool::Image => None,
                 t => Some(self.create_end(t, m, z)),
             },

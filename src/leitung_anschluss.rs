@@ -100,9 +100,17 @@ impl App {
         if self.sym_edit.is_some() {
             return false;
         }
-        let Some(p) = self.sheet().and_then(|s| crate::leitung_route::ende_auf_leitung(s, self.snap(m), m, tol)) else { return false };
+        let Some(p) = self.abzweig_anfang(m, tol) else { return false };
         self.drag = Drag::Wire { f: crate::leitung_fuehrung::Fuehrung::neu(p) };
         true
+    }
+
+    /// Anfang eines Abzweigs bei Umschalt + Drücken auf einer Leitung: auf dem getroffenen Teilstück im Raster –
+    /// auch mit gehaltener Umschalttaste, die sonst den Rasterfang abschaltet (Nutzer Runde 13: „wenn eine Leitung
+    /// von einer Leitung gezeichnet wird, soll diese auch am Raster orientiert werden“).
+    pub fn abzweig_anfang(&self, m: P, tol: f32) -> Option<P> {
+        let q = if self.fang() > 0.0 { crate::raster::fang(m, self.fang(), self.raster_ursprung()) } else { m };
+        self.sheet().and_then(|s| crate::leitung_route::ende_auf_leitung(s, q, m, tol))
     }
 }
 

@@ -1745,11 +1745,9 @@ impl App {
                     self.drag = Drag::Kurve(k);
                     bleibt = true;
                 }
-                // nach dem Verschieben: freie Anschlüsse automatisch verbinden (gleicher Rückgängig-Schritt)
-                Drag::Move { moved: true, .. } if self.auto_conn_eff() => {
-                    let ids: Vec<u64> = self.selected_objs().iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })).map(|o| o.id).collect();
-                    self.auto_connect_nocp(&ids);
-                }
+                // nach dem Verschieben keine automatischen Verbindungen mehr (Nutzer Runde 13: „wenn eine Leitung
+                // verschoben wird, verbindet es automatisch die darunterliegenden Anschlusspunkte, bitte entfernen“);
+                // beim Ablegen aus der Bibliothek und mit gehaltener Taste A bleibt die Auto-Verbindung
                 _ => {}
             }
             if !bleibt {
