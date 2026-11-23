@@ -931,8 +931,37 @@ impl App {
         // Versatz ein Vielfaches des Rasters, mindestens 10 mm: bei feinem Raster (2,5 mm) verdeckte die Kopie
         // sonst das Original fast ganz (Maustest Runde 11)
         let d = if self.fang() > 0.0 { self.fang() * (10.0 / self.fang()).ceil().max(1.0) } else { 10.0 };
-        let mut new_sel = vec![];
         let clip = self.clipboard.clone();
+        // Versetzt nur, wenn die Kopie sonst genau auf vorhandenen Objekten läge (auf einem anderen, leeren Blatt
+        // bleibt sie an derselben Stelle), und nie über den Zeichnungsrahmen hinaus (Nachzeichnen 24.11.2026:
+        // Grundriss auf ein neues Blatt eingefügt ragte 10 mm über den Rahmen)
+        let d = {
+            let lib = self.lib.clone();
+            let lage = |o: &Obj| canvas::obj_bounds(o, &lib);
+            let nah = |a: P, b: P| (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() < 1e-3;
+            let s = self.sheet().expect("Blatt");
+            let liegt_auf = clip.iter().any(|c| {
+                let (ca, cb) = lage(c);
+                s.objects.iter().any(|o| {
+                    std::mem::discriminant(&o.kind) == std::mem::discriminant(&c.kind) && {
+                        let (oa, ob) = lage(o);
+                        nah(oa, ca) && nah(ob, cb)
+                    }
+                })
+            });
+            if liegt_auf {
+                let ids: Vec<u64> = clip.iter().map(|o| o.id).collect();
+                let v = crate::blatt_grenze::begrenzen(s, &lib, &clip, &ids, P::default(), P::new(d, d));
+                if v.x.abs() < 1e-3 && v.y.abs() < 1e-3 {
+                    crate::blatt_grenze::begrenzen(s, &lib, &clip, &ids, P::default(), P::new(-d, -d))
+                } else {
+                    v
+                }
+            } else {
+                P::default()
+            }
+        };
+        let mut new_sel = vec![];
         let mut gmap: HashMap<u64, u64> = HashMap::new();
         for mut o in clip {
             o.id = self.project.alloc_id();
@@ -943,7 +972,7 @@ impl App {
                 let ng = *gmap.entry(g).or_insert_with(|| 1_000_000 + o.id);
                 o.group = Some(ng);
             }
-            o.kind.translate(P::new(d, d));
+            o.kind.translate(d);
             let new_bmk = if let Kind::Symbol { key, .. } = &o.kind {
                 symbols::find(&self.lib, key).map(|def| self.new_bmk(def))
             } else {
@@ -966,7 +995,7 @@ impl App {
         }
         self.selection = new_sel;
         for o in &mut self.clipboard {
-            o.kind.translate(P::new(d, d));
+            o.kind.translate(d);
         }
     }
 
