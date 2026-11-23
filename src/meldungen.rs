@@ -99,6 +99,10 @@ pub const FB_INHALT: &str = "Es kann kein Folgeblatt für's Inhaltsverzeichnis e
 pub const FB_VERGEBEN: &str = " schon vergeben ist!\n";
 pub const FB_NUMMER: &str = "(Blattnummer: 0     Subindex: ";
 pub const SF_KEINE_DATEI: &str = "Keine Datei";
+/// Sammelschienenassistent auf einem Blatt, das kein Schaltplan ist (0x4862d4, Überschrift „Achtung“)
+pub const SCHIENEN_HIER_NICHT: &str = "Sammelschienen können hier nicht eingefügt werden";
+/// Überschrift, wenn die Schriftfelddatei nicht zu öffnen ist (0x4732d4; Text = Systemmeldung)
+pub const SF_DATEI_OEFFNEN: &str = "Fehler beim öffnen der Schriftfelddatei";
 pub const FRAGE_NOETIG: &str = " nötig.\nSollen alle nötigen Blätter erzeugt werden?";
 
 // ------------------------------------------------------------------ Drucken (Drucken1Click)

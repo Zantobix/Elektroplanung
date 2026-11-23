@@ -24,6 +24,12 @@ Angleichungen nach statischer Prüfung der Dialoge (Runde 12):
   Verweislinks nur in Gegenrichtung mit „(n Ziel)“ und „[Vergeben]“.
 - Pfadbeschreibungen mit Spalte „Pfade“ (ab 0 bei „Ab '0'“); Potential mit drei Nachkommastellen, Leitungsquerschnitt
   mit zwei; Bild zeigt die Namen der Grafiken; „Neues Schriftfeld“ zählt nur unbenannte Anlagen.
+- Datei › Schriftfeld speichern schreibt wie das Original eine Schriftfelddatei (`.eff`, „Fuss02“); Hinzufügen ›
+  Schriftfeld › Aus Datei und die Projektvorgabe „Schriftfeld aus Datei“ lesen sie (auch „Fuss01“). Bisher legte
+  der Nachbau eine eigene Vorgabe `schriftfeld.json` ab (eine vorhandene gilt weiter als Vorgabeschriftfeld).
+- Sammelschienenassistent: auf Blättern, die kein Stromlaufplan sind, kommt die Meldung vor dem Dialog.
+- Markierung als Symbol ohne Markierung: keine Meldung (wie das Original); Speichern-als-Filter
+  „Elektroplanungs Projekt“.
 
 Leitungsführung nach Nutzerwünschen (Runde 12):
 - Gezogene Leitungen folgen dem Mausweg: jede Richtungsänderung der Maus (ab einem Raster) wird ein Knick, Zurückfahren

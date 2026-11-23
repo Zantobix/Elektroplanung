@@ -763,7 +763,8 @@ impl App {
                     }
                     ui.add_enabled(*aus_datei, egui::TextEdit::singleline(pfad).desired_width(230.0));
                     if ui.add_enabled(*aus_datei, egui::Button::new("Suchen")).clicked() {
-                        if let Some(p) = rfd::FileDialog::new().add_filter("Projekt", &["epj", "epr"]).pick_file() {
+                        // Original Button3Click 0x4ae374: „Schriftfelddatei|*.eff“; Projekte als Erweiterung
+                        if let Some(p) = rfd::FileDialog::new().add_filter("Schriftfelddatei", &["eff"]).add_filter("Projekt", &["epj", "epr"]).pick_file() {
                             *pfad = p.display().to_string();
                         }
                     }
@@ -1235,7 +1236,20 @@ impl App {
                 }
             }
             Dlg3::NeuesSchriftfeld { aus_datei, pfad, .. } => {
-                if aus_datei {
+                if aus_datei && crate::schriftfeld_datei::ist_eff(std::path::Path::new(pfad.trim())) {
+                    // Schriftfelddatei des Originals (0x4732d4)
+                    match std::fs::read(pfad.trim()) {
+                        // Überschrift = Meldung des Originals, Text = Systemmeldung (FormatMessage)
+                        Err(e) => crate::meldungen::warnung(crate::meldungen::SF_DATEI_OEFFNEN, &e.to_string()),
+                        Ok(d) => match crate::schriftfeld_datei::schriftfeld_aus(&d) {
+                            Ok(tb) => {
+                                self.checkpoint();
+                                self.project.titleblock = tb;
+                            }
+                            Err(m) => crate::meldungen::warnung(crate::schriftfeld_datei::T_FEHLER, m),
+                        },
+                    }
+                } else if aus_datei {
                     match crate::mcp::open_project(std::path::Path::new(pfad.trim())) {
                         Ok(x) => {
                             let mut quellen = vec![];

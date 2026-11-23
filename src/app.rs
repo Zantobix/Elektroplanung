@@ -1285,7 +1285,8 @@ impl App {
     pub fn save_as(&mut self) {
         let stem = self.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Projekt".into());
         let dlg = rfd::FileDialog::new()
-            .add_filter("Elektroplanung Projekt (Originalformat)", &["epr"])
+            // Filtertext wie im Original (0x416cfc: „Elektroplanungs Projekt|*.epr“), JSON als Erweiterung
+            .add_filter("Elektroplanungs Projekt", &["epr"])
             .add_filter("Elektroplanung Projekt (JSON)", &["epj"])
             .set_file_name(format!("{stem}.epr"));
         if let Some(p) = dlg.save_file() {
@@ -1723,8 +1724,9 @@ impl App {
     /// Markierung als Symbol: markierte Zeichenelemente werden zu einem Projektsymbol, Klemmstellen zu Anschlüssen.
     pub fn selection_to_symbol(&mut self) {
         let objs = self.selected_objs();
+        // MarkierungzuSymbol1Click 0x46c58c: ohne Markierung (+0x714 = 0) geschieht nichts; die Meldung kommt nur,
+        // wenn unter den markierten Objekten keines umwandelbar ist
         if objs.is_empty() {
-            crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::MARKIERUNG_LEER);
             return;
         }
         let pts: Vec<P> = objs.iter().flat_map(|o| { let (a, b) = canvas::obj_bounds(o, &self.lib); [a, b] }).collect();

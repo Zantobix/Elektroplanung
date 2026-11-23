@@ -699,14 +699,15 @@ pub fn schriftfeld_text(v: usize) -> &'static str {
 }
 
 /// Schriftfeld eines neuen Projekts nach den Projektvorgaben (Original 0x4055d8: Feld 1 = Vorgabeschriftfeld,
-/// 2 = Schriftfeld aus Datei 0x4732d4). „Aus Datei“ liest hier die eigene Vorgabedatei (JSON) oder das
-/// Schriftfeld eines Projekts (.epr/.epj); Dateien im .eff-Format des Originals kann der Nachbau nicht lesen,
-/// dann gilt die Vorgabe. „Ohne Schriftfeld“ kennt das Modell nicht (leeres Schriftfeld = Vorgabe).
+/// 2 = Schriftfeld aus Datei 0x4732d4). „Aus Datei“ liest die Schriftfelddatei des Originals (.eff), dazu eine
+/// eigene Vorgabedatei (JSON) oder das Schriftfeld eines Projekts (.epr/.epj); ist die Datei unlesbar, gilt die
+/// Vorgabe. „Ohne Schriftfeld“ kennt das Modell nicht (leeres Schriftfeld = Vorgabe).
 pub fn schriftfeld_neues_projekt(o: &Optionen) -> Option<Vec<crate::titleblock::TbOwned>> {
     if o.schriftfeld == 1 && !o.schriftfeld_datei.trim().is_empty() {
         let p = std::path::Path::new(o.schriftfeld_datei.trim());
         let ext = p.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
         let tb = match ext.as_str() {
+            "eff" => std::fs::read(p).ok().and_then(|d| crate::schriftfeld_datei::schriftfeld_aus(&d).ok()),
             "json" => std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str::<Vec<crate::titleblock::TbOwned>>(&s).ok()),
             "epr" => crate::epr::import(p).ok().map(|x| x.titleblock),
             "epj" => std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str::<crate::model::Project>(&s).ok()).map(|x| x.titleblock),

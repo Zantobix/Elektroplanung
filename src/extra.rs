@@ -782,6 +782,12 @@ impl App {
     }
 
     pub fn open_busbar_assistant(&mut self) {
+        // Sammelschienenassistent1Click 0x4862d4: ohne Blatt/Anlage oder auf anderen Blattarten als dem Schaltplan
+        // erscheint statt des Dialogs die Meldung (Prüfung vor ShowModal)
+        if !crate::extra::schienen_assistent_erlaubt(self.sheet()) {
+            crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::SCHIENEN_HIER_NICHT);
+            return;
+        }
         // wie im Original: feste Auswahl L1, L2, L3, N, PE (alle angehakt)
         let pots = BUSBAR_NAMES.iter().map(|p| (p.to_string(), true)).collect();
         self.xdlg = Some(XDialog::Busbar { pots, auto: true, y: "40".into(), dy: "10".into(), x0: "25".into(), x1: "282".into() });
@@ -805,16 +811,6 @@ impl App {
         self.neu_merken();
         let idx = self.project.platzhalter.len() - 1;
         self.xdlg = Some(XDialog::Platz { idx, name: self.project.platzhalter[idx].name.clone(), text: String::new() });
-    }
-
-    /// Schriftfeld des Projekts als Vorgabe für neue Projekte speichern ("Schriftfeld speichern").
-    pub fn save_titleblock_default(&mut self) {
-        let tb = if self.project.titleblock.is_empty() { titleblock::default_owned() } else { self.project.titleblock.clone() };
-        let path = appdir().join("schriftfeld.json");
-        match serde_json::to_string_pretty(&tb).map_err(|e| e.to_string()).and_then(|s| std::fs::write(&path, s).map_err(|e| e.to_string())) {
-            Ok(()) => self.info = "Schriftfeld als Vorgabe für neue Projekte gespeichert".into(),
-            Err(e) => self.dialog = Some(Dialog::Message(format!("Schriftfeld konnte nicht gespeichert werden: {e}"))),
-        }
     }
 
     /// Hinzufügen › Schriftfeld: Schriftfeld eines anderen Projekts (.epj/.epr) übernehmen.
@@ -1856,8 +1852,8 @@ impl App {
             XDialog::Busbar { pots, auto, y, dy, x0, x1 } => {
                 let (y, dy, x0, x1) = (num(&y, 40.0), num(&dy, 10.0), num(&x0, 25.0), num(&x1, 282.0));
                 // wie im Original (TS_Assi): nur auf Schaltplänen, mindestens eine Schiene gewählt
-                if self.sheet().map(|s| !matches!(s.art, 0 | 3)).unwrap_or(true) {
-                    crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, "Sammelschienen können hier nicht eingefügt werden");
+                if !crate::extra::schienen_assistent_erlaubt(self.sheet()) {
+                    crate::meldungen::hinweis(crate::meldungen::T_ACHTUNG, crate::meldungen::SCHIENEN_HIER_NICHT);
                     return;
                 }
                 if !pots.iter().any(|(_, on)| *on) {
@@ -1955,8 +1951,8 @@ impl App {
     }
 }
 
-/// Vorgabe-Schriftfeld (von "Schriftfeld speichern"), falls vorhanden.
-/// Vorgabeschriftfeld (Datei › Schriftfeld speichern), sonst das Standard-Schriftfeld.
+/// Vorgabeschriftfeld: eine früher vom Nachbau abgelegte Vorgabe (schriftfeld.json), sonst das Standard-Schriftfeld.
+/// „Schriftfeld speichern“ schreibt wie das Original eine Schriftfelddatei (.eff, schriftfeld_datei.rs).
 pub fn default_titleblock() -> Vec<TbOwned> {
     load_default_titleblock().unwrap_or_else(titleblock::default_owned)
 }
@@ -1964,6 +1960,12 @@ pub fn default_titleblock() -> Vec<TbOwned> {
 pub fn load_default_titleblock() -> Option<Vec<TbOwned>> {
     let s = std::fs::read_to_string(appdir().join("schriftfeld.json")).ok()?;
     serde_json::from_str(&s).ok()
+}
+
+/// Sammelschienenassistent erlaubt? Original 0x4862d4: Blatt vorhanden und Blattart 3 (Stromlaufplan); Art 0
+/// (neu/unbekannt) gilt im Nachbau als Stromlaufplan.
+pub fn schienen_assistent_erlaubt(s: Option<&Sheet>) -> bool {
+    s.is_some_and(|s| matches!(s.art, 0 | 3))
 }
 
 /// Sammelschienen des Assistenten (Original: feste Liste L1, L2, L3, N, PE).

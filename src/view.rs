@@ -1999,7 +1999,7 @@ impl App {
                 }
                 ui.separator();
                 if ui.button("Schriftfeld speichern").clicked() {
-                    self.save_titleblock_default();
+                    self.schriftfeld_speichern();
                 }
                 ui.separator();
                 // Reihenfolge wie im Original-Menü: Export › PDF (dort „PDF (Beta)“; hier geprüft, siehe CHANGELOG),
