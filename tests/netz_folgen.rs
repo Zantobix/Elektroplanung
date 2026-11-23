@@ -254,3 +254,90 @@ fn video_lampe_unter_andere_lampe() {
     let wb = wires.iter().find(|(_, w)| w.iter().any(|q| q.dist(b_oben) < 0.05)).map(|(_, w)| w.clone()).expect("Leitung zu B");
     assert!(!wb.windows(2).any(|v| (v[0].x - 105.0).abs() < 0.05 && (v[1].x - 105.0).abs() < 0.05 && v[0].y.min(v[1].y) < 112.0 && v[0].y.max(v[1].y) > 98.0), "durch A: {wb:?}");
 }
+
+/// Maustest 23.11.2026 (T5, licht_maus.epr): Lampe senkrecht unter der Klemme nach unten verschoben – die gerade
+/// Leitung Klemme → Lampe bekam einen U-Umweg zur Seite, statt einfach länger zu werden (Kriterium L9/L15).
+#[test]
+fn maustest_gerade_leitung_wird_beim_verschieben_in_flucht_nur_laenger() {
+    // Klemme (25,75) → Schließer oben (25,98); Schließer unten (25,112) → runter, rechts, hoch auf N (y = 45)
+    let mut app = app_mit(vec![
+        wire(1, &[(15.0, 45.0), (215.0, 45.0)]),
+        klemme(2, 25.0, 75.0),
+        schliesser(3, 25.0, 105.0),
+        wire(4, &[(25.0, 75.0), (25.0, 98.0)]),
+        wire(5, &[(25.0, 112.0), (25.0, 135.0), (65.0, 135.0), (65.0, 45.0)]),
+    ]);
+    app.lib = elektroplanung::symbols::builtin();
+    app.selection = vec![3];
+    app.checkpoint();
+    app.netz_merken();
+    for dy in [5.0, 10.0, 15.0, 20.0] {
+        app.netz_verschieben(&[3], p(0.0, dy));
+        assert_eq!(pts(&app, 4), vec![p(25.0, 75.0), p(25.0, 98.0 + dy)], "beim Ziehen um {dy}");
+    }
+    app.aufraeumen();
+    assert_eq!(pts(&app, 4), vec![p(25.0, 75.0), p(25.0, 118.0)]);
+}
+
+/// Ladefunktion für die privaten Maustest-Pläne (`EP_FIXTURES`); ohne sie wird der Test übersprungen.
+fn licht_maus() -> Option<(elektroplanung::app::App, u64)> {
+    let pfad = std::path::PathBuf::from(std::env::var("EP_FIXTURES").ok()?).join("licht_maus.epr");
+    if !pfad.exists() {
+        return None;
+    }
+    let mut app = test_app();
+    app.open_path(pfad, false);
+    let lampe = app.sheet()?.objects.iter().find(|o| matches!(&o.kind, Kind::Symbol { bmk, .. } if bmk.contains("E1")))?.id;
+    Some((app, lampe))
+}
+
+fn leitungen(app: &elektroplanung::app::App) -> Vec<(u64, Vec<P>)> {
+    app.sheet().unwrap().objects.iter().filter_map(|o| match &o.kind { Kind::Wire { pts, .. } => Some((o.id, pts.clone())), _ => None }).collect()
+}
+
+/// Eine Ziehgeste wie in der Oberfläche (view.rs, `Drag::Move`): Gesamtverschiebung je Mausbild, mit
+/// Strompfadausrichtung des Symbols, dann Aufräumen beim Loslassen.
+fn geste(app: &mut elektroplanung::app::App, id: u64, schritte: &[P]) {
+    app.selection = vec![id];
+    app.checkpoint();
+    app.netz_merken();
+    let p0 = match &app.sheet().unwrap().objects.iter().find(|o| o.id == id).unwrap().kind {
+        Kind::Symbol { pos, .. } => *pos,
+        _ => P::default(),
+    };
+    for d in schritte {
+        let mut d = *d;
+        d.x = app.align_to_path(p0.add(d)).x - p0.x;
+        app.netz_verschieben(&[id], d);
+    }
+    app.aufraeumen();
+}
+
+/// Maustest 23.11.2026 T5 auf dem mit der Maus gezeichneten Plan (privat `licht_maus.epr`): -E1 um 30 mm nach
+/// unten – die gerade Leitung von X1.1 bleibt gerade (vorher U-Umweg: die untere Leitung der Lampe wurde in ihrer
+/// Ausgangslage als fremdes Hindernis gesehen).
+#[test]
+fn maustest_licht_lampe_nach_unten() {
+    let Some((mut app, lampe)) = licht_maus() else { return };
+    let vorher = leitungen(&app);
+    geste(&mut app, lampe, &[p(0.0, 10.0), p(0.0, 20.0), p(0.0, 30.0)]);
+    for (id, w) in leitungen(&app) {
+        let alt = &vorher.iter().find(|(i, _)| *i == id).unwrap().1;
+        assert!(w.len() <= alt.len(), "Leitung {id} bekam Knicke: {alt:?} → {w:?}");
+    }
+}
+
+/// Maustest 23.11.2026 T2 (Kriterium L10 Rückkehr): -E1 in einer Geste nach rechts, in einer zweiten zurück –
+/// danach dieselbe Form wie vorher (vorher: Haken in der Leitung von X1.1). Offen (R5): die untere Leitung kommt
+/// mit 5 mm statt 10 mm Stich zurück – geprüft werden daher Punktzahl und Enden.
+#[test]
+fn maustest_licht_lampe_hin_und_zurueck() {
+    let Some((mut app, lampe)) = licht_maus() else { return };
+    let vorher = leitungen(&app);
+    geste(&mut app, lampe, &[p(10.0, 0.0), p(20.0, 0.0), p(34.6, 0.0)]);
+    geste(&mut app, lampe, &[p(-10.0, 0.0), p(-20.0, 0.0), p(-34.6, 0.0)]);
+    for ((id, w), (_, alt)) in leitungen(&app).iter().zip(&vorher) {
+        assert_eq!(w.len(), alt.len(), "Leitung {id}: {alt:?} → {w:?}");
+        assert!(w[0].dist(alt[0]) < 0.01 && w[w.len() - 1].dist(alt[alt.len() - 1]) < 0.01, "Leitung {id}: {alt:?} → {w:?}");
+    }
+}

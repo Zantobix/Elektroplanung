@@ -241,6 +241,13 @@ pub struct Gefuehrt {
 /// Änderung (für Richtungen, Hindernisse, andere Leitungen).
 #[allow(clippy::too_many_arguments)]
 pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P], ziel: [Option<P>; 2], opt: &NetzOpt, bewegt_ids: &[u64]) -> Option<Gefuehrt> {
+    fuehren_mit(vorher, jetzt, jetzt, lib, id, alt, ziel, opt, bewegt_ids)
+}
+
+/// Wie `fuehren`; `lagen` liefert die anderen Leitungen für die Prüfung auf Überdeckung (beim Nachführen ohne die
+/// Folgeleitungen, deren Ausgangslage nicht mehr gilt).
+#[allow(clippy::too_many_arguments)]
+pub fn fuehren_mit(vorher: &Sheet, jetzt: &Sheet, lagen: &Sheet, lib: &[SymDef], id: u64, alt: &[P], ziel: [Option<P>; 2], opt: &NetzOpt, bewegt_ids: &[u64]) -> Option<Gefuehrt> {
     use crate::leitung_hindernis as lh;
     let n = alt.len();
     if n < 2 {
@@ -272,11 +279,11 @@ pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P]
     let (a, b) = (ziel[0].unwrap_or(enden[0]), ziel[1].unwrap_or(enden[1]));
     let umrisse = lh::umrisse(jetzt, lib);
     let hind = lh::wirksam(&lh::hindernisse(&umrisse, &[], &[]), a, b);
-    let andere = strecken_ohne(jetzt, id);
+    let andere = strecken_ohne(lagen, id);
     // Leitungen, die mit dieser verbunden sind (Ende auf ihr bzw. ihr Ende auf dieser): Überdeckung mit ihnen ist
     // kein Hindernis (gleiches Netz, das Aufräumen vereinigt sie), wohl aber mit allen anderen
     let auf = |q: P, w: &[P]| w.windows(2).any(|s| seg_dist(q, s[0], s[1]) <= PIN_TOL);
-    let fremd: Vec<(P, P)> = jetzt
+    let fremd: Vec<(P, P)> = lagen
         .objects
         .iter()
         .filter(|o| o.id != id)
@@ -571,6 +578,12 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
         // geändert: primär oder in diesem Schritt geführt
         let mut geaendert: Vec<u64> = primaer.to_vec();
         geaendert.extend(&bewegt_ids);
+        // Lagen für die Überdeckungsprüfung: ohne die Folgeleitungen dieses Schritts – ihre Ausgangslage gilt nicht
+        // mehr (Maustest 23.11.2026: die untere Leitung einer nach unten verschobenen Lampe lag in der Ausgangslage
+        // dort, wo die obere gerade weiterlaufen sollte – die obere bekam einen U-Umweg). Ihre neue Lage wird nicht
+        // eingesetzt: dann hingen die Folgeleitungen gegenseitig voneinander ab und kämen nicht zur Ruhe.
+        let mut lagen = s.clone();
+        lagen.objects.retain(|o| !bewegt_ids.contains(&o.id));
         for o in vorher.iter().filter(|o| folger_von(o)) {
             let Kind::Wire { pts, .. } = &o.kind else { continue };
             let n = pts.len();
@@ -590,7 +603,7 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
             if ziel == [None, None] {
                 continue;
             }
-            if let Some(mut g) = fuehren(&vs, s, lib, o.id, pts, ziel, opt, &bewegt_ids) {
+            if let Some(mut g) = fuehren_mit(&vs, s, &lagen, lib, o.id, pts, ziel, opt, &bewegt_ids) {
                 // Absicherung (Nutzerbild Runde 13: schräge Leitung nach dem Verschieben einer Lampe): eine vorher
                 // rechtwinklige Leitung bleibt rechtwinklig – sonst neu mit Stichen um Symbole herum
                 if rechtwinklig(pts) && !rechtwinklig(&g.pts) && g.pts.len() >= 2 {

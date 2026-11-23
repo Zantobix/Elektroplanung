@@ -437,7 +437,9 @@ impl Sheet {
 }
 
 /// Strompfadausrichtung wie im Original: Schritt = (rechts − links) / Pfade, Mitte = links + (k + 0,5) · Schritt;
-/// gewählt wird der Pfad, in dessen Mitte `x` am nächsten liegt (ohne Abstandsgrenze).
+/// gewählt wird der Pfad, in dessen Mitte `x` am nächsten liegt (ohne Abstandsgrenze). Gerundet auf 0,1 mm, die
+/// Genauigkeit der .epr-Datei: sonst passte die Mitte nach Speichern und Laden nicht mehr zu den schon ausgerichteten
+/// Symbolen (Maustest 23.11.2026: 22,9375 gegen gespeicherte 22,9 – gerade Leitungen bekamen beim Verschieben Umwege).
 pub fn path_center(left: f32, right: f32, cols: u32, x: f32) -> f32 {
     let n = cols.max(1);
     let step = (right - left) / n as f32;
@@ -445,7 +447,7 @@ pub fn path_center(left: f32, right: f32, cols: u32, x: f32) -> f32 {
         return x;
     }
     let k = ((x - left) / step - 0.5).round().clamp(0.0, (n - 1) as f32);
-    left + (k + 0.5) * step
+    ((left + (k + 0.5) * step) * 10.0).round() / 10.0
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

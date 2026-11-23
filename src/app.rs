@@ -2036,12 +2036,13 @@ mod tests {
 
     #[test]
     fn strompfad_mitte() {
-        // A4 quer: Rahmen 5 … 292, 8 Pfade → Schritt 35,875
-        let step = (292.0 - 5.0) / 8.0;
-        assert!((path_center(5.0, 292.0, 8, 6.0) - (5.0 + 0.5 * step)).abs() < 1e-4);
-        assert!((path_center(5.0, 292.0, 8, 60.0) - (5.0 + 1.5 * step)).abs() < 1e-4);
-        assert!((path_center(5.0, 292.0, 8, 400.0) - (5.0 + 7.5 * step)).abs() < 1e-4);
-        assert!((path_center(5.0, 292.0, 8, -50.0) - (5.0 + 0.5 * step)).abs() < 1e-4);
+        // A4 quer: Rahmen 5 … 292, 8 Pfade → Schritt 35,875; Mitten auf 0,1 mm gerundet (Dateigenauigkeit)
+        let m = |k: f32| ((5.0 + k * (292.0 - 5.0) / 8.0) * 10.0f32).round() / 10.0;
+        assert!((path_center(5.0, 292.0, 8, 6.0) - m(0.5)).abs() < 1e-4);
+        assert!((path_center(5.0, 292.0, 8, 60.0) - m(1.5)).abs() < 1e-4);
+        assert!((path_center(5.0, 292.0, 8, 400.0) - m(7.5)).abs() < 1e-4);
+        assert!((path_center(5.0, 292.0, 8, -50.0) - m(0.5)).abs() < 1e-4);
+        assert_eq!(path_center(5.0, 292.0, 8, 6.0), 22.9);
         let s = Sheet::new(1);
         let (fx0, _, fx1, _) = s.frame();
         assert!((s.path_center_x(100.0).unwrap() - path_center(fx0, fx1, 8, 100.0)).abs() < 1e-4);
