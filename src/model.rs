@@ -370,6 +370,9 @@ pub struct Sheet {
     /// Pfadbeschreibungen: Begrenzungslinien zwischen den Strompfaden über das ganze Blatt (TPfadDialog)
     #[serde(default)]
     pub pfad_linien: bool,
+    /// „Auto+“ des Blattdialogs (BLT Feld 32 Bit 5 = Blatt +0x80 Bit 0x20; nur bei Listenblättern wählbar)
+    #[serde(default)]
+    pub auto_plus: bool,
     /// Erstellt / Geändert dieses Blattes (BLT Byte 112 / 120, Delphi-Datum) – das Schriftfeld zeigt sie
     #[serde(default)]
     pub erstellt: String,
@@ -387,7 +390,7 @@ pub struct Sheet {
 
 impl Sheet {
     pub fn new(number: u32) -> Self {
-        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, zusatz: 0, art_fest: false, pfad_linien: false, erstellt: today(), geaendert: String::new(), raender: crate::rahmen::RAENDER_W2, ab_null: false, raw: None }
+        Self { name: format!("Blatt {number}"), number, columns: 8, objects: Vec::new(), portrait: false, col_labels: vec![], ort: String::new(), frame_h: 0.0, subindex: 0, col_auto: false, art: 0, klm: 0, zusatz: 0, art_fest: false, pfad_linien: false, auto_plus: false, erstellt: today(), geaendert: String::new(), raender: crate::rahmen::RAENDER_W2, ab_null: false, raw: None }
     }
 
     /// Blattgröße in mm (A4 quer oder hoch).

@@ -155,6 +155,14 @@ fn loese_partner(project: &mut Project, id: u64, p: u64) -> bool {
     false
 }
 
+/// Verweis `id` ohne Ziel (Blatt „Keine Zuordnung“); ein zurückzeigender Partner wird ebenfalls gelöst.
+pub fn loesen(project: &mut Project, id: u64) {
+    if let Some(alt) = ziel_von(project, id) {
+        loese_partner(project, id, alt.obj);
+    }
+    setze_ziel(project, id, None);
+}
+
 /// "Ziel setzen": Verweis `id` auf Blatt `ziel` und optional den Gegenverweis `gegen` richten. Wie im Original
 /// (Routine 0x48056c) zeigt der Gegenverweis danach zurück; bisherige Partner beider Seiten werden gelöst
 /// (das Original fragt dabei "Der Zielverweis ist schon anderwertig belegt …"). Rückgabe: Hinweis für die Statuszeile.

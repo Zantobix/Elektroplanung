@@ -16,6 +16,14 @@ Angleichungen nach statischer Prüfung der Dialoge (Runde 12):
 - Symboleigenschaften: „Wahl n Löschen“ entfernt den letzten Alternativtext; „Seite Löschen“ bei nur einer Seite
   meldet wie das Original.
 - Sammelschienen-Objekt: `Neue Schiene "L<n>"` steht wie im Original als erster Eintrag der S-Schienen-Liste.
+- Blattdialog beim Anlegen (Hinzufügen › Blatt): Strompfade „-1“, Querformat, Anlage wählbar; Bezeichnung, Nummer
+  und Subindex folgen der Blattart („Klemmenplan“, Deckblatt 0/0 …). „Auto+“ ist bei Listenblättern wählbar und
+  wird im `.epr` gelesen und geschrieben. Knopf „Neues Blatt“ und Datei › Neu › Blatt legen das Blatt wie im
+  Original ohne Dialog an.
+- Verweis: Blatt- und Verweislink-Liste beginnen mit „Keine Zuordnung“ (ohne Ziel bleibt der Verweis unverknüpft),
+  Verweislinks nur in Gegenrichtung mit „(n Ziel)“ und „[Vergeben]“.
+- Pfadbeschreibungen mit Spalte „Pfade“ (ab 0 bei „Ab '0'“); Potential mit drei Nachkommastellen, Leitungsquerschnitt
+  mit zwei; Bild zeigt die Namen der Grafiken; „Neues Schriftfeld“ zählt nur unbenannte Anlagen.
 
 Leitungsführung nach Nutzerwünschen (Runde 12):
 - Gezogene Leitungen folgen dem Mausweg: jede Richtungsänderung der Maus (ab einem Raster) wird ein Knick, Zurückfahren

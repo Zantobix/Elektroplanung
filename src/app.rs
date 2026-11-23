@@ -1087,6 +1087,11 @@ impl App {
             self.open_sheet_props_dialog(r);
             if let Some(crate::props::Props::Sheet(s)) = self.props.as_mut() {
                 s.neu = true;
+                // Vorgaben des Dialogs wie Blatteinfgen1Click 0x461960 (blatt_neu.rs): Strompfade „-1“, Querformat
+                s.strompfade = "-1".into();
+                s.portrait = false;
+                s.vorgabe = [s.name.clone(), s.nummer.clone(), s.subindex.clone()];
+                s.vorher = (s.art, s.anlage_wahl);
             }
         }
     }

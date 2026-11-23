@@ -80,15 +80,21 @@ fn strs(v: &[&str]) -> Vec<String> {
 
 /// Spaltenweise Liste (TIconTab des Originals): Zellen bearbeiten, Zeile wählen.
 fn icon_tab(ui: &mut egui::Ui, id: &str, head: &[&str], rows: &mut [Vec<String>], sel: &mut usize, h: f32) {
+    icon_tab_nr(ui, id, "", 1, head, rows, sel, h);
+}
+
+/// Wie `icon_tab`, mit Kopf `nr_kopf` der Nummernspalte und Zählung ab `ab`.
+#[allow(clippy::too_many_arguments)]
+fn icon_tab_nr(ui: &mut egui::Ui, id: &str, nr_kopf: &str, ab: usize, head: &[&str], rows: &mut [Vec<String>], sel: &mut usize, h: f32) {
     egui::ScrollArea::both().id_salt(id).max_height(h).show(ui, |ui| {
         egui::Grid::new(id).striped(true).num_columns(head.len() + 1).show(ui, |ui| {
-            ui.label("");
+            ui.label(RichText::new(nr_kopf).strong());
             for c in head {
                 ui.label(RichText::new(*c).strong());
             }
             ui.end_row();
             for (r, row) in rows.iter_mut().enumerate() {
-                if ui.selectable_label(*sel == r, format!("{}", r + 1)).clicked() {
+                if ui.selectable_label(*sel == r, format!("{}", r + ab)).clicked() {
                     *sel = r;
                 }
                 for c in row.iter_mut() {
@@ -131,14 +137,6 @@ pub fn order_key(p: P, dir: usize) -> f32 {
         3 => -p.y,
         _ => p.x,
     }
-}
-
-/// Verweise eines Blattes (Objekt-Id, Text) für die Auswahl "Verweislink".
-fn verweis_links(project: &Project, r: SheetRef) -> Vec<(u64, String)> {
-    project
-        .sheet(r)
-        .map(|s| s.objects.iter().filter_map(|o| if let Kind::Verweis { text, .. } = &o.kind { Some((o.id, text.clone())) } else { None }).filter(|(_, t)| !t.is_empty()).collect())
-        .unwrap_or_default()
 }
 
 impl App {
@@ -201,14 +199,17 @@ impl App {
                 }
             }
             Kind::Verweis { text, dir, ziel, .. } => {
-                // gesetztes Ziel vorwählen (Anlage, Blatt, Gegenverweis), sonst das eigene Blatt
-                let (blatt_ref, gegen) = ziel.as_ref().and_then(|z| self.project.resolve_ziel(z)).unwrap_or((r, None));
-                let link = gegen.and_then(|g| verweis_links(&self.project, blatt_ref).iter().position(|(i, _)| *i == g)).map(|i| i + 1).unwrap_or(0);
+                // gesetztes Ziel vorwählen (Anlage, Blatt, Gegenverweis); ohne Ziel die eigene Anlage mit Blatt
+                // „Keine Zuordnung“ wie im Original (0x4a468c, verweis_wahl.rs)
+                let gesetzt = ziel.as_ref().and_then(|z| self.project.resolve_ziel(z));
+                let (blatt_ref, gegen) = gesetzt.unwrap_or((r, None));
+                let start = crate::verweis_wahl::ist_start(*dir);
+                let link = gegen.and_then(|g| crate::verweis_wahl::link_kandidaten(&self.project, blatt_ref, id, start).iter().position(|k| k.0 == g)).map(|i| i + 1).unwrap_or(0);
                 Dlg3::Verweis {
                     id,
                     anlagen: self.project.anlagen.iter().map(|a| a.name.clone()).collect(),
                     anlage: blatt_ref.anlage,
-                    blatt: blatt_ref.sheet,
+                    blatt: if gesetzt.is_some() { blatt_ref.sheet + 1 } else { 0 },
                     link,
                     zu: *dir == 0 || *dir == 270,
                     titel: text.clone(),
@@ -281,7 +282,8 @@ impl App {
     pub fn open_pfad_dialog(&mut self) {
         let Some(r) = self.cur() else { return };
         let Some(s) = self.project.sheet(r) else { return };
-        self.dlg3 = Some(Dlg3::Pfad { r, rows: (0..s.columns as usize).map(|i| s.col_label(i)).collect(), grenze: s.pfad_linien });
+        // Spalte „Bezeichnung“ nur mit eigenen Pfadbeschreibungen (0x4b726c: PFB-Liste), Nummern in „Pfade“
+        self.dlg3 = Some(Dlg3::Pfad { r, rows: (0..s.columns as usize).map(|i| s.col_labels.get(i).cloned().unwrap_or_default()).collect(), grenze: s.pfad_linien });
     }
 
     pub fn open_titel_dialog(&mut self) {
@@ -573,12 +575,16 @@ impl App {
                         }
                     });
                 }
-                Dlg3::Verweis { anlagen, anlage, blatt, link, zu, titel, .. } => {
-                    let blaetter: Vec<String> = self.project.anlagen.get(*anlage).map(|a| a.sheets.iter().map(|s| format!("[{}] {}", s.number, s.name)).collect()).unwrap_or_default();
-                    // Eintrag 0 = nur das Blatt, danach die Verweise des Zielblattes
-                    let links: Vec<String> = std::iter::once("(nur Blatt)".to_string())
-                        .chain(verweis_links(&self.project, SheetRef { anlage: *anlage, sheet: *blatt }).into_iter().map(|(_, t)| t))
-                        .collect();
+                Dlg3::Verweis { id, anlagen, anlage, blatt, link, zu, titel } => {
+                    // Listen wie im Original (verweis_wahl.rs): Eintrag 0 jeweils „Keine Zuordnung“; Verweislink nur
+                    // mit Verweisen der Gegenrichtung (Richtung des Verweises beim Öffnen)
+                    let blaetter = crate::verweis_wahl::blatt_eintraege(&self.project, *anlage);
+                    let start = self.cur().and_then(|r| self.project.sheet(r)).and_then(|s| s.objects.iter().find(|o| o.id == *id)).map(|o| matches!(&o.kind, Kind::Verweis { dir, .. } if crate::verweis_wahl::ist_start(*dir))).unwrap_or(*zu);
+                    let kand = match blatt.checked_sub(1) {
+                        Some(b) => crate::verweis_wahl::link_kandidaten(&self.project, SheetRef { anlage: *anlage, sheet: b }, *id, start),
+                        None => vec![],
+                    };
+                    let links = crate::verweis_wahl::link_eintraege(&kand);
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Anlage");
                         if combo(ui, "vwanl", anlagen, anlage, 170.0) {
@@ -594,9 +600,10 @@ impl App {
                     });
                     ui.horizontal(|ui| {
                         lbl(ui, 90.0, "Verweislink");
+                        // Komfort des Nachbaus: Auswahl übernimmt den Titel des Gegenverweises (Original: kein OnChange)
                         if combo(ui, "vwlink", &links, link, 170.0) && *link > 0 {
-                            if let Some(t) = links.get(*link) {
-                                *titel = t.clone();
+                            if let Some(k) = kand.get(*link - 1).filter(|k| !k.1.trim().is_empty()) {
+                                *titel = k.1.clone();
                             }
                         }
                     });
@@ -614,9 +621,11 @@ impl App {
                 }
                 Dlg3::Bild { grafiken, grafik, art, oben, links, hoehe, breite, rahmen, fixiert, .. } => {
                     let mut neu = false;
+                    // Liste wie im Original (0x446845): Namen der Grafiken des Projekts statt der Schlüssel „bld:<Nr>“
+                    let namen: Vec<String> = grafiken.iter().map(|g| crate::verweis_wahl::grafik_name(&self.project, g)).collect();
                     ui.horizontal(|ui| {
                         lbl(ui, 80.0, "Grafik");
-                        combo(ui, "bgraf", grafiken, grafik, 140.0);
+                        combo(ui, "bgraf", &namen, grafik, 140.0);
                         neu = ui.button("Neu").clicked();
                     });
                     if neu {
@@ -685,10 +694,12 @@ impl App {
                     icon_tab(ui, "kidx", &crate::klemmen_verwendung::KOPF, &mut rows, &mut sel, 200.0);
                     *nrs = rows.into_iter().map(|mut r| r.remove(0)).collect();
                 }
-                Dlg3::Pfad { rows, grenze, .. } => {
+                Dlg3::Pfad { r, rows, grenze } => {
+                    // Spalten „Pfade“ und „Bezeichnung“ (0x4b726c); Pfadnummern ab 0 bei „Ab '0'“ der Anlage
+                    let ab = usize::from(!self.project.sheet(*r).is_some_and(|s| s.ab_null));
                     let mut grid: Vec<Vec<String>> = rows.iter().map(|r| vec![r.clone()]).collect();
                     let mut sel = 0;
-                    icon_tab(ui, "pfad", &["Bezeichnung"], &mut grid, &mut sel, 290.0);
+                    icon_tab_nr(ui, "pfad", "Pfade", ab, &["Bezeichnung"], &mut grid, &mut sel, 290.0);
                     *rows = grid.into_iter().map(|mut r| r.remove(0)).collect();
                     ui.checkbox(grenze, "Begrenzungslinien");
                 }
@@ -739,7 +750,7 @@ impl App {
                 Dlg3::NeuesSchriftfeld { anlage, aus_datei, pfad } => {
                     // wie TFORM10.FormShow: „Gesamtes Projekt“, dann die Anlagen (ohne Namen: „[AnlageX ohne Namen]“)
                     let mut items = vec!["Gesamtes Projekt".to_string()];
-                    items.extend(self.project.anlagen.iter().enumerate().map(|(i, a)| if a.name.is_empty() { "[AnlageX ohne Namen]".replace('X', &(i + 1).to_string()) } else { a.name.clone() }));
+                    items.extend(crate::verweis_wahl::anlagen_ohne_namen(&self.project));
                     ui.horizontal(|ui| {
                         lbl(ui, 40.0, "Für");
                         combo(ui, "sfanl", &items, anlage, 190.0);
@@ -1091,9 +1102,25 @@ impl App {
                 });
             }
             Dlg3::Verweis { id, anlage, blatt, link, zu, titel, .. } => {
-                // Ziel setzen; mit Verweislink wird der Gegenverweis wie im Original zurückverknüpft
-                let ziel_ref = SheetRef { anlage, sheet: blatt };
-                let gegen = link.checked_sub(1).and_then(|i| verweis_links(&self.project, ziel_ref).get(i).map(|(g, _)| *g));
+                // Ziel setzen; mit Verweislink wird der Gegenverweis wie im Original zurückverknüpft.
+                // Blatt „Keine Zuordnung“ (Index 0): Verweis ohne Ziel, bisheriger Partner wird gelöst
+                let start = self.project.find_obj(id).map(|(_, o)| matches!(&o.kind, Kind::Verweis { dir, .. } if crate::verweis_wahl::ist_start(*dir))).unwrap_or(zu);
+                let Some(b) = blatt.checked_sub(1) else {
+                    crate::verweise::loesen(&mut self.project, id);
+                    self.with_sheet(|s, _| {
+                        if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
+                            if let Kind::Verweis { text, dir, .. } = &mut o.kind {
+                                *text = titel.clone();
+                                if crate::verweis_wahl::ist_start(*dir) != zu {
+                                    *dir = (*dir + 180) % 360;
+                                }
+                            }
+                        }
+                    });
+                    return None;
+                };
+                let ziel_ref = SheetRef { anlage, sheet: b };
+                let gegen = link.checked_sub(1).and_then(|i| crate::verweis_wahl::link_kandidaten(&self.project, ziel_ref, id, start).get(i).map(|k| k.0));
                 // Original (0x48056c): ist der Gegenverweis schon mit einem anderen verbunden, erst fragen (Nein = nichts verknüpfen)
                 let bestaetigt = !crate::meldungen::zielverweis_belegt(&self.project, id, gegen) || crate::meldungen::frage(crate::meldungen::T_SICHER_F, crate::meldungen::ZIELVERWEIS_BELEGT);
                 if bestaetigt && self.project.sheet(ziel_ref).is_some() {
@@ -1168,8 +1195,8 @@ impl App {
             }
             Dlg3::Pfad { r, rows, grenze } => {
                 if let Some(s) = self.project.sheet_mut(r) {
-                    let def: Vec<String> = (0..rows.len()).map(|i| (i + 1).to_string()).collect();
-                    s.col_labels = if rows == def { vec![] } else { rows };
+                    // leere Zeilen = Pfadnummer (col_label); ganz leer = keine eigenen Beschreibungen
+                    s.col_labels = if rows.iter().all(|t| t.trim().is_empty()) { vec![] } else { rows };
                     s.pfad_linien = grenze;
                 }
             }

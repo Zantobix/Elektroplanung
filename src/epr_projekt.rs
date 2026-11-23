@@ -21,7 +21,8 @@
 //!   Schiene), Feld 8/9 Kennung,
 //!   11 Potential (POT Feld 8), 18 Stift. KLM (80 Byte): Name 0–20, TIT, Feld 13 Kennung, 15 Etagen.
 //! - BLT: Feld 22 Byte 0 Blattart, Byte 51–71 Ort, Feld 25 Strompfade (−1 = von der Anlage), Feld 32 Bit 4
-//!   Begrenzungslinien (Pfaddialog 0x499b88: Blatt +0x80 Bit 0x10), Feld 32 ab Bit 8 Klemmleiste (Klemmplan);
+//!   Begrenzungslinien (Pfaddialog 0x499b88: Blatt +0x80 Bit 0x10), Bit 5 „Auto+“ (Blattdialog, 0x461e20),
+//!   Feld 32 ab Bit 8 Klemmleiste (Klemmplan);
 //!   PFB (4 Byte: Pfadnummer ab 1) › STR = Pfadbeschreibung (Blatt +0x9c, Dialog TPfadDialog).
 //!
 //! Grundsatz wie in `epr_write`: Ein Feld wird nur geschrieben, wenn sich der Wert im Modell von dem im Block
@@ -236,6 +237,7 @@ pub fn import(prj: &Block, p: &mut Project) {
                 s.columns = n.clamp(1, 100) as u32;
             }
             s.pfad_linien = b.i32(32) & 0x10 != 0;
+            s.auto_plus = b.i32(32) & 0x20 != 0;
             let labels = pfade_aus(b);
             if !labels.is_empty() {
                 s.col_labels = labels;
@@ -653,6 +655,9 @@ fn write_blatt(a: &Anlage, s: &Sheet, b: &mut Block) {
     let mut v = f32_;
     if (v & 0x10 != 0) != s.pfad_linien {
         v ^= 0x10;
+    }
+    if (v & 0x20 != 0) != s.auto_plus {
+        v ^= 0x20;
     }
     if v != f32_ {
         b.set_i32(32, v);

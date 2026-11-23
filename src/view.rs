@@ -173,8 +173,9 @@ impl App {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing = Vec2::ZERO;
             ui.add_space(29.0);
+            // ToolButton2 → ToolButton4Click 0x42ba58: Blatt sofort anlegen (0x4066d8), ohne Dialog
             if tool_button(ui, Icon::NewSheet, "Neues Blatt", true, false).clicked() {
-                self.new_sheet_dialog();
+                self.new_sheet();
             }
             if tool_button(ui, Icon::NewPotential, "Neues Potential", true, false).clicked() {
                 self.potential_neu();
@@ -1971,8 +1972,9 @@ impl App {
                     if ui.button("Projekt").clicked() {
                         self.guarded(crate::app::Pending::New);
                     }
+                    // Datei › Neu › Blatt = ToolButton4Click wie der Knopf „Neues Blatt“ (ohne Dialog)
                     if ui.button("Blatt").clicked() {
-                        self.new_sheet_dialog();
+                        self.new_sheet();
                     }
                 });
                 ui.separator();

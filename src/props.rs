@@ -89,6 +89,13 @@ pub struct SheetProps {
     pub leisten: Vec<(i32, String)>,
     /// gerade über Hinzufügen › Blatt angelegt: Abbruch nimmt das Blatt wieder weg (wie im Original, Maus-Befund M18)
     pub neu: bool,
+    /// gewählte Anlage (nur beim Anlegen wählbar, blatt_neu.rs)
+    pub anlage_wahl: usize,
+    /// „Auto+“ (BLT Feld 32 Bit 5)
+    pub auto_plus: bool,
+    /// Vorgaben (Bezeichnung, Nummer, Subindex) zu (Blattart, Anlage) `vorher` – beim Anlegen nachgeführt
+    pub vorgabe: [String; 3],
+    pub vorher: (usize, usize),
 }
 
 pub struct AnlProps {
@@ -444,6 +451,10 @@ impl App {
                 },
                 leisten,
                 neu: false,
+                anlage_wahl: r.anlage,
+                auto_plus: s.auto_plus,
+                vorgabe: Default::default(),
+                vorher: (usize::MAX, r.anlage),
             }));
         }
     }
@@ -463,7 +474,10 @@ impl App {
                 match &mut p {
                     Props::Symbol(s) => symbol_ui(ui, s),
                     Props::Text(t) => text_ui(ui, t),
-                    Props::Sheet(s) => sheet_ui(ui, s, &anlagen),
+                    Props::Sheet(s) => {
+                        sheet_ui(ui, s, &anlagen);
+                        crate::props::vorgaben_nachfuehren(&self.project, s);
+                    }
                     Props::Anlage(a) => anlage_ui(ui, a),
                     Props::SymEigen(s) => symeigen_ui(ui, s),
                     Props::Zeichen(z) => crate::zeichen_dialog::ui(ui, z, &stifte),
@@ -673,7 +687,15 @@ impl App {
                 }
                 let _ = t;
             }
-            Props::Sheet(s) => {
+            Props::Sheet(mut s) => {
+                // beim Anlegen gewählte andere Anlage: Blatt dorthin umhängen (Blatteinfgen1Click 0x461cba)
+                if s.neu && s.anlage_wahl != s.r.anlage {
+                    let alt = s.r;
+                    s.r = crate::blatt_neu::umhaengen(&mut self.project, alt, s.anlage_wahl);
+                    for t in self.tabs.iter_mut().filter(|t| **t == alt) {
+                        *t = s.r;
+                    }
+                }
                 // Regeln des Originals für Nummer 0, Subindex 0 und Deckblatt (blattnummer.rs); im Nachbau
                 // angelegte Blätter ohne Art gelten als Schaltplan
                 let art = s.art as u8;
@@ -706,6 +728,7 @@ impl App {
                         sh.col_auto = true;
                     }
                     sh.portrait = s.portrait;
+                    sh.auto_plus = s.auto_plus && crate::blatt_neu::auto_plus_frei(s.art);
                     // Blattart; beim Klemmplan die gewählte Klemmleiste (BLT Feld 32 ab Bit 8)
                     sh.art = s.art as u8;
                     sh.art_fest = true;
@@ -1138,11 +1161,32 @@ fn anlage_ui(ui: &mut egui::Ui, a: &mut AnlProps) {
     });
 }
 
+/// Beim Anlegen: nach Wechsel von Blattart oder Anlage die Vorgaben des Originals übernehmen, soweit die Felder
+/// noch die alte Vorgabe zeigen (blatt_neu.rs).
+pub fn vorgaben_nachfuehren(p: &Project, s: &mut SheetProps) {
+    if !s.neu || s.vorher == (s.art, s.anlage_wahl) {
+        return;
+    }
+    let neu = crate::blatt_neu::vorgaben(p, s.anlage_wahl, s.art, s.r);
+    for (feld, (alt, v)) in [&mut s.name, &mut s.nummer, &mut s.subindex].into_iter().zip(s.vorgabe.iter().zip(neu.iter())) {
+        if feld.trim() == alt.trim() {
+            *feld = v.clone();
+        }
+    }
+    s.vorgabe = neu;
+    s.vorher = (s.art, s.anlage_wahl);
+}
+
 fn sheet_ui(ui: &mut egui::Ui, s: &mut SheetProps, anlagen: &[String]) {
     egui::Grid::new("blt").num_columns(2).spacing([4.0, 8.0]).show(ui, |ui| {
         label(ui, 90.0, "Anlage", true);
-        ui.add_enabled_ui(false, |ui| {
-            egui::ComboBox::from_id_salt("anl").width(185.0).selected_text(anlagen.get(s.r.anlage).cloned().unwrap_or_default()).show_ui(ui, |_| {});
+        // wählbar nur beim Anlegen (Original: beim Bearbeiten gesperrt, 0x44a3da)
+        ui.add_enabled_ui(s.neu, |ui| {
+            egui::ComboBox::from_id_salt("anl").width(185.0).selected_text(anlagen.get(s.anlage_wahl).cloned().unwrap_or_default()).show_ui(ui, |ui| {
+                for (i, a) in anlagen.iter().enumerate() {
+                    ui.selectable_value(&mut s.anlage_wahl, i, a);
+                }
+            });
         });
         ui.end_row();
         label(ui, 90.0, "Art", true);
@@ -1174,10 +1218,11 @@ fn sheet_ui(ui: &mut egui::Ui, s: &mut SheetProps, anlagen: &[String]) {
             });
         });
         ui.end_row();
-        label(ui, 90.0, "Auto+", false);
-        ui.add_enabled_ui(false, |ui| {
-            let mut a = true;
-            ui.checkbox(&mut a, bt("(bei Darstellung)"));
+        // „Auto+“ nur bei Listenblättern wählbar (0x4a3970), Wert in BLT Feld 32 Bit 5
+        let frei = crate::blatt_neu::auto_plus_frei(s.art);
+        label(ui, 90.0, "Auto+", frei);
+        ui.add_enabled_ui(frei, |ui| {
+            ui.checkbox(&mut s.auto_plus, bt("(bei Darstellung)"));
         });
         ui.end_row();
         label(ui, 90.0, "Bezeichnung", true);

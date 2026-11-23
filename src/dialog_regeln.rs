@@ -23,9 +23,21 @@ pub fn zahl_text(s: &str, stellen: usize) -> String {
     }
 }
 
+/// Wie `zahl_text`, leere Eingabe als 0 (TIn.FSetZahl zeigt 0 mit Kommastellen als „0,000“).
+pub fn zahl_text_leer0(s: &str, stellen: usize) -> String {
+    zahl_text(if s.trim().is_empty() { "0" } else { s }, stellen)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn potential_anzeige() {
+        assert_eq!(zahl_text_leer0("230", 3), "230,000");
+        assert_eq!(zahl_text_leer0("", 3), "0,000");
+        assert_eq!(zahl_text_leer0("0,5", 3), "0,500");
+    }
 
     #[test]
     fn druck_anlage_gesperrt() {

@@ -767,7 +767,8 @@ impl App {
                 idx,
                 name: l.name.clone(),
                 color: to_c32(l.color),
-                quer: format!("{}", l.quer).replace('.', ","),
+                // L_Quer: TIn mit Kommastellen=2 (FSetZahl): „1,50“
+                quer: crate::dialog_regeln::zahl_text(&format!("{}", l.quer), 2),
                 adern: l.adern.to_string(),
                 kennz: l.kennz as usize,
                 width: format!("{:.2}", l.width_mm).replace('.', ","),

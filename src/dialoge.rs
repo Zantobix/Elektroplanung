@@ -50,6 +50,8 @@ impl App {
     pub fn open_potential_dialog(&mut self, idx: usize) {
         let name = self.project.potentiale.get(idx).cloned().unwrap_or_default();
         let (spannung, strom) = self.project.pot_werte.get(&name).cloned().unwrap_or_default();
+        // Anzeige wie TIn mit Kommastellen=3 (P_Spannung/P_Strom, FSetZahl 0x51edec): „230,000“, leer „0,000“
+        let (spannung, strom) = (crate::dialog_regeln::zahl_text_leer0(&spannung, 3), crate::dialog_regeln::zahl_text_leer0(&strom, 3));
         self.dlg2 = Some(Dlg2::Potential { idx, name, spannung, strom });
     }
 
@@ -227,6 +229,9 @@ impl App {
                     let old = std::mem::replace(p, name.clone());
                     self.project.pot_werte.remove(&old);
                 }
+                // gespeichert wie bisher („230“, 0 = leer)
+                let norm = |t: &str| crate::epr_projekt::tausendstel(t).map(crate::epr_projekt::als_text).unwrap_or_else(|| t.to_string());
+                let (spannung, strom) = (norm(&spannung), norm(&strom));
                 if !spannung.is_empty() || !strom.is_empty() {
                     self.project.pot_werte.insert(name, (spannung, strom));
                 }
