@@ -31,6 +31,7 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     app.open_path(std::path::PathBuf::from(f), false);
     let mut z = Zufall(777);
     let (mut versuche, mut fehler) = (0, vec![]);
+    let mut ueber_anschluss: Vec<String> = vec![];
     let blaetter = app.tabs.len();
     for b in 0..blaetter {
         app.active = b;
@@ -84,7 +85,7 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
                     was = format!("Objekt {} um {d:?}", o.id);
                 }
             }
-            app.aufraeumen();
+            if std::env::var("OHNE_AUFR").is_err() { app.aufraeumen(); }
             versuche += 1;
             let n = app.sheet().unwrap().clone();
             // keine neuen freien Enden: Lagen freier Leitungsenden nachher, die vorher keine freien Enden waren und
@@ -112,6 +113,12 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
                     if war_gerade && !pts.windows(2).all(|w| (w[0].x - w[1].x).abs() < 0.01 || (w[0].y - w[1].y).abs() < 0.01) {
                         fehler.push(format!("Blatt {b}: {was}: Leitung {} schräg {pts:?}", x.id));
                     }
+                    // über keinen fremden Symbolanschluss (sonst elektrisch angeschlossen), wenn sie es vorher nicht tat
+                    let ueber = |q: &[P], sh: &Sheet| sh.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).flat_map(|o| elektroplanung::canvas::obj_pins(o, &lib)).any(|a| a.dist(q[0]) > 0.05 && a.dist(q[q.len() - 1]) > 0.05 && q.windows(2).any(|w| seg_dist(a, w[0], w[1]) < 0.05));
+                    let vorher_ueber = s.objects.iter().find(|y| y.id == x.id).is_some_and(|y| matches!(&y.kind, Kind::Wire { pts: q, .. } if ueber(q, &s)));
+                    if ueber(pts, &n) && !vorher_ueber && x.id != o.id {
+                        ueber_anschluss.push(format!("Blatt {b}: {was}: Leitung {} läuft über einen fremden Anschluss {pts:?}", x.id));
+                    }
                     if pts.windows(2).any(|w| w[0].dist(w[1]) < 0.001) {
                         fehler.push(format!("Blatt {b}: {was}: Leitung {} doppelter Punkt", x.id));
                     }
@@ -124,6 +131,13 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
         println!("{f}");
     }
     println!("{versuche} Bearbeitungen, {} Befunde", fehler.len());
+    for f in ueber_anschluss.iter().take(15) {
+        println!("(Kennzahl) {f}");
+    }
+    println!("{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
     assert!(fehler.is_empty());
+    // Kennzahl (Runde 13): übrig sind Fälle, in denen die Zufallsverschiebung ein Objekt auf fremde Leitungen bzw.
+    // Anschlüsse setzt und es keinen sauberen Weg mehr gibt
+    assert!(ueber_anschluss.len() <= 12, "{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
 }
 

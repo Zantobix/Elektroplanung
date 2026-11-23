@@ -40,9 +40,15 @@ pub fn schiene_bei(p: P, sch: &[Schiene]) -> Option<Schiene> {
 /// Läuft der Anfang bzw. das Ende der Leitung auf einer Schiene entlang, beginnt sie dort, wo sie die Schiene
 /// verlässt (der Abgriff wandert mit). Eine Leitung, die ganz auf der Schiene liegt, bleibt unverändert.
 pub fn abgreifen(pts: &[P], sch: &[Schiene]) -> Vec<P> {
+    abgreifen_ausser(pts, sch, [false, false])
+}
+
+/// Wie `abgreifen`; Enden mit `fest` (an einem Anschluss bzw. einer Klemmstelle) bleiben, auch wenn das Endstück auf
+/// einer Schiene liegt – sonst hinge die Leitung an der Schiene statt am Anschluss.
+pub fn abgreifen_ausser(pts: &[P], sch: &[Schiene], fest: [bool; 2]) -> Vec<P> {
     let mut v = crate::leitung_fuehrung::bereinigen(pts.to_vec());
-    for _ in 0..2 {
-        while v.len() > 2 {
+    for k in 0..2 {
+        while v.len() > 2 && !fest[k] {
             let Some(s) = schiene_bei(v[0], sch) else { break };
             if !auf(v[1], &s) {
                 break;

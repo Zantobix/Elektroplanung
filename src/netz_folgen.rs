@@ -140,6 +140,14 @@ pub fn lage_auf(alt: &[P], neu: &[P], e: P) -> P {
     if alt.iter().any(|q| q.dist(e) <= PIN_TOL) && neu.iter().any(|q| q.dist(e) <= PIN_TOL) {
         return e;
     }
+    // liegt e nachher noch auf einem Stück gleicher Richtung wie eines der alten Stücke durch e (z. B. Abzweig an
+    // einer Ecke, deren waagerechtes Stück bleibt, während das senkrechte wandert): bleibt – sonst zog eine Ecke
+    // ganze Ketten von Abzweigen mit (W2 Blatt 27, Klemmenreihe um 2,5 mm verschoben)
+    let richtung = |a: P, b: P| if waag(a, b) && !senk(a, b) { 1 } else if senk(a, b) && !waag(a, b) { 2 } else { 0 };
+    let alt_r: Vec<i32> = alt.windows(2).filter(|s| seg_dist(e, s[0], s[1]) <= PIN_TOL).map(|s| richtung(s[0], s[1])).filter(|r| *r != 0).collect();
+    if neu.windows(2).any(|s| seg_dist(e, s[0], s[1]) <= PIN_TOL && alt_r.contains(&richtung(s[0], s[1]))) {
+        return e;
+    }
     let (a, b) = (alt[i], alt[i + 1]);
     let (h, v) = (waag(a, b) && !senk(a, b), senk(a, b) && !waag(a, b));
     // Ende genau an einem Eckpunkt: dem Eckpunkt folgen (gleiche Punktzahl) bzw. Knick-Regel unten
@@ -265,21 +273,67 @@ pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P]
     let umrisse = lh::umrisse(jetzt, lib);
     let hind = lh::wirksam(&lh::hindernisse(&umrisse, &[], &[]), a, b);
     let andere = strecken_ohne(jetzt, id);
+    // Leitungen, die mit dieser verbunden sind (Ende auf ihr bzw. ihr Ende auf dieser): Überdeckung mit ihnen ist
+    // kein Hindernis (gleiches Netz, das Aufräumen vereinigt sie), wohl aber mit allen anderen
+    let auf = |q: P, w: &[P]| w.windows(2).any(|s| seg_dist(q, s[0], s[1]) <= PIN_TOL);
+    let fremd: Vec<(P, P)> = jetzt
+        .objects
+        .iter()
+        .filter(|o| o.id != id)
+        .flat_map(|o| match &o.kind {
+            Kind::Wire { pts, .. } if pts.len() >= 2 => {
+                let verbunden = auf(pts[0], alt) || auf(pts[pts.len() - 1], alt) || auf(enden[0], pts) || auf(enden[1], pts);
+                if verbunden {
+                    vec![]
+                } else {
+                    pts.windows(2).map(|v| (v[0], v[1])).collect::<Vec<_>>()
+                }
+            }
+            Kind::Busbar { a, x2, .. } => vec![(*a, P::new(*x2, a.y))],
+            _ => vec![],
+        })
+        .collect();
+    // Enden an Anschlüssen bzw. Klemmstellen (nachher): dort wandert kein Abgriff auf einer Schiene
+    let am_anschluss = |q: P| {
+        jetzt.objects.iter().any(|o| match &o.kind {
+            Kind::Terminal { pos, .. } => pos.dist(q) <= crate::klemme_leitung::KLEMME_R + PIN_TOL,
+            Kind::Symbol { .. } | Kind::Verweis { .. } => canvas::obj_pins(o, lib).iter().any(|x| x.dist(q) <= PIN_TOL),
+            _ => false,
+        })
+    };
+    let fest_enden = [am_anschluss(ziel[0].unwrap_or(enden[0])), am_anschluss(ziel[1].unwrap_or(enden[1]))];
     let sch = crate::schiene_halten::schienen(jetzt, &[]);
     if gedreht {
         // Richtung eines Anschlusses gedreht (Drehen/Spiegeln): einfacher Weg, sonst Stich + Z um Symbole herum
-        let pts = crate::leitung_kurz::bester(a, dirs[0], b, dirs[1], opt.stich, &hind, &andere).unwrap_or_else(|| {
+        let ok = |w: &[P]| zulaessig(w, &hind, &fremd, &umrisse);
+        let pts = crate::leitung_kurz::bester_mit(a, dirs[0], b, dirs[1], opt.stich, &hind, &andere, &ok).unwrap_or_else(|| {
             let weg = crate::leitung_route::mit_stichen(a, dirs[0], b, dirs[1], opt.stich);
-            lh::umgehen(&weg, dirs[0], dirs[1], &hind, 2.0 * opt.stich, false)
+            let um = lh::umgehen(&weg, dirs[0], dirs[1], &hind, 2.0 * opt.stich, false);
+            if ok(&um) {
+                um
+            } else {
+                // kein zulässiger einfacher Weg: Form halten (Enden nachgeführt)
+                let mut p = alt.to_vec();
+                for (i, ends) in [(0, [true, false]), (1, [false, true])] {
+                    if ziel[i].is_some() {
+                        p = folgen_um(&p, ends, d[i], dirs, profil, opt.stich, &hind, opt.rund);
+                    }
+                }
+                if ok(&p) {
+                    p
+                } else {
+                    um
+                }
+            }
         });
-        return Some(Gefuehrt { pts: crate::schiene_halten::abgreifen(&pts, &sch), ganz: None });
+        return Some(Gefuehrt { pts: crate::schiene_halten::abgreifen_ausser(&pts, &sch, fest_enden), ganz: None });
     }
     // ein Ende bewegt, das andere hängt als Abzweig quer auf einem Gleis: gerade aufs Gleis (Abgriff wandert mit)
     let bewegt = [ziel[0].is_some() && d[0].dist(P::default()) > 1e-5, ziel[1].is_some() && d[1].dist(P::default()) > 1e-5];
     if bewegt[0] != bewegt[1] {
         let k = if bewegt[0] { 0 } else { 1 };
         let gl = crate::schiene_halten::gleise(jetzt);
-        if let Some(g) = crate::schiene_halten::gerade_zum_gleis(id, alt, bewegt, d[k], alt_dirs, &gl).filter(|g| lh::kreuzungen(g, &hind) == 0) {
+        if let Some(g) = crate::schiene_halten::gerade_zum_gleis(id, alt, bewegt, d[k], alt_dirs, &gl).filter(|g| zulaessig(g, &hind, &fremd, &umrisse)) {
             return Some(Gefuehrt { pts: g, ganz: None });
         }
     }
@@ -289,13 +343,65 @@ pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P]
             p = folgen_um(&p, ends, d[i], dirs, profil, opt.stich, &hind, opt.rund);
         }
     }
-    let p = crate::schiene_halten::abgreifen(&p, &sch);
+    let p = crate::schiene_halten::abgreifen_ausser(&p, &sch, fest_enden);
     // einfacher Weg mit weniger Knicken, wenn er nichts verschlechtert (leitung_kurz.rs)
-    let p = crate::leitung_kurz::kuerzer(&p, dirs[0], dirs[1], opt.stich, &hind, &andere).unwrap_or(p);
+    let ok = |w: &[P]| zulaessig(w, &hind, &fremd, &umrisse);
+    let p = crate::leitung_kurz::kuerzer_mit(&p, dirs[0], dirs[1], opt.stich, &hind, &andere, &ok).unwrap_or(p);
     // ein Ende auf einer anderen Leitung bzw. Schiene darf auf ihr gleiten, wenn das Knicke spart (Nutzerbild
     // 23.11.2026: Abzweig mit Ecke kurz vor dem Wirt)
-    let p = gleiten(jetzt, lib, id, p, dirs, opt.stich, &umrisse, &andere, bewegt_ids);
+    let p = gleiten(jetzt, lib, id, p, dirs, opt.stich, &umrisse, &andere, bewegt_ids, fest_enden);
+    // Zulässigkeit (Nutzervideo 16:22: Leitung lief durch eine andere Lampe und auf deren Leitung – nach dem
+    // Aufräumen hing die Lampe am falschen Anschluss): kein fremdes Symbol durchqueren, auf keiner Leitung liegen
+    let p = if !zulaessig(&p, &hind, &fremd, &umrisse) {
+        let (a, b) = (p[0], p[p.len() - 1]);
+        crate::leitung_kurz::bester_mit(a, dirs[0], b, dirs[1], opt.stich, &hind, &andere, &ok).unwrap_or_else(|| {
+            let weg = crate::leitung_route::mit_stichen(a, dirs[0], b, dirs[1], opt.stich);
+            let um = lh::umgehen(&weg, dirs[0], dirs[1], &hind, 2.0 * opt.stich, false);
+            // Notweg nur, wenn er zulässig ist; sonst bleibt die formerhaltende Führung
+            if zulaessig(&um, &hind, &fremd, &umrisse) {
+                um
+            } else {
+                p.clone()
+            }
+        })
+    } else {
+        p
+    };
     Some(Gefuehrt { pts: p, ganz: None })
+}
+
+/// Darf eine geführte Leitung so liegen? Kein fremdes Symbol durchqueren (auch kein Knick im Innern eines Umrisses),
+/// auf keiner anderen Leitung bzw. Schiene liegen und über keinen fremden Anschluss laufen (sonst wäre sie dort
+/// elektrisch angeschlossen). Anschlüsse an den eigenen Enden zählen nicht.
+pub fn zulaessig(w: &[P], hind: &[crate::leitung_hindernis::Rechteck], andere: &[(P, P)], umrisse: &[crate::leitung_hindernis::Umriss]) -> bool {
+    if w.len() < 2 {
+        return true;
+    }
+    if crate::leitung_hindernis::kreuzungen(w, hind) > 0 || crate::leitung_kurz::ueberlappt(w, andere) {
+        return false;
+    }
+    let (a, b) = (w[0], w[w.len() - 1]);
+    let innen = |q: P, r: &crate::leitung_hindernis::Rechteck| {
+        let (mn, mx) = (P::new(r.0.x.min(r.1.x), r.0.y.min(r.1.y)), P::new(r.0.x.max(r.1.x), r.0.y.max(r.1.y)));
+        q.x > mn.x + 0.1 && q.x < mx.x - 0.1 && q.y > mn.y + 0.1 && q.y < mx.y - 0.1
+    };
+    // Knick im Innern eines Symbols, an dessen Anschluss die Leitung nicht endet
+    for u in umrisse {
+        let eigen = u.pins.iter().any(|q| q.dist(a) < 0.05 || q.dist(b) < 0.05);
+        if !eigen && w[1..w.len() - 1].iter().any(|q| innen(*q, &u.r)) {
+            return false;
+        }
+        // fremder Anschluss auf dem Weg
+        for q in &u.pins {
+            if q.dist(a) < 0.05 || q.dist(b) < 0.05 {
+                continue;
+            }
+            if w.windows(2).any(|s| seg_dist(*q, s[0], s[1]) < 0.05) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// Waagerechtes bzw. senkrechtes Stück einer anderen Leitung (nicht `ohne`) bzw. Schiene, in dessen Innerem `e`
@@ -338,7 +444,8 @@ pub fn bewertung(w: &[P], andere: &[(P, P)]) -> (usize, usize, i64) {
 /// am Wirt hängt, gleitet das Ende nicht (sonst entstünde eine neue Verbindung).
 #[allow(clippy::too_many_arguments)]
 /// Auf Leitungen in `bewegt_ids` (in diesem Schritt selbst geführt, im Blatt noch in alter Lage) gleitet nichts.
-pub fn gleiten(jetzt: &Sheet, lib: &[SymDef], id: u64, p: Vec<P>, dirs: [Option<P>; 2], stich: f32, umrisse: &[crate::leitung_hindernis::Umriss], andere: &[(P, P)], bewegt_ids: &[u64]) -> Vec<P> {
+/// Enden mit `fest` (an Anschluss bzw. Klemmstelle) gleiten nie.
+pub fn gleiten(jetzt: &Sheet, lib: &[SymDef], id: u64, p: Vec<P>, dirs: [Option<P>; 2], stich: f32, umrisse: &[crate::leitung_hindernis::Umriss], andere: &[(P, P)], bewegt_ids: &[u64], fest: [bool; 2]) -> Vec<P> {
     use crate::leitung_hindernis as lh;
     let n = p.len();
     if n < 3 {
@@ -349,6 +456,9 @@ pub fn gleiten(jetzt: &Sheet, lib: &[SymDef], id: u64, p: Vec<P>, dirs: [Option<
     // Anschlüsse und Leitungsenden anderer Objekte (dort darf das Ende nicht hingleiten)
     let belegt: Vec<P> = jetzt.objects.iter().filter(|o| o.id != id).flat_map(|o| canvas::obj_pins(o, lib)).collect();
     for k in [1usize, 0] {
+        if fest[k] {
+            continue;
+        }
         let e = if k == 1 { p[n - 1] } else { p[0] };
         let Some((wid, a, b)) = wirt_bei(jetzt, id, e) else { continue };
         if bewegt_ids.contains(&wid) {
@@ -373,9 +483,19 @@ pub fn gleiten(jetzt: &Sheet, lib: &[SymDef], id: u64, p: Vec<P>, dirs: [Option<
             }
             let dq = crate::leitung_route::richtung_auf_leitung_ohne(jetzt, q, anf, id);
             let hind = lh::wirksam(&lh::hindernisse(umrisse, &[], &[]), anf, q);
-            let Some(mut w) = crate::leitung_kurz::bester(anf, da, q, dq, stich, &hind, andere) else { continue };
+            let ok = |w: &[P]| {
+                let mut v = w.to_vec();
+                if k == 0 {
+                    v.reverse();
+                }
+                zulaessig(&v, &hind, andere, umrisse)
+            };
+            let Some(mut w) = crate::leitung_kurz::bester_mit(anf, da, q, dq, stich, &hind, andere, &ok) else { continue };
             if k == 0 {
                 w.reverse();
+            }
+            if !zulaessig(&w, &hind, andere, umrisse) {
+                continue;
             }
             let v = bewertung(&w, andere);
             if v < wert {

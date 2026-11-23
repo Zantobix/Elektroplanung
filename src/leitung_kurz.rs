@@ -52,7 +52,7 @@ pub fn kreuzungen_mit(w: &[P], andere: &[(P, P)]) -> usize {
 }
 
 /// Liegt ein Teilstück von `w` in der Flucht einer Strecke aus `andere` mit gemeinsamer Länge über 0,5 mm?
-fn ueberlappt(w: &[P], andere: &[(P, P)]) -> bool {
+pub fn ueberlappt(w: &[P], andere: &[(P, P)]) -> bool {
     w.windows(2).any(|v| {
         let (a, b) = (v[0], v[1]);
         andere.iter().any(|(c, d)| {
@@ -82,8 +82,15 @@ fn in_richtung(w: &[P], da: Option<P>, db: Option<P>) -> bool {
 /// Bester einfacher Weg von `a` nach `b` (wenigste Knicke, dann kürzester) nach den Regeln im Modulkopf, ohne
 /// Vergleich mit einem vorhandenen Weg (Neuführung nach Drehen/Spiegeln).
 pub fn bester(a: P, da: Option<P>, b: P, db: Option<P>, s: f32, hind: &[Rechteck], andere: &[(P, P)]) -> Option<Vec<P>> {
+    bester_mit(a, da, b, db, s, hind, andere, &|_| true)
+}
+
+/// Wie `bester`, nur Wege, die zusätzlich `ok` erfüllen (z. B. über keinen fremden Anschluss, netz_folgen::zulaessig).
+#[allow(clippy::too_many_arguments)]
+pub fn bester_mit(a: P, da: Option<P>, b: P, db: Option<P>, s: f32, hind: &[Rechteck], andere: &[(P, P)], ok: &dyn Fn(&[P]) -> bool) -> Option<Vec<P>> {
     kandidaten(a, da, b, db, s)
         .into_iter()
+        .filter(|w| ok(w))
         .filter(|w| !laeuft_hinein(w, da, db) && in_richtung(w, da, db))
         .filter(|w| kreuzungen(w, hind) == 0)
         .filter(|w| !ueberlappt(w, andere))
@@ -123,6 +130,12 @@ fn kandidaten(a: P, da: Option<P>, b: P, db: Option<P>, s: f32) -> Vec<Vec<P>> {
 /// im Modulkopf erfüllt. `da`/`db` = Richtungen nach außen an Anfang/Ende, `s` = Stich, `hind` = Symbol-Umrisse,
 /// `andere` = Strecken anderer Leitungen und Schienen.
 pub fn kuerzer(form: &[P], da: Option<P>, db: Option<P>, s: f32, hind: &[Rechteck], andere: &[(P, P)]) -> Option<Vec<P>> {
+    kuerzer_mit(form, da, db, s, hind, andere, &|_| true)
+}
+
+/// Wie `kuerzer`, nur Wege, die zusätzlich `ok` erfüllen.
+#[allow(clippy::too_many_arguments)]
+pub fn kuerzer_mit(form: &[P], da: Option<P>, db: Option<P>, s: f32, hind: &[Rechteck], andere: &[(P, P)], ok: &dyn Fn(&[P]) -> bool) -> Option<Vec<P>> {
     let form = bereinigen(form.to_vec());
     if form.len() < 3 {
         return None;
@@ -137,6 +150,7 @@ pub fn kuerzer(form: &[P], da: Option<P>, db: Option<P>, s: f32, hind: &[Rechtec
     kandidaten(a, da, b, db, s)
         .into_iter()
         .filter(|w| knicke(w) < k_form)
+        .filter(|w| ok(w))
         .filter(|w| !laeuft_hinein(w, da, db) && in_richtung(w, da, db))
         .filter(|w| kreuzungen(w, hind) == 0)
         .filter(|w| !ueberlappt(w, andere))

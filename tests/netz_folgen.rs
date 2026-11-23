@@ -217,3 +217,40 @@ fn video_knoten_auf_knoten_und_abgriff_nachziehen() {
     // E3-Abzweig endet auf dem Strang
     assert!(wires.iter().any(|(_, w)| *w == vec![p(15.0, 65.0), p(115.0, 65.0)]), "{wires:?}");
 }
+
+fn schliesser(id: u64, x: f32, y: f32) -> Obj {
+    Obj { id, kind: Kind::Symbol { key: "builtin:schliesser".into(), pos: P::new(x, y), rot: 0, mirror_h: false, mirror_v: false, bmk: String::new(), value: String::new(), scale: 1.0, option: 0, title: None, flags: 0, ext: Default::default() }, pen: 0, fixed: false, group: None, raw: None }
+}
+
+/// Nutzervideo 23.11.2026 16:22: E3 direkt unter E2 geschoben – die Leitung von E3 lief auf der Leitung von E2 und
+/// durch E2 hindurch; nach dem Aufräumen hing E3 am unteren Anschluss von E2. Die geführte Leitung darf kein fremdes
+/// Symbol durchqueren und auf keiner anderen Leitung liegen.
+#[test]
+fn video_lampe_unter_andere_lampe() {
+    // Schiene (Leitung) H bei y = 45; A bei (105,105) mit Leitung von H; B bei (155,155) mit Leitung von H
+    let mut app = app_mit(vec![
+        wire(1, &[(15.0, 45.0), (215.0, 45.0)]),
+        schliesser(2, 105.0, 105.0),
+        wire(3, &[(105.0, 45.0), (105.0, 98.0)]),
+        schliesser(4, 155.0, 155.0),
+        wire(5, &[(155.0, 45.0), (155.0, 148.0)]),
+    ]);
+    app.lib = elektroplanung::symbols::builtin();
+    let pa = elektroplanung::canvas::obj_pins(&app.sheet().unwrap().objects[1], &app.lib);
+    assert_eq!(pa[0], p(105.0, 98.0), "Anschluss oben von A: {pa:?}");
+    app.selection = vec![4];
+    app.checkpoint();
+    app.netz_merken();
+    app.netz_verschieben(&[4], p(-50.0, 20.0));
+    app.aufraeumen();
+    let s = app.sheet().unwrap();
+    let wires: Vec<(u64, Vec<P>)> = s.objects.iter().filter_map(|o| match &o.kind { Kind::Wire { pts, .. } => Some((o.id, pts.clone())), _ => None }).collect();
+    // A unverändert angeschlossen, Leitung 3 unverändert
+    assert!(wires.iter().any(|(id, w)| *id == 3 && *w == vec![p(105.0, 45.0), p(105.0, 98.0)]), "{wires:?}");
+    // keine Leitung berührt den unteren Anschluss von A (105,112)
+    assert!(!wires.iter().any(|(_, w)| w.windows(2).any(|v| seg_dist(p(105.0, 112.0), v[0], v[1]) < 0.05)), "E3 hängt an A unten: {wires:?}");
+    // die Leitung zu B endet an B oben (105,168) und durchquert A nicht (x = 105 zwischen 98 und 112)
+    let b_oben = p(105.0, 168.0);
+    let wb = wires.iter().find(|(_, w)| w.iter().any(|q| q.dist(b_oben) < 0.05)).map(|(_, w)| w.clone()).expect("Leitung zu B");
+    assert!(!wb.windows(2).any(|v| (v[0].x - 105.0).abs() < 0.05 && (v[1].x - 105.0).abs() < 0.05 && v[0].y.min(v[1].y) < 112.0 && v[0].y.max(v[1].y) > 98.0), "durch A: {wb:?}");
+}

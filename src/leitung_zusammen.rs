@@ -224,7 +224,11 @@ fn ueberlappt(w: &[P], andere: &[(P, P)]) -> bool {
 /// Leitungen auch zusammengelegt werden“): Endet Leitung A an einem Knick von Leitung B und setzt dort ein Stück von
 /// B gerade fort, übernimmt A den Teil von B ab dem Knick; B endet am Knick (als Abzweig auf A). Gleiche Leitung und
 /// Darstellung, keine fixiert. Liefert, ob sich etwas geändert hat.
-pub fn durchgehend(sheet: &mut Sheet, ids: &[u64]) -> bool {
+pub fn durchgehend(sheet: &mut Sheet, lib: &[SymDef], ids: &[u64]) -> bool {
+    // Anschlüsse und Klemmstellen: an ihnen wird nicht durchgehend zusammengelegt (sonst läge der Anschluss mitten
+    // auf der Leitung)
+    let anschluesse: Vec<P> = sheet.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. } | Kind::Verweis { .. })).flat_map(|o| canvas::obj_pins(o, lib)).collect();
+    let klemmen: Vec<P> = sheet.objects.iter().filter_map(|o| if let Kind::Terminal { pos, .. } = &o.kind { Some(*pos) } else { None }).collect();
     let mut geaendert = false;
     for &a in ids {
         for _ in 0..2 {
@@ -236,6 +240,9 @@ pub fn durchgehend(sheet: &mut Sheet, ids: &[u64]) -> bool {
             'such: for k in [0usize, 1] {
                 let n = ap.len();
                 let (e, nb) = if k == 1 { (ap[n - 1], ap[n - 2]) } else { (ap[0], ap[1]) };
+                if anschluesse.iter().any(|q| q.dist(e) <= PIN_TOL) || klemmen.iter().any(|q| q.dist(e) <= crate::klemme_leitung::KLEMME_R + PIN_TOL) {
+                    continue;
+                }
                 let r = e.sub(nb);
                 for o in sheet.objects.iter().filter(|o| o.id != a) {
                     let Kind::Wire { pts: bp, .. } = &o.kind else { continue };
@@ -313,7 +320,7 @@ impl crate::app::App {
                     *pts = p;
                 }
             }
-            durchgehend(s, &ids);
+            durchgehend(s, &lib, &ids);
         });
     }
 
