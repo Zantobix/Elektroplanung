@@ -6,8 +6,13 @@ use std::path::PathBuf;
 
 #[test]
 fn titelgenerator_formel() {
-    assert_eq!(dialoge3::titel_formel("-S@x", 3, 7, 2, "UV1", ""), "-S3");
-    assert_eq!(dialoge3::titel_formel("@A/@S.@P (@T)", 1, 4, 10, "UV2", "alt"), "UV2/4.10 (alt)");
+    // wie die Hilfe des Originals (TTitel.Memo1): Variable = „@“ + ein Zeichen, Start 0 oder Wert in Klammern
+    assert_eq!(dialoge3::titel_formel("-S@x", 0), "-S0");
+    assert_eq!(dialoge3::titel_formel("-S@x", 3), "-S3");
+    assert_eq!(dialoge3::titel_formel("K@a(10).@b @a", 2), "K12.2 12");
+    assert_eq!(dialoge3::titel_formel("S@", 4), "S");
+    assert_eq!(dialoge3::titel_dir2(0)[0].0, "Oben -> Unten");
+    assert_eq!(dialoge3::titel_dir2(1)[1].0, "Rechts -> Links");
 }
 
 #[test]

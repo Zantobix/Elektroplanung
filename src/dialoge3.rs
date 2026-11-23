@@ -40,7 +40,6 @@ pub enum Dlg3 {
     ListExport { art: usize, format: usize, msg: String },
 }
 
-const DIRS: &[&str] = &["Links nach Rechts", "Rechts nach Links", "Oben nach Unten", "Unten nach Oben"];
 const BILD_ARTEN: &[&str] = &["Zentriert", "Eingepasst", "Gestreckt"];
 const KL_ALIGN: &[&str] = &["Links", "Mittig", "Rechts"];
 /// Ebenen wie im Original „Nummer/Buchstabe“
@@ -123,10 +122,54 @@ pub fn list_from_text(s: &str, cols: usize) -> Vec<Vec<String>> {
         .collect()
 }
 
-/// Titelgenerator: Formel je Objekt auswerten. Variablen: @x laufende Nummer, @S Blattnummer, @P Strompfad,
-/// @A Anlage (Kurzform), @T bisheriger Text.
-pub fn titel_formel(formel: &str, nr: usize, sheet: u32, pfad: u32, anlage: &str, alt: &str) -> String {
-    formel.replace("@x", &nr.to_string()).replace("@S", &sheet.to_string()).replace("@P", &pfad.to_string()).replace("@A", anlage).replace("@T", alt)
+/// Titelgenerator: Formel für das `k`-te Objekt (ab 0) auswerten wie das Original (0x496e9c, Hilfetext
+/// TTitel.Memo1): „@“ und genau ein Zeichen bilden eine Variable; ihr Wert beginnt bei 0 bzw. bei der Zahl in
+/// Klammern direkt dahinter („@x(5)“) und steigt je Objekt um eins. Ein „@“ am Ende entfällt.
+pub fn titel_formel(formel: &str, k: usize) -> String {
+    let c: Vec<char> = formel.chars().collect();
+    let mut out = String::new();
+    // Startwert je Variable (erste Angabe gilt)
+    let mut start: Vec<(char, i64)> = vec![];
+    let mut i = 0;
+    while i < c.len() {
+        if c[i] != '@' {
+            out.push(c[i]);
+            i += 1;
+            continue;
+        }
+        let Some(&v) = c.get(i + 1) else { break };
+        i += 2;
+        let mut s0 = None;
+        if c.get(i) == Some(&'(') {
+            if let Some(e) = c[i..].iter().position(|ch| *ch == ')') {
+                s0 = c[i + 1..i + e].iter().collect::<String>().trim().parse::<i64>().ok();
+                i += e + 1;
+            }
+        }
+        let st = match start.iter().find(|(n, _)| *n == v) {
+            Some((_, w)) => *w,
+            None => {
+                let w = s0.unwrap_or(0);
+                start.push((v, w));
+                w
+            }
+        };
+        out.push_str(&(st + k as i64).to_string());
+    }
+    out
+}
+
+/// Einträge „Reihenfolge 1“ wie TTitel (0x4b13b2 ff.) und je Eintrag der Sortierschlüssel für `order_key`.
+pub const TITEL_DIR1: [(&str, usize); 4] = [("Links -> Rechts", 0), ("Oben -> Unten", 2), ("Rechts -> Links", 1), ("Unten -> Oben", 3)];
+
+/// Einträge „Reihenfolge 2“ nach Dir1Change (0x4b144c): zu einer waagerechten Reihenfolge 1 die senkrechten
+/// und umgekehrt.
+pub fn titel_dir2(dir1: usize) -> [(&'static str, usize); 2] {
+    if dir1 % 2 == 0 {
+        [("Oben -> Unten", 2), ("Unten -> Oben", 3)]
+    } else {
+        [("Links -> Rechts", 0), ("Rechts -> Links", 1)]
+    }
 }
 
 /// Sortierschlüssel nach Reihenfolge (0 links→rechts, 1 rechts→links, 2 oben→unten, 3 unten→oben).
@@ -287,7 +330,7 @@ impl App {
     }
 
     pub fn open_titel_dialog(&mut self) {
-        self.dlg3 = Some(Dlg3::Titel { formel: "-S@x".into(), dir1: 0, dir2: 2, wahl: 0, hilfe: false, msg: String::new() });
+        self.dlg3 = Some(Dlg3::Titel { formel: "S@".into(), dir1: 0, dir2: 0, wahl: 0, hilfe: false, msg: String::new() });
     }
 
     pub fn open_blattindex(&mut self) {
@@ -708,11 +751,16 @@ impl App {
                     ui.add(egui::TextEdit::multiline(formel).desired_rows(2).desired_width(280.0));
                     ui.horizontal(|ui| {
                         lbl(ui, 110.0, "Reihenfolge 1");
-                        combo(ui, "dir1", &strs(DIRS), dir1, 150.0);
+                        let alt = *dir1;
+                        combo(ui, "dir1", &crate::dialoge3::TITEL_DIR1.iter().map(|d| d.0.to_string()).collect::<Vec<_>>(), dir1, 150.0);
+                        // Dir1Change: Reihenfolge 2 neu füllen
+                        if *dir1 != alt {
+                            *dir2 = 0;
+                        }
                     });
                     ui.horizontal(|ui| {
                         lbl(ui, 110.0, "Reihenfolge 2");
-                        combo(ui, "dir2", &strs(DIRS), dir2, 150.0);
+                        combo(ui, "dir2", &titel_dir2(*dir1).iter().map(|d| d.0.to_string()).collect::<Vec<_>>(), dir2, 150.0);
                     });
                     ui.group(|ui| {
                         ui.label(RichText::new("Textauswahl bei Symbolen").font(bold(12.0)));
@@ -725,7 +773,8 @@ impl App {
                         });
                     });
                     if *hilfe {
-                        ui.small("Der eingegebene Text wird jedem markierten Objekt zugewiesen. Variablen beginnen mit '@': @x laufende Nummer, @S Blatt, @P Strompfad, @A Anlage, @T bisheriger Text.");
+                        // sinngemäß wie TTitel.Memo1
+                        ui.small("Der eingegebene Text wird jedem gefundenen Objekt zugewiesen. Dabei werden Variablen durch ihre Werte ersetzt. Eine Variable wird durch das Zeichen '@' eingeleitet und besteht aus genau einem Zeichen. Der Wert einer Variable beginnt bei 0, es sei denn, nach der Variable wird ein Wert in Klammern eingegeben. Die Variablenwerte werden für jedes neue Objekt um eins erhöht. Für Symbole kann gewählt werden, welcher Text erzeugt werden soll.");
                     }
                     if !msg.is_empty() {
                         ui.small(msg.as_str());
@@ -1329,9 +1378,9 @@ impl App {
     pub fn apply_titel(&mut self, formel: &str, dir1: usize, dir2: usize, wahl: usize) -> usize {
         let Some(r) = self.cur() else { return 0 };
         let sel = self.selection.clone();
-        let kurz = self.project.anlagen[r.anlage].set.kurz.clone();
+        let k1 = TITEL_DIR1.get(dir1).map(|d| d.1).unwrap_or(0);
+        let k2 = titel_dir2(dir1).get(dir2).map(|d| d.1).unwrap_or(2);
         let Some(s) = self.project.sheet_mut(r) else { return 0 };
-        let number = s.number;
         let mut idx: Vec<usize> = (0..s.objects.len())
             .filter(|i| (sel.is_empty() || sel.contains(&s.objects[*i].id)) && matches!(s.objects[*i].kind, Kind::Symbol { .. } | Kind::Text { .. }))
             .collect();
@@ -1341,23 +1390,21 @@ impl App {
         };
         idx.sort_by(|a, b| {
             let (pa, pb) = (pos(&s.objects[*a]), pos(&s.objects[*b]));
-            order_key(pa, dir1).partial_cmp(&order_key(pb, dir1)).unwrap().then(order_key(pa, dir2).partial_cmp(&order_key(pb, dir2)).unwrap())
+            order_key(pa, k1).partial_cmp(&order_key(pb, k1)).unwrap().then(order_key(pa, k2).partial_cmp(&order_key(pb, k2)).unwrap())
         });
-        let pfade: Vec<u32> = idx.iter().map(|i| crate::epr::column_at(s, pos(&s.objects[*i]).x)).collect();
-        for (n, (i, pf)) in idx.iter().zip(pfade).enumerate() {
+        for (n, i) in idx.iter().enumerate() {
             match &mut s.objects[*i].kind {
                 Kind::Symbol { bmk, value, ext, .. } => match wahl {
-                    1 => *value = titel_formel(formel, n + 1, number, pf, &kurz, value),
+                    1 => *value = titel_formel(formel, n),
                     // Alternativtext: benutzerdefinierter Text Nr. 2 der Instanz (erster Symboltext nach der BMK)
                     2 => {
-                        let old = ext.texts.iter().find(|(k, _)| *k == 2).map(|(_, t)| t.clone()).unwrap_or_default();
-                        let t = titel_formel(formel, n + 1, number, pf, &kurz, &old);
+                        let t = titel_formel(formel, n);
                         ext.texts.retain(|(k, _)| *k != 2);
                         ext.texts.push((2, t));
                     }
-                    _ => *bmk = titel_formel(formel, n + 1, number, pf, &kurz, bmk),
+                    _ => *bmk = titel_formel(formel, n),
                 },
-                Kind::Text { text, .. } => *text = titel_formel(formel, n + 1, number, pf, &kurz, text),
+                Kind::Text { text, .. } => *text = titel_formel(formel, n),
                 _ => {}
             }
         }
