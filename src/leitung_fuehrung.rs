@@ -103,17 +103,21 @@ pub struct Fuehrung {
     /// Knicke nach dem Mausweg (`leitung_bahn.rs`) und Achse des laufenden Teilstücks
     pub bahn: Vec<P>,
     pub bahn_achse: Option<Richtung>,
+    /// weiteste Lage des laufenden Knicks auf der Achse und Länge des Querstücks dort (Kehre, leitung_bahn.rs)
+    pub bahn_spitze: Option<(f32, f32)>,
+    /// Vorschau des letzten Bildes (Formhalt gegen Umspringen, leitung_bahn.rs `formhalt`)
+    pub vorschau: Vec<P>,
 }
 
 impl Fuehrung {
     pub fn neu(start: P) -> Self {
-        Fuehrung { pts: vec![start], richtung: None, gekippt: false, zuletzt: None, klickbetrieb: false, schiene: None, bahn: vec![], bahn_achse: None }
+        Fuehrung { pts: vec![start], richtung: None, gekippt: false, zuletzt: None, klickbetrieb: false, schiene: None, bahn: vec![], bahn_achse: None, bahn_spitze: None, vorschau: vec![] }
     }
 
     /// Leitung, die auf einer Sammelschiene `schiene` (Höhe, x von, x bis) bei `m` beginnt.
     pub fn von_schiene(m: P, schiene: (f32, f32, f32)) -> Self {
         let (y, x1, x2) = schiene;
-        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), gekippt: false, zuletzt: None, klickbetrieb: false, schiene: Some(schiene), bahn: vec![], bahn_achse: None }
+        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), gekippt: false, zuletzt: None, klickbetrieb: false, schiene: Some(schiene), bahn: vec![], bahn_achse: None, bahn_spitze: None, vorschau: vec![] }
     }
 
     /// Beginnt die Leitung auf einer Schiene und ist noch kein Eckpunkt gesetzt: Anfang in die Flucht von `ziel`

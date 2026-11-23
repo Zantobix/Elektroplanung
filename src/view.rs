@@ -1352,9 +1352,10 @@ impl App {
                 if inside && pressed_l {
                     let min = 6.0 / xf.z;
                     // Klick auf eine Sammelschiene beendet wie ein Anschluss (senkrecht auf die Schiene)
-                    let ziel = self.pin_near(m, min, &[]).or_else(|| self.sheet().and_then(|s| crate::leitung_route::schiene_bei(s, m, min)).map(|s| crate::leitung_route::ende_auf_schiene(f.letzter(), s)));
+                    let (q, halb) = (self.snap(m), self.raster() / 2.0);
+                    let ziel = self.pin_near(m, min, &[]).or_else(|| self.sheet().and_then(|s| crate::leitung_route::schiene_bei(s, m, min)).map(|s| crate::leitung_route::ende_auf_schiene_fang(f.letzter(), m, q, halb, s)));
                     // Klick auf eine Leitung beendet ebenfalls (Abzweig bzw. Kürzen, leitung_anschluss.rs)
-                    let ziel = ziel.or_else(|| self.sheet().and_then(|s| crate::leitung_route::ende_auf_leitung(s, f.letzter(), m, min)));
+                    let ziel = ziel.or_else(|| self.sheet().and_then(|s| crate::leitung_route::ende_auf_leitung_fang(s, f.letzter(), m, q, min, halb)));
                     match ziel {
                         Some(pin) if !(f.pts.len() == 1 && pin.dist(f.start()) < 0.01) => {
                             let pts = self.leitungsweg(&f, pin);
@@ -1607,19 +1608,7 @@ impl App {
             self.kurven_griff_ziehen(id, griff, p);
         }
         // Knickrichtung nach dem gezeichneten Ende (gefangen) verfolgen: Form halten bis Länge 0 (leitung_knick.rs)
-        if let Drag::Wire { f } = &self.drag {
-            let ende = self.leitungsende(f, m, xf.z);
-            let da = self.sheet().and_then(|s| crate::leitung_route::anschluss_richtung(s, &self.lib, f.start()));
-            let raster = self.raster();
-            if let Drag::Wire { f } = &mut self.drag {
-                let vorher = f.zuletzt;
-                f.bewegen_mit(ende, da, 6.0 / xf.z);
-                // Knicke entlang des Mauswegs (leitung_bahn.rs); kleinste Strecke ein Raster
-                if vorher.is_none_or(|v| v.dist(ende) >= 0.01) {
-                    f.bahn_fortschreiben(vorher, ende, raster.max(2.5));
-                }
-            }
-        }
+        self.leitung_zug_bewegen(m, xf.z);
         if matches!(self.drag, Drag::Teilstueck { .. }) {
             self.teilstueck_ziehen(m);
         }

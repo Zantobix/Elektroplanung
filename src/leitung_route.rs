@@ -202,9 +202,60 @@ pub fn ende_auf_schiene(l: P, schiene: (f32, f32, f32)) -> P {
     P::new(l.x.clamp(x1, x2), y)
 }
 
+/// Wie `ende_auf_schiene`, aber die Flucht von `l` nur, wenn die Maus `m` weniger als `halb` daneben liegt, sonst
+/// der Rasterwert `q` der Maus (Runde 13: das Ende sprang sonst weit von der Maus weg).
+pub fn ende_auf_schiene_fang(l: P, m: P, q: P, halb: f32, schiene: (f32, f32, f32)) -> P {
+    let (y, x1, x2) = schiene;
+    P::new(entlang(m.x, l.x, q.x, halb, x1 - 1e-3, x2 + 1e-3).clamp(x1, x2), y)
+}
+
+/// Richtung nach außen an einem Leitungsende `e`, das im Innern einer Leitung bzw. auf einer Schiene liegt: quer zum
+/// getroffenen Stück, zur Seite von `von` (dort kommt die neue Leitung her). So tritt sie senkrecht auf und läuft
+/// nicht ein Stück auf der anderen entlang.
+pub fn richtung_auf_leitung(sheet: &Sheet, e: P, von: P) -> Option<P> {
+    const T: f32 = 0.05;
+    for o in &sheet.objects {
+        let stuecke: Vec<(P, P)> = match &o.kind {
+            Kind::Wire { pts, .. } => pts.windows(2).map(|w| (w[0], w[1])).collect(),
+            Kind::Busbar { a, x2, .. } => vec![(*a, P::new(*x2, a.y))],
+            _ => continue,
+        };
+        for (a, b) in stuecke {
+            if crate::model::seg_dist(e, a, b) > T {
+                continue;
+            }
+            if (a.y - b.y).abs() < 1e-3 {
+                let s = if von.y < e.y { -1.0 } else { 1.0 };
+                return Some(P::new(0.0, s));
+            }
+            if (a.x - b.x).abs() < 1e-3 {
+                let s = if von.x < e.x { -1.0 } else { 1.0 };
+                return Some(P::new(s, 0.0));
+            }
+        }
+    }
+    None
+}
+
 /// Leitungsende auf dem waagerechten bzw. senkrechten Teilstück einer Leitung unter `m`: in der Flucht des letzten
 /// festen Punktes `l`, sonst der Lotfußpunkt der Maus.
 pub fn ende_auf_leitung(sheet: &Sheet, l: P, m: P, tol: f32) -> Option<P> {
+    ende_auf_leitung_fang(sheet, l, m, m, tol, f32::INFINITY)
+}
+
+/// Lage entlang einer Achse: die Flucht `bezug`, wenn die Maus `m` weniger als `halb` daneben liegt und sie im
+/// Bereich `lo..hi` liegt, sonst der Rasterwert `q`; immer auf `lo..hi` begrenzt.
+fn entlang(m: f32, bezug: f32, q: f32, halb: f32, lo: f32, hi: f32) -> f32 {
+    let v = if (m - bezug).abs() < halb && bezug > lo && bezug < hi { bezug } else { q };
+    v.clamp(lo, hi)
+}
+
+/// Leitungsende auf einer Leitung unter der Maus `m` (Runde 13, Nutzer: „wenn eine Leitung auf einer Leitung
+/// gesetzt wird, soll diese nicht irgendwo platziert werden können, sondern am Raster orientiert“): der Punkt liegt
+/// auf dem getroffenen Teilstück, entlang des Stücks auf dem Rasterwert `q` der Maus – oder in der Flucht des
+/// Bezugspunkts `l`, wenn die Maus weniger als `halb` daneben liegt. (Vorher: immer in der Flucht von `l`, auch
+/// wenn die Maus weit weg war – das Ende sprang bis zu 60 mm.)
+pub fn ende_auf_leitung_fang(sheet: &Sheet, l: P, m: P, q: P, tol: f32, halb: f32) -> Option<P> {
     for o in &sheet.objects {
         let Kind::Wire { pts, .. } = &o.kind else { continue };
         for w in pts.windows(2) {
@@ -212,14 +263,12 @@ pub fn ende_auf_leitung(sheet: &Sheet, l: P, m: P, tol: f32) -> Option<P> {
             if (a.y - b.y).abs() < 1e-3 {
                 let (x1, x2) = (a.x.min(b.x), a.x.max(b.x));
                 if (m.y - a.y).abs() <= tol && m.x >= x1 - tol && m.x <= x2 + tol {
-                    let x = if l.x > x1 && l.x < x2 { l.x } else { m.x.clamp(x1, x2) };
-                    return Some(P::new(x, a.y));
+                    return Some(P::new(entlang(m.x, l.x, q.x, halb, x1, x2), a.y));
                 }
             } else if (a.x - b.x).abs() < 1e-3 {
                 let (y1, y2) = (a.y.min(b.y), a.y.max(b.y));
                 if (m.x - a.x).abs() <= tol && m.y >= y1 - tol && m.y <= y2 + tol {
-                    let y = if l.y > y1 && l.y < y2 { l.y } else { m.y.clamp(y1, y2) };
-                    return Some(P::new(a.x, y));
+                    return Some(P::new(a.x, entlang(m.y, l.y, q.y, halb, y1, y2)));
                 }
             }
         }
@@ -239,11 +288,12 @@ impl crate::app::App {
             // Maus-Befund M16: zeigt der Anfangsanschluss (noch ohne Eckpunkte) von der Schiene weg, führte die
             // Flucht des Anschlusses um das Symbol herum und auf der Schiene zurück – dann senkrecht an der Maus
             let da = anschluss_richtung(sheet, &self.lib, f.start());
-            let bezug = if f.pts.len() == 1 && !zeigt_zur_schiene(f.start(), da, s.0) { self.snap(m) } else { f.letzter() };
-            return ende_auf_schiene(bezug, s);
+            let bezug = if f.pts.len() == 1 && !zeigt_zur_schiene(f.start(), da, s.0) { self.snap(m) } else { f.bahn.last().copied().unwrap_or_else(|| f.letzter()) };
+            return ende_auf_schiene_fang(bezug, m, self.snap(m), self.raster() / 2.0, s);
         }
-        // auf einer Leitung: senkrecht auf das getroffene Teilstück (Knoten in der Flucht)
-        if let Some(p) = self.sheet().and_then(|s| ende_auf_leitung(s, f.letzter(), m, tol)) {
+        // auf einer Leitung: auf dem Raster bzw. in der Flucht des Bezugspunkts (Knoten)
+        let bezug = f.bahn.last().copied().unwrap_or_else(|| f.letzter());
+        if let Some(p) = self.sheet().and_then(|s| ende_auf_leitung_fang(s, bezug, m, self.snap(m), tol, self.raster() / 2.0)) {
             return p;
         }
         // Flucht des Bezugspunkts (Anfang bzw. letzter Knick) vor dem Raster: liegt die Maus weniger als ein halbes
@@ -281,6 +331,9 @@ impl crate::app::App {
         } else {
             w
         };
+        let w = crate::klemme_leitung::enden_an_klemmen(s, w);
+        // gegen Umspringen: Form des letzten Bildes halten, solange sie nicht deutlich schlechter ist
+        let w = self.formhalt(f, ende, w);
         crate::klemme_leitung::enden_an_klemmen(s, w)
     }
 
@@ -288,7 +341,9 @@ impl crate::app::App {
         let weg = f.weg(ende);
         let Some(sheet) = self.sheet() else { return weg };
         let da = anschluss_richtung(sheet, &self.lib, f.start());
-        let db = anschluss_richtung(sheet, &self.lib, ende);
+        // Ende auf einer Leitung bzw. Schiene: senkrecht darauf zulaufen
+        let von = f.bahn.last().copied().unwrap_or_else(|| f.letzter());
+        let db = anschluss_richtung(sheet, &self.lib, ende).or_else(|| richtung_auf_leitung(sheet, ende, von));
         // Symbole als Hindernisse (M29, leitung_hindernis.rs), auch Start- und Zielsymbol; die Zugrichtung bleibt
         let hind: Vec<_> = crate::leitung_hindernis::umrisse(sheet, &self.lib).into_iter().map(|u| u.r).collect();
         let umgehen = |w: &[P], da: Option<P>| crate::leitung_hindernis::umgehen(w, da, db, &hind, self.raster(), true);
