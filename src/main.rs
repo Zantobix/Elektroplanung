@@ -29,7 +29,14 @@ fn main() -> eframe::Result {
     }
     let mut options = eframe::NativeOptions { viewport: vp, ..Default::default() };
     options.persist_window = false;
-    eframe::run_native("Elektroplanung", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, shot.clone())))))
+    eframe::run_native("Elektroplanung", options, Box::new(move |cc| {
+        let mut a = app::App::new(cc, shot.clone());
+        // beim Start einmal im Hintergrund nach einer neueren Version suchen (Option, nicht bei Bildschirmfotos)
+        if shot.is_none() && a.opt.update_pruefen {
+            a.update.starten(&cc.egui_ctx, false);
+        }
+        Ok(Box::new(a))
+    }))
 }
 
 /// Kleines eigenes Programmsymbol (Blitz auf Blatt).

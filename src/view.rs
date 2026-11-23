@@ -2139,6 +2139,9 @@ impl App {
                     self.meldung = Some(crate::fehlermeldung::Meldung::neu(crate::fehlermeldung::Art::Wunsch));
                 }
                 ui.separator();
+                if ui.button("Nach neuer Version suchen").clicked() {
+                    self.update.starten(ui.ctx(), true);
+                }
                 if ui.button("Info").clicked() {
                     self.dialog = Some(Dialog::Info);
                 }
@@ -2555,6 +2558,7 @@ impl eframe::App for App {
             self.canvas(&mut ca);
         });
         self.lib_drag_end(&ctx);
+        self.update_hinweis(&ctx);
         self.dialogs(&ctx);
         self.props_ui(&ctx);
         self.multi_props_ui(&ctx);

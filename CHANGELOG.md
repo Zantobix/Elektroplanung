@@ -14,6 +14,11 @@ erhält der Abschnitt deren Nummer.
 
 - Pipeline: der macOS-Build ist optional – hat GitHub keinen Mac-Rechner frei, erscheinen Release bzw.
   Entwicklungsstand mit Linux und Windows und einem Hinweis.
+- Hilfe › Nach neuer Version suchen; beim Start sucht das Programm einmal im Hintergrund nach einem neueren
+  Release auf GitHub und zeigt dann einen Hinweis mit Link (Optionen › Programmverhalten, abschaltbar; es wird nichts
+  heruntergeladen).
+- Leitungen: Eine gerade Leitung bleibt gerade, wenn ein Symbol entlang ihr verschoben wird (vorher U-Umweg bzw.
+  Haken nach hin und zurück); die Strompfadausrichtung rundet auf 0,1 mm wie die Datei.
 
 ## [0.3.0]
 

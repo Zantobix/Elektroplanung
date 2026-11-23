@@ -238,6 +238,8 @@ pub struct App {
     pub lib_gruppen: Vec<Vec<String>>,
     pub recent: Vec<String>,
     pub show_library: bool,
+    /// Suche nach einer neueren Version (update_pruefung.rs)
+    pub update: crate::update_pruefung::Pruefung,
     /// weitere Dialoge (dialoge3.rs)
     pub dlg3: Option<crate::dialoge3::Dlg3>,
     /// Bibliotheksverwaltung: Reiter und Synchronisierung
@@ -368,6 +370,7 @@ impl App {
             lib_gruppen: vec![],
             recent: vec![],
             show_library: false,
+            update: Default::default(),
             dlg3: None,
             lib_tab: 0,
             lib_sync: (String::new(), true, true, 0, String::new()),

@@ -210,6 +210,9 @@ nicht. Gemessen werden stattdessen:
   - Fang: Leitungsenden und Klemmstellen fangen je Achse auf die Fluchten von Anschlüssen und Leitungsenden, ein
     kleines Kreuz zeigt die tatsächliche Lage (`src/fang.rs`); verschobene Objekte und gezogene Teilstücke rücken auf
     das Raster bzw. auf die Flucht anderer Leitungen.
+  - Suche nach neuer Version: Hilfe › Nach neuer Version suchen und (abschaltbar unter Optionen ›
+    Programmverhalten) einmal beim Start; fragt mit dem `curl` des Systems das neueste Release auf GitHub ab und zeigt
+    bei einer neueren Version einen Hinweis mit Link, lädt aber nichts herunter (`src/update_pruefung.rs`).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).

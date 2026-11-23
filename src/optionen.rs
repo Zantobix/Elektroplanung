@@ -35,6 +35,8 @@ pub struct Optionen {
     pub variantenrad: bool,
     /// Brückenbögen an Kreuzungen von Leitungen zeichnen (Nachbau-Erweiterung, `bruecken.rs`)
     pub brueckenboegen: bool,
+    /// beim Programmstart bei GitHub nach einer neueren Version suchen (Nachbau-Erweiterung, `update_pruefung.rs`)
+    pub update_pruefen: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
     pub sym_hoehe: f32,
@@ -96,6 +98,7 @@ impl Default for Optionen {
             pruefen_vor_druck: true,
             variantenrad: true,
             brueckenboegen: true,
+            update_pruefen: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
             blatt_farbe: [238, 221, 221],
@@ -315,6 +318,7 @@ impl App {
                                     mark(ui, &mut o.pruefen_vor_druck, "Vor dem Drucken Projekt prüfen");
                                     mark(ui, &mut o.variantenrad, "Variantenrad beim Platzieren");
                                     mark(ui, &mut o.brueckenboegen, "Brückenbögen an Kreuzungen");
+                                    mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
                                 });
                                 egui::Frame::group(ui.style()).show(ui, |ui| {
                                     ui.set_width(330.0);
