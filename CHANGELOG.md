@@ -20,6 +20,12 @@ Leitungen, allgemein überarbeitet (Runde 13):
   zu 60 mm); die Vorschau hält ihre Form statt umzuspringen.
 - Fang je Achse auf die Fluchten von Anschlüssen und Leitungsenden; Fangkreuz an der tatsächlichen Lage.
 - Zufallstests: 300 Mausbahnen beim Zeichnen, über 700 Bearbeitungen auf allen Blättern von W2.
+- Ein Ende auf einer anderen Leitung bzw. Schiene gleitet auf ihr, wenn das Knicke spart (dann Kreuzungen, dann
+  Länge) – keine Ecke mehr kurz vor dem Abzweig.
+- Abzweig mit Umschalt beginnt im Raster; das Fangkreuz (grünes „+“) zeigt den Anfang schon vor dem Klick.
+- Nach dem Verschieben entstehen keine automatischen Verbindungen mehr (Ablegen aus der Bibliothek und Taste A
+  bleiben).
+- Linux/Wayland: Fensterrahmen im Adwaita-Stil mit Titel statt des grauen Rahmens ohne Titel.
 
 Wie im Original (Entscheidung Runde 13):
 - Listen Export: Betriebsmittelliste mit den Spalten „Anlage, Ort, Betriebsmittel“ (je Symbol ohne Eigentümer),

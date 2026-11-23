@@ -205,6 +205,8 @@ nicht. Gemessen werden stattdessen:
     (`leitung_kurz.rs`); übereinanderliegende Leitungen werden vereinigt (`leitung_vereinigen.rs`), aneinanderstoßende
     ohne Abzweig zu einer Leitung zusammengefasst (`leitung_zusammen.rs`); eine Leitung kann überall an einer anderen
     enden – auf dem Raster, senkrecht darauf –, ein freier Überstand wird gekürzt (`leitung_anschluss.rs`).
+  - Nach dem Verschieben verbindet der Nachbau keine Anschlüsse automatisch (Nutzerwunsch); ein Abzweig-Ende
+    gleitet beim Nachführen auf seinem Wirt, wenn das Knicke spart.
   - Fang: Leitungsenden und Klemmstellen fangen je Achse auf die Fluchten von Anschlüssen und Leitungsenden, ein
     kleines Kreuz zeigt die tatsächliche Lage (`src/fang.rs`); verschobene Objekte und gezogene Teilstücke rücken auf
     das Raster bzw. auf die Flucht anderer Leitungen.
