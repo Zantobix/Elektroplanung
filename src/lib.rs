@@ -72,6 +72,7 @@ pub mod menus;
 pub mod leitung_profil;
 pub mod mitziehen;
 pub mod netz_folgen;
+pub mod fang;
 pub mod leitung_zusammen;
 pub mod netz;
 pub mod model;

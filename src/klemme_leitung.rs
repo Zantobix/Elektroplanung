@@ -114,10 +114,7 @@ impl App {
             })
         });
         let im_editor = self.sym_edit.is_some();
-        let pos = match treffer {
-            Some((_, _, a, b)) if !im_editor => lage(a, b, m, self.snap(m)),
-            _ => self.snap(m),
-        };
+        let pos = self.klemmstelle_lage(m, tol);
         // Bezeichnung wie beim Original links über der Klemme (Titelposition −1/−2 mm, rechtsbündig)
         let text_off = (!im_editor).then_some(P::new(-1.0, -2.0));
         let id = self.add_obj(Kind::Terminal { pos, leiste, nr, level: 0, text_off, tpl: String::new(), opt: Default::default() });

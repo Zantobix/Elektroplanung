@@ -299,16 +299,9 @@ impl crate::app::App {
         // Flucht des Bezugspunkts (Anfang bzw. letzter Knick) vor dem Raster: liegt die Maus weniger als ein halbes
         // Raster neben ihr, bleibt das Ende in der Flucht (Maustest Runde 12: Lampenanschluss bei x = 202,3, Raster
         // 10 mm – das erste gefangene Ende sprang auf x = 205, die Leitung lief erst nach rechts statt nach unten)
-        let mut q = self.snap(m);
+        // Runde 13: je Achse auch auf die Fluchten von Anschlüssen und Leitungsenden (fang.rs)
         let bezug = f.bahn.last().copied().unwrap_or_else(|| f.letzter());
-        let halb = self.raster() / 2.0;
-        if (m.x - bezug.x).abs() < halb {
-            q.x = bezug.x;
-        }
-        if (m.y - bezug.y).abs() < halb {
-            q.y = bezug.y;
-        }
-        q
+        self.fang_mit_fluchten(m, &[bezug, f.start()])
     }
 
     /// Weg der gerade gezeichneten Leitung `f` bis `ende` mit Anschlussrichtungen (Vorschau und Ergebnis).

@@ -1095,6 +1095,10 @@ impl App {
         if let Some(hp) = hover {
             if area.contains(hp) && !self.zoom_tool && self.ring.is_none() {
                 self.draw_snap_points(&clip, xf, xf.m(hp));
+                // Fangkreuz: wo der Klick bzw. das Loslassen tatsächlich setzt (fang.rs)
+                if let Some(q) = self.fangpunkt(xf.m(hp), xf.z) {
+                    crate::fang::kreuz(&clip, xf.s(q));
+                }
             }
         }
         if self.size_frame && self.selection.len() == 1 {
@@ -1191,13 +1195,13 @@ impl App {
         }
     }
 
-    fn wire_end(&self, m: P, z: f32) -> P {
+    pub(crate) fn wire_end(&self, m: P, z: f32) -> P {
         self.pin_near(m, 6.0 / z, &[]).unwrap_or_else(|| self.snap(m))
     }
 
     /// Punkt beim Aufziehen eines Zeichenobjekts: Linien fangen wie Leitungen auf Anschlüsse (außer im
     /// Symboleditor), alles andere auf das Raster.
-    fn create_end(&self, tool: Tool, m: P, z: f32) -> P {
+    pub(crate) fn create_end(&self, tool: Tool, m: P, z: f32) -> P {
         if tool == Tool::Line && self.sym_edit.is_none() {
             self.wire_end(m, z)
         } else {
