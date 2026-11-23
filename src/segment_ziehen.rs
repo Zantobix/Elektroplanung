@@ -184,6 +184,9 @@ impl App {
         let frei = [0, n - 1].map(|i| !self.netz_vorher.is_empty() && crate::leitung_anschluss::freies_ende_in(&self.netz_vorher, &self.lib, id, orig[i]));
         let neu_pts = if knick { crate::knick_ziehen::knick_verschieben_frei(&orig, idx, d, frei) } else { verschieben_frei(&orig, idx, d, frei) };
         let neu = crate::schiene_halten::abgreifen(&neu_pts, &sch);
+        // ebenso auf anderen Leitungen (Anfang auf N: wandert auf N mit, kein Querstück auf N)
+        let gl = crate::schiene_halten::gleise_aus(&self.netz_vorher);
+        let neu = crate::schiene_halten::abgreifen_gleise(&neu, &gl, id);
         self.with_sheet(|s, _| {
             if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
                 *pts = neu;

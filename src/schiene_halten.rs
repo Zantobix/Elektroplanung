@@ -108,6 +108,24 @@ pub fn achse(a: P, b: P) -> Option<P> {
     }
 }
 
+/// Wie `abgreifen` für alle Gleise (Schienen und achsengerade Stücke anderer Leitungen außer `ohne`): läuft der
+/// Anfang bzw. das Ende auf einem Gleis entlang, beginnt die Leitung dort, wo sie es verlässt (Nutzervideo Runde 13:
+/// Teilstück gezogen, das Querstück lief auf der Leitung N entlang).
+pub fn abgreifen_gleise(pts: &[P], gl: &[Gleis], ohne: u64) -> Vec<P> {
+    let auf = |p: P, g: &Gleis| crate::model::seg_dist(p, g.a, g.b) < EPS;
+    let mut v = crate::leitung_fuehrung::bereinigen(pts.to_vec());
+    for _ in 0..2 {
+        while v.len() > 2 {
+            if !gl.iter().any(|g| g.id != ohne && auf(v[0], g) && auf(v[1], g)) {
+                break;
+            }
+            v.remove(0);
+        }
+        v.reverse();
+    }
+    v
+}
+
 /// Achsengerades Gleis, auf dem ein Abgriff wandern darf: Sammelschiene oder gerades Stück einer Leitung
 /// (Leitung als „Schiene“, z. B. die Ausgänge „-F2.L“/„-F2.N“ in W2, an denen Abzweige mit Knoten hängen).
 #[derive(Clone, Copy, Debug)]
@@ -120,8 +138,13 @@ pub struct Gleis {
 
 /// Alle Gleise des Blattes: Sammelschienen und achsengerade Stücke aller Leitungen.
 pub fn gleise(sheet: &Sheet) -> Vec<Gleis> {
+    gleise_aus(&sheet.objects)
+}
+
+/// Wie `gleise` für die Objekte `objs`.
+pub fn gleise_aus(objs: &[crate::model::Obj]) -> Vec<Gleis> {
     let mut v = vec![];
-    for o in &sheet.objects {
+    for o in objs {
         match &o.kind {
             Kind::Busbar { a, x2, .. } => v.push(Gleis { id: o.id, a: P::new(a.x.min(*x2), a.y), b: P::new(a.x.max(*x2), a.y), schiene: true }),
             Kind::Wire { pts, .. } => {

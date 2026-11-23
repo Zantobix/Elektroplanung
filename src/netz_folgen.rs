@@ -89,11 +89,16 @@ impl Abbild {
         }
     }
 
+    /// Neue Lage des Leitungsendes `e`, wenn es an einem Anschluss eines geänderten Objekts hing.
+    pub fn ziel_anschluss(&self, e: P) -> Option<P> {
+        let pin = self.pins.iter().filter(|(_, p, _, t)| p.dist(e) <= *t).min_by(|x, y| x.1.dist(e).total_cmp(&y.1.dist(e)));
+        pin.map(|(_, p, q, _)| e.add(q.sub(*p)))
+    }
+
     /// Neue Lage des Leitungsendes `e` der Leitung `eigen`, wenn es vorher an einer abgebildeten Lage hing.
     pub fn ziel(&self, eigen: u64, e: P) -> Option<P> {
-        let pin = self.pins.iter().filter(|(_, p, _, t)| p.dist(e) <= *t).min_by(|x, y| x.1.dist(e).total_cmp(&y.1.dist(e)));
-        if let Some((_, p, q, _)) = pin {
-            return Some(e.add(q.sub(*p)));
+        if let Some(q) = self.ziel_anschluss(e) {
+            return Some(q);
         }
         for (id, alt, neu) in &self.wires {
             if *id != eigen && alt.windows(2).any(|s| seg_dist(e, s[0], s[1]) <= PIN_TOL) {
@@ -126,6 +131,10 @@ pub fn lage_auf(alt: &[P], neu: &[P], e: P) -> P {
     let Some(i) = (0..alt.len().saturating_sub(1)).find(|&i| seg_dist(e, alt[i], alt[i + 1]) <= PIN_TOL) else {
         return abzweig_lage(alt, neu, e);
     };
+    // an einem Punkt des Zuges, den es nachher noch gibt (Ende oder Knick, der stehen bleibt): bleibt
+    if alt.iter().any(|q| q.dist(e) <= PIN_TOL) && neu.iter().any(|q| q.dist(e) <= PIN_TOL) {
+        return e;
+    }
     let (a, b) = (alt[i], alt[i + 1]);
     let (h, v) = (waag(a, b) && !senk(a, b), senk(a, b) && !waag(a, b));
     // Ende genau an einem Eckpunkt: dem Eckpunkt folgen (gleiche Punktzahl) bzw. Knick-Regel unten
@@ -434,10 +443,25 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
         let mut neu: Vec<(u64, Gefuehrt)> = vec![];
         // Leitungen, die in diesem Schritt (letzter Durchlauf) selbst geführt werden
         let bewegt_ids: Vec<u64> = folger.iter().map(|(id, _)| *id).collect();
+        // geändert: primär oder in diesem Schritt geführt
+        let mut geaendert: Vec<u64> = primaer.to_vec();
+        geaendert.extend(&bewegt_ids);
         for o in vorher.iter().filter(|o| folger_von(o)) {
             let Kind::Wire { pts, .. } = &o.kind else { continue };
             let n = pts.len();
-            let ziel = [abb.ziel(o.id, pts[0]), abb.ziel(o.id, pts[n - 1])];
+            // ein Ende, das (auch) an etwas Unverändertem hängt (Anschluss, Klemme, Leitung im Innern, Schiene),
+            // folgt nur einem verschobenen Anschluss, nicht einer geänderten Leitung, die zufällig denselben Punkt
+            // berührt (Nutzervideo: E2-Abzweig wanderte mit einer anderen Leitung, die am selben Punkt auf N endete)
+            let ziel_von = |e: P| {
+                if let Some(q) = abb.ziel_anschluss(e) {
+                    return Some(q);
+                }
+                if fest_an(&vs, lib, &geaendert, o.id, e).is_some() {
+                    return None;
+                }
+                abb.ziel(o.id, e)
+            };
+            let ziel = [ziel_von(pts[0]), ziel_von(pts[n - 1])];
             if ziel == [None, None] {
                 continue;
             }

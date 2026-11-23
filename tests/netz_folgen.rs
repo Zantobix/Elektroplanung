@@ -158,3 +158,29 @@ fn abzweig_ende_gleitet_auf_dem_wirt() {
     assert!(seg_dist(*w2.last().unwrap(), p(85.0, 15.0), p(85.0, 105.0)) < 0.01, "{w2:?}");
     assert!(w2.len() <= 3, "höchstens ein Knick: {w2:?}");
 }
+
+/// Nutzervideo 23.11.2026: Abzweig von E2 und eine zweite Leitung enden am selben Punkt auf N; das waagerechte Stück
+/// der zweiten wird nach unten gezogen. E2s Abzweig bleibt, der Anfang der gezogenen Leitung wandert auf N mit
+/// (kein Querstück auf N).
+#[test]
+fn video_gezogene_leitung_mit_gemeinsamem_punkt_auf_n() {
+    let mut app = app_mit(vec![
+        klemme(10, 25.0, 205.8),
+        wire(1, &[(25.0, 5.0), (25.0, 205.0)]),
+        // E2-Abzweig von links auf N bei y = 45
+        klemme(11, 0.0, 85.8),
+        wire(2, &[(-15.0, 85.0), (-15.0, 45.0), (25.0, 45.0)]),
+        // obere Leitung von N (25,45) nach rechts und runter auf die Ecke der E3-Leitung (105,125)
+        wire(3, &[(25.0, 45.0), (105.0, 45.0), (105.0, 125.0)]),
+        // E3-Leitung von N (25,125) nach rechts und runter zur Klemme
+        klemme(12, 105.0, 155.8),
+        wire(4, &[(25.0, 125.0), (105.0, 125.0), (105.0, 155.0)]),
+    ]);
+    let w2 = pts(&app, 2);
+    app.selection = vec![3];
+    assert!(app.teilstueck_greifen(3, p(65.0, 45.0), 1.0));
+    app.teilstueck_ziehen(p(65.0, 85.0));
+    assert_eq!(pts(&app, 2), w2, "E2-Abzweig bleibt");
+    let w3 = pts(&app, 3);
+    assert_eq!(w3, vec![p(25.0, 85.0), p(105.0, 85.0), p(105.0, 125.0)], "Anfang wandert auf N");
+}
