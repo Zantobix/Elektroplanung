@@ -1,5 +1,6 @@
 //! Neue Sammelschiene aus der Schienenauswahl eines Sammelschienen-Objekts wie im Original: Die Liste
-//! „S-Schiene“ (Objekt-Eigenschaften 0x4427d4, Fall Sammelschiene) endet mit dem Eintrag `Neue Schiene "L<n>"`
+//! „S-Schiene“ (Objekt-Eigenschaften 0x4427d4, Fall Sammelschiene) beginnt mit dem Eintrag `Neue Schiene "L<n>"`
+//! (Wine-Gegenprobe Runde 12: erster Eintrag, dann „Schiene 1 (L1)“ …)
 //! (0x442c1a, n = Anzahl der Schienen + 1). Ist er bei OK gewählt, legt das Original eine neue Schiene an
 //! (0x405e08 mit 1) und hängt das Objekt daran. Der Nachbau legt sie wie „Neue Sammelschiene“ an
 //! (Schlüssel/Kürzel „L<n>“, Name „Schiene n“).

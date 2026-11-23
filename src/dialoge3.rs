@@ -153,9 +153,9 @@ impl App {
                 if !sliste.contains(name) {
                     sliste.push(name.clone());
                 }
+                // erster Eintrag wie im Original: `Neue Schiene "L<n>"` (schiene_neu.rs; Wine-Gegenprobe Runde 12)
+                sliste.insert(0, crate::schiene_neu::eintrag(anl));
                 let sel = sliste.iter().position(|s| s == name).unwrap_or(0);
-                // letzter Eintrag wie im Original: `Neue Schiene "L<n>"` (schiene_neu.rs)
-                sliste.push(crate::schiene_neu::eintrag(anl));
                 let set = anl.schienen.get(name).cloned().unwrap_or_default();
                 // Positionierung aus OBJ Feld 15 (Bit 1 fest = kein Auto, Bit 0 Unten) und Feld 11 (Y Offset)
                 let (auto, unten) = (lage & crate::sammelschiene_lage::FEST == 0, lage & crate::sammelschiene_lage::UNTEN != 0);
