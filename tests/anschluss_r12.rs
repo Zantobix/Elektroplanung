@@ -226,3 +226,16 @@ fn w2_drehen_rundreise() {
     back.active = 0;
     assert!(enden(&back), "nach der Rundreise nicht angeschlossen");
 }
+
+/// Nutzerwunsch 23.11.2026: Sind Leitungen markiert, gibt es keine Skalierungsecken (auch nicht zusammen mit
+/// Symbolen); ein Symbol allein behält sie.
+#[test]
+fn markierte_leitungen_ohne_skalierungsecken() {
+    let mut app = app_mit_schliesser();
+    app.selection = vec![1];
+    assert!(app.sel_frame().is_some());
+    app.selection = vec![1, 2, 3];
+    assert!(app.sel_frame().is_none());
+    app.selection = vec![2];
+    assert!(app.sel_frame().is_none());
+}

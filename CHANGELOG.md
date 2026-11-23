@@ -19,6 +19,7 @@ erhält der Abschnitt deren Nummer.
   heruntergeladen).
 - Hilfslinien beim Verschieben von Symbolen (nach QElectroTech): graue Linie quer durch jeden Anschluss, an freien
   Anschlüssen die Flucht in Anschlussrichtung, grün bis zu einem freien Gegenanschluss (abschaltbar).
+- Sind Leitungen markiert (auch zusammen mit Symbolen), erscheinen keine Skalierungsecken mehr.
 - Leitungen: Eine gerade Leitung bleibt gerade, wenn ein Symbol entlang ihr verschoben wird (vorher U-Umweg bzw.
   Haken nach hin und zurück); die Strompfadausrichtung rundet auf 0,1 mm wie die Datei.
 

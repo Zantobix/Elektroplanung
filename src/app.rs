@@ -866,7 +866,13 @@ impl App {
         if !self.size_frame || self.tool != Tool::Select || self.placing.is_some() {
             return None;
         }
-        crate::groesse::rahmen(&self.selected_objs(), &self.lib)
+        let objs = self.selected_objs();
+        // mit markierten Leitungen keine Skalierungsecken (Nutzerwunsch 23.11.2026: Leitungen werden nicht skaliert,
+        // die Ecken stören beim Greifen von Leitungen und Anschlüssen)
+        if objs.iter().any(|o| matches!(o.kind, Kind::Wire { .. })) {
+            return None;
+        }
+        crate::groesse::rahmen(&objs, &self.lib)
     }
 
     pub fn selected_objs(&self) -> Vec<Obj> {
