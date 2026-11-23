@@ -37,6 +37,8 @@ pub struct NetzOpt<'a> {
     pub fix_active: bool,
     /// neu entstehende innere Knicke auf das Raster
     pub rund: &'a dyn Fn(P) -> P,
+    /// gemerkte Leitungsformen je Quadrant (leitung_gedaechtnis.rs)
+    pub formen: Option<&'a crate::leitung_gedaechtnis::Gedaechtnis>,
 }
 
 /// Abbildung alter auf neue Lagen der geänderten Objekte.
@@ -342,6 +344,37 @@ pub fn fuehren_mit(vorher: &Sheet, jetzt: &Sheet, lagen: &Sheet, lib: &[SymDef],
         let gl = crate::schiene_halten::gleise(jetzt);
         if let Some(g) = crate::schiene_halten::gerade_zum_gleis(id, alt, bewegt, d[k], alt_dirs, &gl).filter(|g| zulaessig(g, &hind, &fremd, &umrisse)) {
             return Some(Gefuehrt { pts: g, ganz: None });
+        }
+    }
+    // beide Enden wieder genau dort, wo eine Form gemerkt wurde (Rückkehr, Kriterium L10): diese Form, wenn zulässig
+    if bewegt[0] || bewegt[1] {
+        let mut f = opt.formen.and_then(|g| g.genau(id, a, b));
+        // nur ein Ende bewegt, das andere hängt auf einem Wirt: dort darf es zurückgleiten
+        if f.is_none() && bewegt[0] != bewegt[1] {
+            let (k, q, anders) = if bewegt[0] { (0, a, b) } else { (1, b, a) };
+            if let Some((_, w0, w1)) = wirt_bei(jetzt, id, anders) {
+                f = opt.formen.and_then(|g| g.mit_ende(id, k, q, &|p| seg_dist(p, w0, w1) <= PIN_TOL));
+            }
+        }
+        if let Some(f) = f {
+            if f.as_slice() != alt && zulaessig(&f, &hind, &fremd, &umrisse) {
+                return Some(Gefuehrt { pts: f, ganz: None });
+            }
+        }
+    }
+    // Quadrant gewechselt und für den neuen ist eine Form gemerkt (nach QElectroTech): diese Form, wenn sie zulässig
+    // ist – nur ein Ende bewegt und dieses an einem Anschluss (das andere bleibt liegen), ohne fremde Anschlüsse im
+    // Innern
+    if bewegt[0] != bewegt[1] && fest_enden[if bewegt[0] { 0 } else { 1 }] && profil && n >= 2 {
+        let neu_q = crate::leitung_gedaechtnis::quadrant(a, b);
+        if neu_q != crate::leitung_gedaechtnis::quadrant(alt[0], alt[n - 1]) {
+            if let Some(f) = opt.formen.and_then(|g| g.form(id, a, b, opt.rund)) {
+                let raus = |i: usize, q: P, nb: P| dirs[i].is_none_or(|d| (nb.x - q.x) * d.x + (nb.y - q.y) * d.y > 0.0);
+                let m = f.len();
+                if m >= 2 && rechtwinklig(&f) && raus(0, f[0], f[1]) && raus(1, f[m - 1], f[m - 2]) && zulaessig(&f, &hind, &fremd, &umrisse) {
+                    return Some(Gefuehrt { pts: f, ganz: None });
+                }
+            }
         }
     }
     let mut p = alt.to_vec();
@@ -677,6 +710,9 @@ fn halten(vs: &Sheet, s: &mut Sheet, lib: &[SymDef], primaer: &[u64]) {
     }
 }
 
+/// Zahl der gemerkten Blattstände für die Rückkehr.
+const RUECKKEHR: usize = 8;
+
 impl crate::app::App {
     /// Vor dem Verschieben markierter Symbole, Klemmstellen und Verweise (nach dem Rückgängig-Punkt): Leitungen, die an
     /// ihren Anschlüssen enden, mit stoßenden Leitungen in Flucht zu einer zusammenfassen. Nutzervideo 23.11.2026
@@ -710,9 +746,42 @@ impl crate::app::App {
         }
     }
 
+    /// Stehen alle Objekte außer Leitungen wieder genau wie in einem zu Gestenbeginn gemerkten Stand (Symbol hin und
+    /// zurück, viermal gedreht …), gelten dessen Leitungen – der neueste passende Stand, damit Handänderungen
+    /// erhalten bleiben (Kriterium L10, Maustest 23.11.2026).
+    pub fn rueckkehr_anwenden(&mut self) {
+        let (Some(r), Some(s)) = (self.cur(), self.sheet()) else { return };
+        let ohne = |v: &[Obj]| -> Vec<Obj> { v.iter().filter(|o| !matches!(o.kind, Kind::Wire { .. })).cloned().collect() };
+        let jetzt = ohne(&s.objects);
+        let Some(objs) = self.rueckkehr.iter().rev().find(|(r0, o0)| *r0 == r && ohne(o0) == jetzt).map(|(_, o)| o.clone()) else {
+            self.rueckkehr_gilt = false;
+            return;
+        };
+        let anders = s.objects != objs;
+        self.rueckkehr_gilt = true;
+        if anders {
+            self.with_sheet(|s, _| s.objects = objs);
+        }
+    }
+
     /// Stand des aktuellen Blattes vor einer Änderung merken (Beginn des Ziehens, vor Drehen/Pfeiltaste).
     pub fn netz_merken(&mut self) {
+        self.rueckkehr_gilt = false;
         self.netz_vorher = self.sheet().map(|s| s.objects.clone()).unwrap_or_default();
+        if let Some(r) = self.cur() {
+            if self.rueckkehr.last().is_none_or(|(r0, o0)| *r0 != r || *o0 != self.netz_vorher) {
+                self.rueckkehr.push((r, self.netz_vorher.clone()));
+                if self.rueckkehr.len() > RUECKKEHR {
+                    self.rueckkehr.remove(0);
+                }
+            }
+        }
+        // aktuelle Form jeder Leitung für ihren Quadranten merken (leitung_gedaechtnis.rs)
+        for o in &self.netz_vorher {
+            if let Kind::Wire { pts, .. } = &o.kind {
+                self.formen.merken(o.id, pts);
+            }
+        }
     }
 
     /// Leitungsnetz nach der Änderung der Objekte `primaer` nachführen (vom gemerkten Stand aus). `halten`: primär
@@ -727,10 +796,20 @@ impl crate::app::App {
         let fix_active = self.fix_active;
         let (fang, no_snap, ursprung) = (self.fang(), self.no_snap, self.raster_ursprung());
         let rund = move |p: P| if fang > 0.0 && !no_snap { crate::raster::fang(p, fang, ursprung) } else { p };
-        let opt = NetzOpt { stich, halten, fix_active, rund: &rund };
+        let formen = std::mem::take(&mut self.formen);
+        let opt = NetzOpt { stich, halten, fix_active, rund: &rund, formen: Some(&formen) };
         self.with_sheet(|s, _| {
             nachfuehren(&vorher, s, &lib, primaer, &opt);
         });
+        self.formen = formen;
+        // nur wenn ausschließlich Symbole, Klemmstellen usw. bewegt werden – beim Ziehen von Leitungen ändern sich nur
+        // Leitungen, das wäre sonst immer eine „Rückkehr“
+        let nur_objekte = self.sheet().is_some_and(|s| s.objects.iter().filter(|o| primaer.contains(&o.id)).all(|o| !matches!(o.kind, Kind::Wire { .. })));
+        if nur_objekte && !primaer.is_empty() {
+            self.rueckkehr_anwenden();
+        } else {
+            self.rueckkehr_gilt = false;
+        }
         self.netz_vorher = vorher;
     }
 

@@ -263,6 +263,13 @@ pub struct App {
     pub owner_pick: Option<(SheetRef, Vec<u64>)>,
     /// Objekte des Blattes vor der laufenden Änderung (netz_folgen.rs: Leitungsnetz wird von hier aus nachgeführt)
     pub netz_vorher: Vec<Obj>,
+    /// Leitungsformen je Quadrant (leitung_gedaechtnis.rs, nach QElectroTech)
+    pub formen: crate::leitung_gedaechtnis::Gedaechtnis,
+    /// Blattstände zu Gestenbeginn (neueste zuletzt): kehren alle Objekte außer Leitungen in einen davon zurück, gelten
+    /// dessen Leitungen (Rückkehr, Kriterium L10; netz_folgen.rs)
+    pub rueckkehr: Vec<(SheetRef, Vec<Obj>)>,
+    /// die laufende Geste steht auf einem gemerkten Stand (dann räumt das Loslassen nicht auf)
+    pub rueckkehr_gilt: bool,
     /// Text für die System-Zwischenablage nach „Kopieren“ (view.rs gibt ihn an egui weiter): Unter Linux meldet
     /// egui Strg+V nur, wenn dort Text liegt – sonst blieb Einfügen per Tastatur wirkungslos (Maustest Runde 11)
     pub ablage_text: Option<String>,
@@ -384,6 +391,9 @@ impl App {
             bt: Default::default(),
             owner_pick: None,
             netz_vorher: vec![],
+            formen: Default::default(),
+            rueckkehr: vec![],
+            rueckkehr_gilt: false,
             ablage_text: None,
             meldung: None,
             multi_props: None,
@@ -620,6 +630,7 @@ impl App {
     }
 
     pub fn checkpoint(&mut self) {
+        self.rueckkehr_gilt = false;
         self.undo.push(self.project.clone());
         if self.undo.len() > 200 {
             self.undo.remove(0);
@@ -1393,6 +1404,8 @@ impl App {
                     self.add_project(prj);
                 } else {
                     self.new_project();
+                    self.formen.leeren();
+                    self.rueckkehr.clear();
                     self.project = prj;
                     crate::rahmen::abgleichen(&mut self.project);
                     let extra: Vec<SymDef> = self.project.symdefs.iter().filter(|d| symbols::find(&self.lib, &d.key).is_none()).cloned().collect();

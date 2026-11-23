@@ -141,3 +141,90 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     assert!(ueber_anschluss.len() <= 12, "{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
 }
 
+
+/// R5 Rückkehr (Kriterium L10): Symbol bzw. Klemme in einer Geste verschieben, in einer zweiten zurück – danach
+/// dieselben Leitungen (nach Lage verglichen, weil das Aufräumen Leitungen zusammenfassen kann). Kennzahl.
+#[test]
+fn w2_hin_und_zurueck_ergibt_denselben_plan() {
+    let Some(f) = std::env::var_os("EP_SAMPLE") else { return };
+    let mut app = test_app();
+    app.open_path(std::path::PathBuf::from(f), false);
+    let mut z = Zufall(4242);
+    let (mut versuche, mut abweichend) = (0, vec![]);
+    // gezeichnetes Bild: je waagerechter bzw. senkrechter Linie die Vereinigung der überdeckten Strecken (0,1 mm),
+    // unabhängig davon, wie das Aufräumen die Linien auf Leitungen aufteilt
+    let form = |s: &Sheet| -> Vec<(bool, i32, i32, i32)> {
+        let mut seg: Vec<(bool, i32, i32, i32)> = vec![];
+        for o in &s.objects {
+            if let Kind::Wire { pts, .. } = &o.kind {
+                for w in pts.windows(2) {
+                    let (a, b) = (((w[0].x * 10.0).round() as i32, (w[0].y * 10.0).round() as i32), ((w[1].x * 10.0).round() as i32, (w[1].y * 10.0).round() as i32));
+                    if a == b {
+                        continue;
+                    }
+                    if a.1 == b.1 {
+                        seg.push((true, a.1, a.0.min(b.0), a.0.max(b.0)));
+                    } else if a.0 == b.0 {
+                        seg.push((false, a.0, a.1.min(b.1), a.1.max(b.1)));
+                    } else {
+                        seg.push((true, i32::MIN, a.0 * 100000 + a.1, b.0 * 100000 + b.1));
+                    }
+                }
+            }
+        }
+        seg.sort();
+        let mut v: Vec<(bool, i32, i32, i32)> = vec![];
+        for x in seg {
+            match v.last_mut() {
+                Some(l) if l.0 == x.0 && l.1 == x.1 && x.2 <= l.3 => l.3 = l.3.max(x.3),
+                _ => v.push(x),
+            }
+        }
+        v
+    };
+    let geste = |app: &mut elektroplanung::app::App, id: u64, d: P| {
+        app.selection = vec![id];
+        app.checkpoint();
+        app.stoesse_an_markierung_zusammenfassen();
+        app.netz_merken();
+        app.netz_verschieben(&[id], d);
+        app.aufraeumen();
+    };
+    for b in 0..app.tabs.len() {
+        app.active = b;
+        for _ in 0..12 {
+            let Some(s) = app.sheet().cloned() else { break };
+            let kand: Vec<u64> = s.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })).map(|o| o.id).collect();
+            if kand.is_empty() {
+                break;
+            }
+            let id = kand[(z.next() * kand.len() as f32) as usize % kand.len()];
+            let r = app.raster();
+            let d = P::new(((z.next() * 8.0) as i32 - 4) as f32 * r, ((z.next() * 8.0) as i32 - 4) as f32 * r);
+            if d.x == 0.0 && d.y == 0.0 {
+                continue;
+            }
+            // Ausgangslage nach dem Zusammenfassen der Stoßstücke (das gehört zur ersten Geste)
+            app.selection = vec![id];
+            app.stoesse_an_markierung_zusammenfassen();
+            let vorher = form(app.sheet().unwrap());
+            geste(&mut app, id, d);
+            geste(&mut app, id, P::new(-d.x, -d.y));
+            versuche += 1;
+            let nachher = form(app.sheet().unwrap());
+            if nachher != vorher {
+                let weg: Vec<_> = vorher.iter().filter(|w| !nachher.contains(w)).collect();
+                let neu: Vec<_> = nachher.iter().filter(|w| !vorher.contains(w)).collect();
+                abweichend.push(format!("Blatt {b}: Objekt {id} um {d:?} und zurück: vorher {weg:?} nachher {neu:?}"));
+            }
+            app.do_undo();
+            app.do_undo();
+        }
+    }
+    for a in abweichend.iter().take(20) {
+        println!("{a}");
+    }
+    println!("{versuche} Rückkehr-Versuche, {} mit anderem Plan", abweichend.len());
+    // hart seit 23.11.2026 (Rückkehr auf gemerkte Blattstände, netz_folgen.rs)
+    assert!(abweichend.is_empty());
+}

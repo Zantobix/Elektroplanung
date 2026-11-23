@@ -329,8 +329,8 @@ fn maustest_licht_lampe_nach_unten() {
 }
 
 /// Maustest 23.11.2026 T2 (Kriterium L10 Rückkehr): -E1 in einer Geste nach rechts, in einer zweiten zurück –
-/// danach dieselbe Form wie vorher (vorher: Haken in der Leitung von X1.1). Offen (R5): die untere Leitung kommt
-/// mit 5 mm statt 10 mm Stich zurück – geprüft werden daher Punktzahl und Enden.
+/// danach derselbe Plan wie vorher (vorher: Haken in der Leitung von X1.1, später kam der untere Stich mit 5 statt
+/// 10 mm zurück – jetzt Formgedächtnis je Quadrant, leitung_gedaechtnis.rs).
 #[test]
 fn maustest_licht_lampe_hin_und_zurueck() {
     let Some((mut app, lampe)) = licht_maus() else { return };
@@ -339,7 +339,7 @@ fn maustest_licht_lampe_hin_und_zurueck() {
     geste(&mut app, lampe, &[p(-10.0, 0.0), p(-20.0, 0.0), p(-34.6, 0.0)]);
     for ((id, w), (_, alt)) in leitungen(&app).iter().zip(&vorher) {
         assert_eq!(w.len(), alt.len(), "Leitung {id}: {alt:?} → {w:?}");
-        assert!(w[0].dist(alt[0]) < 0.01 && w[w.len() - 1].dist(alt[alt.len() - 1]) < 0.01, "Leitung {id}: {alt:?} → {w:?}");
+        assert!(w.iter().zip(alt).all(|(a, b)| a.dist(*b) < 0.01), "Leitung {id}: {alt:?} → {w:?}");
     }
 }
 
@@ -371,4 +371,21 @@ fn video_lampe_nach_unten_stich_bleibt() {
     geste(&mut app, lampe, &[p(0.0, 10.0), p(0.0, 20.0)]);
     let w = leitungen(&app).into_iter().find(|(_, w)| w[0].dist(p(22.9, 155.0)) < 0.05).expect("untere Leitung").1;
     assert!((w[1].x - 22.9).abs() < 0.05 && w[1].y > 155.0 + 2.0, "Stich nach unten fehlt: {w:?}");
+}
+
+/// Rückkehr (netz_folgen.rs `rueckkehr_anwenden`) darf eine danach gezeichnete Leitung nie zurücknehmen: Lampe hin
+/// und zurück, dann eine neue Leitung – sie bleibt, auch nach einer weiteren Geste hin und zurück.
+#[test]
+fn rueckkehr_behaelt_neue_leitung() {
+    let Some((mut app, lampe)) = licht_maus() else { return };
+    geste(&mut app, lampe, &[p(35.0, 0.0)]);
+    geste(&mut app, lampe, &[p(-35.0, 0.0)]);
+    // „gezeichnet“: neue freie Leitung mit eigenem Rückgängig-Schritt und Aufräumen
+    app.checkpoint();
+    app.with_sheet(|s, _| s.objects.push(wire(999, &[(100.0, 60.0), (150.0, 60.0)])));
+    app.aufraeumen();
+    assert!(leitungen(&app).iter().any(|(id, _)| *id == 999));
+    geste(&mut app, lampe, &[p(35.0, 0.0)]);
+    geste(&mut app, lampe, &[p(-35.0, 0.0)]);
+    assert!(leitungen(&app).iter().any(|(id, _)| *id == 999), "neue Leitung verschwand bei der Rückkehr");
 }

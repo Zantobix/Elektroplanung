@@ -337,6 +337,10 @@ impl crate::app::App {
     /// Nach jeder Bearbeitung von Leitungen (gleicher Rückgängig-Schritt): übereinanderliegende vereinigen,
     /// Überstände kürzen, stoßende Leitungen zu einer zusammenfassen (leitung_zusammen.rs).
     pub fn aufraeumen(&mut self) {
+        // Geste endet auf einem gemerkten Stand (Rückkehr, netz_folgen.rs): der ist schon aufgeräumt und bleibt
+        if std::mem::take(&mut self.rueckkehr_gilt) {
+            return;
+        }
         let ids = self.geaenderte_leitungen();
         if ids.is_empty() {
             return;

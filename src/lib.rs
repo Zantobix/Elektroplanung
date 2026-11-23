@@ -73,6 +73,7 @@ pub mod mitziehen;
 pub mod netz_folgen;
 pub mod update_pruefung;
 pub mod hilfslinien;
+pub mod leitung_gedaechtnis;
 pub mod fang;
 pub mod leitung_zusammen;
 pub mod netz;
