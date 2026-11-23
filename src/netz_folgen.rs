@@ -115,6 +115,11 @@ impl Abbild {
     }
 }
 
+/// Alle Teilstücke waagerecht oder senkrecht?
+pub fn rechtwinklig(w: &[P]) -> bool {
+    w.windows(2).all(|v| (v[0].x - v[1].x).abs() < 0.01 || (v[0].y - v[1].y).abs() < 0.01)
+}
+
 fn waag(a: P, b: P) -> bool {
     (a.y - b.y).abs() < EPS
 }
@@ -465,7 +470,19 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
             if ziel == [None, None] {
                 continue;
             }
-            if let Some(g) = fuehren(&vs, s, lib, o.id, pts, ziel, opt, &bewegt_ids) {
+            if let Some(mut g) = fuehren(&vs, s, lib, o.id, pts, ziel, opt, &bewegt_ids) {
+                // Absicherung (Nutzerbild Runde 13: schräge Leitung nach dem Verschieben einer Lampe): eine vorher
+                // rechtwinklige Leitung bleibt rechtwinklig – sonst neu mit Stichen um Symbole herum
+                if rechtwinklig(pts) && !rechtwinklig(&g.pts) && g.pts.len() >= 2 {
+                    let (a, b) = (g.pts[0], g.pts[g.pts.len() - 1]);
+                    let da = crate::leitung_route::anschluss_richtung(s, lib, a);
+                    let db = crate::leitung_route::anschluss_richtung(s, lib, b);
+                    let umr = crate::leitung_hindernis::umrisse(s, lib);
+                    let hind = crate::leitung_hindernis::wirksam(&crate::leitung_hindernis::hindernisse(&umr, &[], &[]), a, b);
+                    let weg = crate::leitung_route::mit_stichen(a, da, b, db, opt.stich);
+                    g.pts = crate::leitung_hindernis::umgehen(&weg, da, db, &hind, 2.0 * opt.stich, false);
+                    g.ganz = None;
+                }
                 neu.push((o.id, g));
             }
         }
@@ -504,17 +521,22 @@ fn halten(vs: &Sheet, s: &mut Sheet, lib: &[SymDef], primaer: &[u64]) {
         if fest.iter().all(|f| f.is_none()) {
             continue;
         }
-        let achse = |a: P, b: P| crate::schiene_halten::achse(a, b);
+        // Achse des ersten echten Teilstücks vom Ende aus (doppelte Punkte überspringen, sonst entstand ein schräges
+        // Stück)
+        let achse_ab = |z: Vec<P>| {
+            let a = *z.first()?;
+            z.iter().copied().find(|b| b.dist(a) >= EPS).and_then(|b| crate::schiene_halten::achse(a, b))
+        };
         let mut v = pts.clone();
         match &fest[0] {
             Some(Fest::Schiene(sch)) => binden(&mut v, *sch),
-            Some(Fest::Punkt(q)) => anbinden(&mut v, *q, achse(p0[0], p0[1])),
+            Some(Fest::Punkt(q)) => anbinden(&mut v, *q, achse_ab(p0.clone())),
             None => {}
         }
         v.reverse();
         match &fest[1] {
             Some(Fest::Schiene(sch)) => binden(&mut v, *sch),
-            Some(Fest::Punkt(q)) => anbinden(&mut v, *q, achse(p0[n0 - 1], p0[n0 - 2])),
+            Some(Fest::Punkt(q)) => anbinden(&mut v, *q, achse_ab(p0.iter().rev().copied().collect())),
             None => {}
         }
         v.reverse();
