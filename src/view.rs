@@ -1692,6 +1692,12 @@ impl App {
                     total.x = np.x - p0.x;
                 }
             }
+            // auf dem Blatt bleiben (Nutzerfrage 23.11.2026: Lampe unter den Rahmen gezogen lag außerhalb des
+            // Papiers, die Leitungen liefen durch das Schriftfeld hinaus): Verschiebung so begrenzen, dass der Umriss der
+            // bewegten Objekte im Blatt bleibt
+            if let Some(s) = self.sheet().filter(|_| !movable.is_empty()) {
+                total = crate::blatt_grenze::begrenzen(s, &self.lib, &objs, &movable, applied, total);
+            }
             let d = total.sub(applied);
             if (d.x.abs() > 1e-4 || d.y.abs() > 1e-4) && !movable.is_empty() {
                 if !moved {
