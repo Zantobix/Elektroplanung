@@ -191,6 +191,8 @@ nicht. Gemessen werden stattdessen:
   und vergibt eine neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
 - Bewusste Erweiterungen gegenüber dem Original (bleiben, auch wenn das Original sie nicht hat):
+  - Textgenerator: Zähler wie im Original (`@` + ein Zeichen, Start 0 oder Wert in Klammern), dazu die Werte
+    `@{Blatt}`, `@{Pfad}`, `@{Anlage}` und `@{Text}` (bisheriger Text).
   - Rasterweite je Projekt: Die gewählte Weite wird je Datei gemerkt; ist keine gemerkt, stellt das Öffnen die
     Weite ein, in der das Projekt gezeichnet ist (`src/raster.rs`, `raster_erkennen`).
   - Leitungsführung: gezogene Leitungen folgen dem Mausweg (`leitung_bahn.rs`); beim Mitziehen ersetzt ein einfacher

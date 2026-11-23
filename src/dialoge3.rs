@@ -126,6 +126,22 @@ pub fn list_from_text(s: &str, cols: usize) -> Vec<Vec<String>> {
 /// TTitel.Memo1): „@“ und genau ein Zeichen bilden eine Variable; ihr Wert beginnt bei 0 bzw. bei der Zahl in
 /// Klammern direkt dahinter („@x(5)“) und steigt je Objekt um eins. Ein „@“ am Ende entfällt.
 pub fn titel_formel(formel: &str, k: usize) -> String {
+    titel_formel_mit(formel, k, &TitelWerte::default())
+}
+
+/// Zusatzwerte des Textgenerators (Erweiterung, Nutzerentscheidung 23.11.2026): `@{Blatt}`, `@{Pfad}`,
+/// `@{Anlage}`, `@{Text}` (bisheriger Text). Im Original wäre „@{“ ein Zähler mit dem Zeichen „{“.
+#[derive(Default)]
+pub struct TitelWerte<'a> {
+    pub blatt: u32,
+    pub pfad: u32,
+    pub anlage: &'a str,
+    pub alt: &'a str,
+}
+
+/// Wie [`titel_formel`], zusätzlich mit den Werten `@{Blatt}`, `@{Pfad}`, `@{Anlage}`, `@{Text}` (Groß-/
+/// Kleinschreibung egal); unbekannte Namen bleiben als Text stehen.
+pub fn titel_formel_mit(formel: &str, k: usize, w: &TitelWerte) -> String {
     let c: Vec<char> = formel.chars().collect();
     let mut out = String::new();
     // Startwert je Variable (erste Angabe gilt)
@@ -138,6 +154,23 @@ pub fn titel_formel(formel: &str, k: usize) -> String {
             continue;
         }
         let Some(&v) = c.get(i + 1) else { break };
+        if v == '{' {
+            if let Some(e) = c[i + 2..].iter().position(|ch| *ch == '}') {
+                let name: String = c[i + 2..i + 2 + e].iter().collect();
+                let wert = match name.trim().to_lowercase().as_str() {
+                    "blatt" => Some(w.blatt.to_string()),
+                    "pfad" => Some(w.pfad.to_string()),
+                    "anlage" => Some(w.anlage.to_string()),
+                    "text" => Some(w.alt.to_string()),
+                    _ => None,
+                };
+                if let Some(t) = wert {
+                    out.push_str(&t);
+                    i += e + 3;
+                    continue;
+                }
+            }
+        }
         i += 2;
         let mut s0 = None;
         if c.get(i) == Some(&'(') {
@@ -774,7 +807,7 @@ impl App {
                     });
                     if *hilfe {
                         // sinngemäß wie TTitel.Memo1
-                        ui.small("Der eingegebene Text wird jedem gefundenen Objekt zugewiesen. Dabei werden Variablen durch ihre Werte ersetzt. Eine Variable wird durch das Zeichen '@' eingeleitet und besteht aus genau einem Zeichen. Der Wert einer Variable beginnt bei 0, es sei denn, nach der Variable wird ein Wert in Klammern eingegeben. Die Variablenwerte werden für jedes neue Objekt um eins erhöht. Für Symbole kann gewählt werden, welcher Text erzeugt werden soll.");
+                        ui.small("Der eingegebene Text wird jedem gefundenen Objekt zugewiesen. Dabei werden Variablen durch ihre Werte ersetzt. Eine Variable wird durch das Zeichen '@' eingeleitet und besteht aus genau einem Zeichen. Der Wert einer Variable beginnt bei 0, es sei denn, nach der Variable wird ein Wert in Klammern eingegeben. Die Variablenwerte werden für jedes neue Objekt um eins erhöht. Für Symbole kann gewählt werden, welcher Text erzeugt werden soll. Zusätzlich (Nachbau): @{Blatt} Blattnummer, @{Pfad} Strompfad, @{Anlage} Kurzform der Anlage, @{Text} bisheriger Text.");
                     }
                     if !msg.is_empty() {
                         ui.small(msg.as_str());
@@ -1380,7 +1413,9 @@ impl App {
         let sel = self.selection.clone();
         let k1 = TITEL_DIR1.get(dir1).map(|d| d.1).unwrap_or(0);
         let k2 = titel_dir2(dir1).get(dir2).map(|d| d.1).unwrap_or(2);
+        let kurz = self.project.anlagen[r.anlage].set.kurz.clone();
         let Some(s) = self.project.sheet_mut(r) else { return 0 };
+        let blatt = s.number;
         let mut idx: Vec<usize> = (0..s.objects.len())
             .filter(|i| (sel.is_empty() || sel.contains(&s.objects[*i].id)) && matches!(s.objects[*i].kind, Kind::Symbol { .. } | Kind::Text { .. }))
             .collect();
@@ -1392,19 +1427,22 @@ impl App {
             let (pa, pb) = (pos(&s.objects[*a]), pos(&s.objects[*b]));
             order_key(pa, k1).partial_cmp(&order_key(pb, k1)).unwrap().then(order_key(pa, k2).partial_cmp(&order_key(pb, k2)).unwrap())
         });
-        for (n, i) in idx.iter().enumerate() {
+        let pfade: Vec<u32> = idx.iter().map(|i| crate::epr::column_at(s, pos(&s.objects[*i]).x)).collect();
+        for (n, (i, pfad)) in idx.iter().zip(pfade).enumerate() {
+            let werte = |alt: &str| titel_formel_mit(formel, n, &TitelWerte { blatt, pfad, anlage: &kurz, alt });
             match &mut s.objects[*i].kind {
                 Kind::Symbol { bmk, value, ext, .. } => match wahl {
-                    1 => *value = titel_formel(formel, n),
+                    1 => *value = werte(value),
                     // Alternativtext: benutzerdefinierter Text Nr. 2 der Instanz (erster Symboltext nach der BMK)
                     2 => {
-                        let t = titel_formel(formel, n);
+                        let alt = ext.texts.iter().find(|(k, _)| *k == 2).map(|(_, t)| t.clone()).unwrap_or_default();
+                        let t = werte(&alt);
                         ext.texts.retain(|(k, _)| *k != 2);
                         ext.texts.push((2, t));
                     }
-                    _ => *bmk = titel_formel(formel, n),
+                    _ => *bmk = werte(bmk),
                 },
-                Kind::Text { text, .. } => *text = titel_formel(formel, n),
+                Kind::Text { text, .. } => *text = werte(text),
                 _ => {}
             }
         }

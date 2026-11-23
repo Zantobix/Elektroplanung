@@ -13,6 +13,9 @@ Wie im Original (Entscheidung Runde 13):
 - Listen Export: Betriebsmittelliste mit den Spalten „Anlage, Ort, Betriebsmittel“ (je Symbol ohne Eigentümer),
   Klemmenliste mit „Anlage, Ort, Klemmleiste, Klemmenindex“ (je Klemmstelle), jeweils in Blatt- und
   Objektreihenfolge; die leeren Zeilen, die das Original anhängt, entfallen.
+- Textgenerator: Variablen wie im Original – „@“ und ein beliebiges Zeichen ist ein Zähler, der bei 0 bzw. beim
+  Wert in Klammern beginnt (`K@a(10)`); Reihenfolge-Listen und Hilfetext wie im Original. Blatt, Strompfad, Anlage
+  und bisheriger Text heißen jetzt `@{Blatt}`, `@{Pfad}`, `@{Anlage}`, `@{Text}` (vorher `@S`, `@P`, `@A`, `@T`).
 - Optionen „Fixierung aktivieren“ wird nur gespeichert; der Knopf Fixierung startet immer gedrückt.
 - Symboleditor: „Option Ein und Ausschalten“ zeigt gedrückt, wenn das markierte Element zur gewählten Zusatzoption
   gehört.

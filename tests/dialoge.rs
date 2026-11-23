@@ -11,6 +11,10 @@ fn titelgenerator_formel() {
     assert_eq!(dialoge3::titel_formel("-S@x", 3), "-S3");
     assert_eq!(dialoge3::titel_formel("K@a(10).@b @a", 2), "K12.2 12");
     assert_eq!(dialoge3::titel_formel("S@", 4), "S");
+    // Zusatzwerte des Nachbaus
+    let w = dialoge3::TitelWerte { blatt: 4, pfad: 10, anlage: "UV2", alt: "alt" };
+    assert_eq!(dialoge3::titel_formel_mit("@{Anlage}/@{Blatt}.@{pfad} (@{Text}) -K@x(1)", 2, &w), "UV2/4.10 (alt) -K3");
+    assert_eq!(dialoge3::titel_formel_mit("@{Unbekannt}", 0, &w), "0Unbekannt}");
     assert_eq!(dialoge3::titel_dir2(0)[0].0, "Oben -> Unten");
     assert_eq!(dialoge3::titel_dir2(1)[1].0, "Rechts -> Links");
 }
