@@ -1022,8 +1022,8 @@ impl App {
         // angeschlossene Leitungen folgen den gedrehten/gespiegelten Anschlüssen (C2, netz_folgen.rs)
         self.netz_merken();
         self.with_sheet(|s, _| {
-            // Original (ToolButton17Click 0x465994): gemeinsame Mitte aller markierten Objekte; hier für Auswahlen
-            // nur aus Zeichenobjekten (Symbole und Sonderobjekte drehen weiter um ihren Einfügepunkt)
+            // Original (ToolButton17Click 0x465994): gemeinsame Mitte aller markierten Objekte (drehen_mitte.rs);
+            // Einfügepunkte von Symbolen, Texten, Klemmstellen und Verweisen wandern dann mit
             let gemeinsam = crate::drehen_mitte::gemeinsame_mitte(s.objects.iter().filter(|o| sel.contains(&o.id)), &lib);
             for o in s.objects.iter_mut().filter(|o| sel.contains(&o.id)) {
                 let (mn, mx) = canvas::obj_bounds(o, &lib);
@@ -1036,6 +1036,18 @@ impl App {
                     2 => p.x = 2.0 * c.x - p.x,
                     _ => p.y = 2.0 * c.y - p.y,
                 };
+                // gemeinsame Mitte: Einfügepunkte mitdrehen bzw. -spiegeln (Verweis samt Textlage)
+                if gemeinsam.is_some() {
+                    match &mut o.kind {
+                        Kind::Symbol { pos, .. } | Kind::Text { pos, .. } | Kind::Terminal { pos, .. } => f(pos),
+                        Kind::Verweis { pos, text_pos, .. } => {
+                            let alt = *pos;
+                            f(pos);
+                            *text_pos = text_pos.add(pos.sub(alt));
+                        }
+                        _ => {}
+                    }
+                }
                 match &mut o.kind {
                     Kind::Symbol { rot, mirror_h, mirror_v, ext, .. } => {
                         let old = (*rot, *mirror_h, *mirror_v);
