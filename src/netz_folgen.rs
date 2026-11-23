@@ -132,10 +132,24 @@ pub fn lage_auf(alt: &[P], neu: &[P], e: P) -> P {
         return e;
     }
     if alt.len() == neu.len() {
-        // Flucht unverändert und e noch darauf: bleibt
         let (c, d) = (neu[i], neu[i + 1]);
+        // Flucht unverändert und e noch darauf: bleibt
         if seg_dist(e, c, d) <= PIN_TOL && ((h && waag(c, d) && (c.y - a.y).abs() < EPS) || (v && senk(c, d) && (c.x - a.x).abs() < EPS)) {
             return e;
+        }
+        // beide Enden des Stücks gleich verschoben: mitverschieben
+        let (da, db) = (c.sub(a), d.sub(b));
+        if da.dist(db) < EPS {
+            return e.add(da);
+        }
+        // gestrecktes bzw. quer verschobenes Stück gleicher Richtung: Lot (Lage entlang des Stücks bleibt, auf das
+        // Stück begrenzt) – nicht anteilig, sonst landet der Abzweig neben dem Raster (W2 Blatt 27: Kette von
+        // Abzweigen wanderte auf y = 114,807)
+        if h && waag(c, d) && !senk(c, d) {
+            return P::new(e.x.clamp(c.x.min(d.x), c.x.max(d.x)), c.y);
+        }
+        if v && senk(c, d) && !waag(c, d) {
+            return P::new(c.x, e.y.clamp(c.y.min(d.y), c.y.max(d.y)));
         }
         return abzweig_lage(alt, neu, e);
     }
@@ -312,7 +326,7 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
     }
     let folger_von = |o: &Obj| !primaer.contains(&o.id) && !(o.fixed && opt.fix_active) && matches!(&o.kind, Kind::Wire { pts, .. } if pts.len() >= 2);
     let mut folger: Vec<(u64, Gefuehrt)> = vec![];
-    for _ in 0..6 {
+    for _ in 0..40 {
         let mut abb = basis.clone();
         for (id, g) in &folger {
             if let Some(Obj { kind: Kind::Wire { pts, .. }, .. }) = vorher.iter().find(|o| o.id == *id) {
