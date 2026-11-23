@@ -9,6 +9,14 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Angleichungen nach statischer Prüfung der Dialoge (Runde 12):
+- Optionen: „Hochformat“ gilt für jedes neue Blatt; neue Projekte übernehmen Standardschrift und Schriftfeld „aus
+  Datei“; „Doppelklick auf Verweise“ in der Reihenfolge des Originals.
+- Anlage „Ab '0'“: Strompfadnummern beginnen bei 0.
+- Symboleigenschaften: „Wahl n Löschen“ entfernt den letzten Alternativtext; „Seite Löschen“ bei nur einer Seite
+  meldet wie das Original.
+- Sammelschienen-Objekt: `Neue Schiene "L<n>"` steht wie im Original als erster Eintrag der S-Schienen-Liste.
+
 Leitungsführung nach Nutzerwünschen (Runde 12):
 - Gezogene Leitungen folgen dem Mausweg: jede Richtungsänderung der Maus (ab einem Raster) wird ein Knick, Zurückfahren
   nimmt ihn wieder weg (`leitung_bahn.rs`). Bisher galt nur die erste Bewegung, danach ein Knick zum Ende.
