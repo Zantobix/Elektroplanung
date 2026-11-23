@@ -89,12 +89,13 @@ impl App {
     }
 }
 
-/// Kleines Fangkreuz bei `c` (Bildschirm).
+/// Kleines Fangkreuz („+“) bei `c` (Bildschirm).
 pub fn kreuz(p: &egui::Painter, c: Pos2) {
-    let s = Stroke::new(1.0, Color32::from_rgb(200, 0, 0));
+    // wie im Original ein grünes „+“ am gefangenen Punkt
+    let s = Stroke::new(1.0, Color32::from_rgb(0, 160, 0));
     let r = 4.0;
-    p.line_segment([Pos2::new(c.x - r, c.y - r), Pos2::new(c.x + r, c.y + r)], s);
-    p.line_segment([Pos2::new(c.x - r, c.y + r), Pos2::new(c.x + r, c.y - r)], s);
+    p.line_segment([Pos2::new(c.x - r, c.y), Pos2::new(c.x + r, c.y)], s);
+    p.line_segment([Pos2::new(c.x, c.y - r), Pos2::new(c.x, c.y + r)], s);
 }
 
 #[cfg(test)]
