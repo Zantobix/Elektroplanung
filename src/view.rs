@@ -1671,8 +1671,26 @@ impl App {
                     let a0 = pin.sub(applied);
                     total = self.snap(a0.add(total)).sub(a0);
                 }
-                let np = self.align_to_path(p0.add(total));
-                total.x = np.x - p0.x;
+                // gezielt auf eine Leitung gezogen (ein freies Symbol bzw. eine freie Klemmstelle): auf die Leitung
+                // einrasten statt auf die Strompfadmitte, beim Loslassen wird es eingebaut (symbol_in_leitung.rs)
+                let fang = (self.opt.einbinden_beim_verschieben && movable.len() == 1)
+                    .then(|| objs.iter().find(|o| o.id == movable[0] && matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })))
+                    .flatten()
+                    .and_then(|o| {
+                        let s = self.sheet()?;
+                        let jetzt = canvas::obj_pins(o, &self.lib);
+                        if !crate::symbol_in_leitung::frei(s, &jetzt) {
+                            return None;
+                        }
+                        let ziel: Vec<P> = jetzt.iter().map(|q| q.add(total.sub(applied))).collect();
+                        crate::symbol_in_leitung::leitungsfang(s, o.id, &ziel, self.raster().max(2.5))
+                    });
+                if let Some(off) = fang {
+                    total = total.add(off);
+                } else {
+                    let np = self.align_to_path(p0.add(total));
+                    total.x = np.x - p0.x;
+                }
             }
             let d = total.sub(applied);
             if (d.x.abs() > 1e-4 || d.y.abs() > 1e-4) && !movable.is_empty() {

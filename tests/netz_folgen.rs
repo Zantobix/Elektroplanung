@@ -415,3 +415,27 @@ fn verschobenes_symbol_wird_in_leitung_eingebunden() {
     app.verschoben_einbinden();
     assert_eq!(pts(&app, 1), vec![p(105.0, 45.0), p(105.0, 185.0)]);
 }
+
+/// Nutzerwunsch 23.11.2026: gezielt auf eine Leitung gezogen ⇒ einrasten (auch abseits der Strompfadmitte) und
+/// beim Loslassen einbauen – für Symbole und Klemmstellen.
+#[test]
+fn gezielt_auf_leitung_gezogen_wird_eingebaut() {
+    use elektroplanung::symbol_in_leitung::leitungsfang;
+    let mut app = app_mit(vec![wire(1, &[(105.0, 45.0), (105.0, 185.0)]), klemme(2, 150.0, 100.0), schliesser(3, 160.0, 140.0)]);
+    app.lib = elektroplanung::symbols::builtin();
+    let s = app.sheet().unwrap().clone();
+    // Schließer-Anschlüsse 3 mm neben der Leitung: Versatz +3 quer
+    assert_eq!(leitungsfang(&s, 3, &[p(102.0, 133.0), p(102.0, 147.0)], 5.0), Some(p(3.0, 0.0)));
+    // zu weit weg bzw. Leitung zu kurz: nichts
+    assert_eq!(leitungsfang(&s, 3, &[p(95.0, 133.0), p(95.0, 147.0)], 5.0), None);
+    assert_eq!(leitungsfang(&s, 3, &[p(105.0, 180.0), p(105.0, 194.0)], 5.0), None);
+    // Klemmstelle auf die Leitung gezogen: Leitung geteilt
+    app.selection = vec![2];
+    app.checkpoint();
+    app.netz_merken();
+    app.netz_verschieben(&[2], p(-45.0, 0.0));
+    app.drag = elektroplanung::app::Drag::Move { start: p(150.0, 100.0), applied: p(-45.0, 0.0), moved: true };
+    app.verschoben_einbinden();
+    let n = app.sheet().unwrap().objects.iter().filter(|o| matches!(o.kind, Kind::Wire { .. })).count();
+    assert_eq!(n, 2, "Leitung an der Klemmstelle geteilt");
+}

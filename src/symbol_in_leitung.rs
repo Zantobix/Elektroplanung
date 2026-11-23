@@ -109,28 +109,75 @@ mod tests {
     }
 }
 
+/// Leitungsfang beim Ziehen eines freien Symbols bzw. einer freien Klemmstelle (Nutzerwunsch 23.11.2026: „wenn ein
+/// Objekt gezielt auf eine Leitung gesetzt wird, soll es in die Leitung eingebaut werden“): Versatz quer zur
+/// Leitung, mit dem die Anschlüsse `pins` (an der vorgesehenen Lage) genau auf einem Leitungsstück liegen, das sie in
+/// ihrer Flucht ganz überdeckt – höchstens `weite` entfernt, das nächste gewinnt. Mehrere Anschlüsse müssen in einer
+/// senkrechten oder waagerechten Flucht liegen; ein einzelner (Klemmstelle) passt auf beide Richtungen.
+pub fn leitungsfang(sheet: &Sheet, ohne: u64, pins: &[P], weite: f32) -> Option<P> {
+    if pins.is_empty() {
+        return None;
+    }
+    let senk = pins.iter().all(|q| (q.x - pins[0].x).abs() < EPS);
+    let waag = pins.iter().all(|q| (q.y - pins[0].y).abs() < EPS);
+    let (y0, y1) = pins.iter().fold((f32::MAX, f32::MIN), |(a, b), q| (a.min(q.y), b.max(q.y)));
+    let (x0, x1) = pins.iter().fold((f32::MAX, f32::MIN), |(a, b), q| (a.min(q.x), b.max(q.x)));
+    let mut best: Option<P> = None;
+    for o in sheet.objects.iter().filter(|o| o.id != ohne) {
+        let Kind::Wire { pts, .. } = &o.kind else { continue };
+        for w in pts.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let cand = if senk && (a.x - b.x).abs() < EPS && a.y.min(b.y) < y0 - EPS && a.y.max(b.y) > y1 + EPS {
+                Some(P::new(a.x - pins[0].x, 0.0))
+            } else if waag && (a.y - b.y).abs() < EPS && a.x.min(b.x) < x0 - EPS && a.x.max(b.x) > x1 + EPS {
+                Some(P::new(0.0, a.y - pins[0].y))
+            } else {
+                None
+            };
+            if let Some(c) = cand.filter(|c| c.x.abs().max(c.y.abs()) <= weite) {
+                if best.is_none_or(|b| c.x.abs().max(c.y.abs()) < b.x.abs().max(b.y.abs())) {
+                    best = Some(c);
+                }
+            }
+        }
+    }
+    best
+}
+
+/// Endet an keinem der Punkte `pins` eine Leitung (Klemmstelle: am Kreis)?
+pub fn frei(sheet: &Sheet, pins: &[P]) -> bool {
+    !sheet.objects.iter().any(|w| match &w.kind {
+        Kind::Wire { pts, .. } if pts.len() >= 2 => [pts[0], pts[pts.len() - 1]].iter().any(|e| pins.iter().any(|q| e.dist(*q) <= crate::klemme_leitung::KLEMME_R + crate::mitziehen::PIN_TOL)),
+        _ => false,
+    })
+}
+
 impl crate::app::App {
     /// Nach QElectroTech `autoBreakConductors` (bewusste Erweiterung, Option „Verschobenes Symbol in Leitung
-    /// einbinden“): wird ein einzelnes Symbol ohne angeschlossene Leitungen so abgelegt, dass seine Anschlüsse auf
-    /// einem Leitungsstück liegen, wird die Leitung wie beim Setzen aufgetrennt und über das Symbol geführt
-    /// (gleicher Rückgängig-Schritt wie das Verschieben).
+    /// einbinden“): wird ein einzelnes Symbol bzw. eine Klemmstelle ohne angeschlossene Leitungen so abgelegt, dass
+    /// die Anschlüsse auf einem Leitungsstück liegen, wird die Leitung wie beim Setzen aufgetrennt und über das Objekt
+    /// geführt (gleicher Rückgängig-Schritt wie das Verschieben). Beim Ziehen rastet es dafür auf die Leitung ein
+    /// (`leitungsfang`).
     pub fn verschoben_einbinden(&mut self) {
         if !self.opt.einbinden_beim_verschieben || !matches!(self.drag, crate::app::Drag::Move { moved: true, .. }) || self.selection.len() != 1 {
             return;
         }
         let Some(s) = self.sheet() else { return };
-        let Some(o) = s.objects.iter().find(|o| o.id == self.selection[0] && matches!(o.kind, Kind::Symbol { .. })) else { return };
+        let Some(o) = s.objects.iter().find(|o| o.id == self.selection[0] && matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. })) else { return };
         let pins = crate::canvas::obj_pins(o, &self.lib);
-        if pins.len() < 2 {
+        if !frei(s, &pins) {
             return;
         }
-        let frei = |q: &P| {
-            !s.objects.iter().any(|w| match &w.kind {
-                Kind::Wire { pts, .. } if pts.len() >= 2 => [pts[0], pts[pts.len() - 1]].iter().any(|e| e.dist(*q) <= crate::mitziehen::PIN_TOL),
-                _ => false,
-            })
-        };
-        if pins.iter().all(frei) {
+        if let Kind::Terminal { pos, .. } = o.kind {
+            // Klemmstelle: Leitungsstück unter ihr teilen wie beim Setzen mit dem Werkzeug (klemme_leitung.rs)
+            let treffer = s.objects.iter().find_map(|w| match &w.kind {
+                Kind::Wire { pts, .. } => (0..pts.len().saturating_sub(1)).find(|&i| seg_dist(pos, pts[i], pts[i + 1]) < 0.05 && pos.dist(pts[i]) > 0.5 && pos.dist(pts[i + 1]) > 0.5).map(|i| (w.id, i)),
+                _ => None,
+            });
+            if let Some((wid, i)) = treffer {
+                self.leitung_teilen(wid, i, pos);
+            }
+        } else if pins.len() >= 2 {
             self.insert_into_wire(&pins);
         }
     }
