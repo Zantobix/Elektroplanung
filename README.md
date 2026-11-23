@@ -216,6 +216,11 @@ nicht. Gemessen werden stattdessen:
   - Hilfslinien beim Verschieben (nach QElectroTech): graue Linie quer durch jeden Anschluss des gezogenen Symbols,
     an freien Anschlüssen die Flucht in Anschlussrichtung (blau), grün bis zu einem freien Gegenanschluss in Flucht
     (`src/hilfslinien.rs`, abschaltbar unter Optionen › Programmverhalten).
+  - Leitungsform-Gedächtnis (nach QElectroTech `ConductorProfilesGroup`): Form je Quadrant und genaue Lage werden zu
+    Beginn jeder Geste gemerkt; Symbol hin und zurück ergibt denselben Plan (`src/leitung_gedaechtnis.rs`,
+    `netz_folgen.rs` Rückkehr). Zielanschluss beim Zeichnen farbig (grün frei, orange belegt, rot eigener Anfang).
+  - Verschobenes Symbol in Leitung einbinden (nach QElectroTech `autoBreakConductors`; das Original bindet nur beim
+    Neusetzen ein): ein freies Symbol, auf eine Leitung abgelegt, teilt sie (abschaltbar, `src/symbol_in_leitung.rs`).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).

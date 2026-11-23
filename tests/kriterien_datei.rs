@@ -50,13 +50,13 @@ pub fn pruefen(vorher: &Sheet, nachher: &Sheet, lib: &[elektroplanung::symbols::
     let (mut hart, mut info) = (vec![], vec![]);
     let alt = leitungen(vorher);
     let neu = leitungen(nachher);
-    let geaendert: Vec<&(u64, Vec<P>)> = neu.iter().filter(|(id, w)| alt.iter().find(|(i, _)| i == id).is_none_or(|(_, q)| q != w)).collect();
-    let weg = alt.iter().filter(|(id, _)| !neu.iter().any(|(i, _)| i == id)).count();
-    let (k0, k1): (usize, usize) = (
-        geaendert.iter().map(|(id, _)| alt.iter().find(|(i, _)| i == id).map_or(0, |(_, w)| knicke(w))).sum(),
-        geaendert.iter().map(|(_, w)| knicke(w)).sum(),
-    );
-    info.push(format!("L8: {} Leitungen geändert, {weg} entfallen; L13: Knicke der geänderten {k0} → {k1}", geaendert.len()));
+    // nach Lage verglichen (die IDs vergibt das Laden neu; Richtung egal)
+    let gleich = |a: &[P], b: &[P]| a.len() == b.len() && (a.iter().zip(b).all(|(x, y)| x.dist(*y) < 0.01) || a.iter().zip(b.iter().rev()).all(|(x, y)| x.dist(*y) < 0.01));
+    let geaendert: Vec<&(u64, Vec<P>)> = neu.iter().filter(|(_, w)| !alt.iter().any(|(_, q)| gleich(q, w))).collect();
+    let weg_l: Vec<&(u64, Vec<P>)> = alt.iter().filter(|(_, w)| !neu.iter().any(|(_, q)| gleich(q, w))).collect();
+    let weg = weg_l.len();
+    let (k0, k1): (usize, usize) = (weg_l.iter().map(|(_, w)| knicke(w)).sum(), geaendert.iter().map(|(_, w)| knicke(w)).sum());
+    info.push(format!("L8: {} Leitungen neu/geändert, {weg} alte nicht mehr da; L13: Knicke {k0} → {k1}", geaendert.len()));
     // L1: freie Enden nach Lage
     let frei = |s: &Sheet| -> Vec<P> {
         leitungen(s).iter().flat_map(|(id, w)| [(*id, w[0]), (*id, w[w.len() - 1])]).filter(|(id, p)| freies_ende(s, lib, *id, *p)).map(|(_, p)| p).collect()
@@ -65,6 +65,12 @@ pub fn pruefen(vorher: &Sheet, nachher: &Sheet, lib: &[elektroplanung::symbols::
     if f1.len() > f0.len() {
         let neu_frei: Vec<&P> = f1.iter().filter(|p| !f0.iter().any(|q| q.dist(**p) < 0.01)).collect();
         hart.push(format!("L1: {} freie Enden vorher, {} nachher; neu: {neu_frei:?}", f0.len(), f1.len()));
+    }
+    for (_, w) in &weg_l {
+        info.push(format!("  weg: {w:?}"));
+    }
+    for (id, w) in &geaendert {
+        info.push(format!("  neu {id}: {w:?}"));
     }
     let umr = elektroplanung::leitung_hindernis::umrisse(nachher, lib);
     let netze = elektroplanung::netz::netze(nachher, lib);
