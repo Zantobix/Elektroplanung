@@ -444,3 +444,21 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   Verbindungen, Mitziehen, Prüfen), Umriss/Treffer, Klemmplan, BMK-Lage neuer Symbole und vbg_enden.rs. Der
   Symboleditor zeigt die Elemente in der Lage für Option 0 und erhält den Versatz beim Speichern (offen: Anzeige
   der Seiten mit Versatz wie im Original-Editor).
+
+## Leitungsnetz nachführen (Runde 13, `netz_folgen.rs`)
+
+Ein Verfahren für jede Bearbeitung (Verschieben, Teilstück/Knick ziehen, Skalieren, Drehen/Spiegeln, Pfeiltasten):
+
+1. Beim Beginn merkt `App::netz_merken` die Objekte des Blattes; jedes Bild rechnet von diesem Stand aus.
+2. Ein **Abbild** ordnet alten Lagen neue zu: Anschlüsse der primär geänderten Objekte (je Anschluss), Teilstücke
+   geänderter Leitungen (`lage_auf`: gleich verschoben → mit, gestreckt → Lot, sonst nächstes gleichgerichtetes
+   Stück), Sammelschienen.
+3. Jedes Leitungsende, das an einer abgebildeten Lage hing, bekommt sein Ziel; `fuehren` legt die Leitung neu
+   (ganz verschieben, Profil, Endstück, gerade aufs Gleis, kurze Neuführung, Ausweichen; Richtung an Enden auf
+   Leitungen quer zu ihnen). Geführte Leitungen kommen ins Abbild – Abzweige folgen (bis Ruhe, höchstens 40 Durchläufe).
+4. Primär verschobene Leitungen bleiben an festen Anschlüssen, Klemmstellen, Leitungen und Schienen (`halten`).
+5. Beim Loslassen räumt `App::aufraeumen` auf: Überdeckungen vereinigen, Überstände kürzen, stoßende Leitungen
+   ohne Abzweig zusammenfassen (`leitung_zusammen.rs`).
+
+Prüfung: `tests/netz_zufall.rs` (zufällige Bearbeitungen auf allen W2-Blättern, kein angeschlossenes Ende wird
+frei), `tests/leitung_zeichnen.rs` (300 Zufallsbahnen beim Zeichnen, Sprünge der Vorschau gezählt).

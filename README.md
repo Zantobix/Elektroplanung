@@ -195,13 +195,19 @@ nicht. Gemessen werden stattdessen:
     `@{Blatt}`, `@{Pfad}`, `@{Anlage}` und `@{Text}` (bisheriger Text).
   - Rasterweite je Projekt: Die gewählte Weite wird je Datei gemerkt; ist keine gemerkt, stellt das Öffnen die
     Weite ein, in der das Projekt gezeichnet ist (`src/raster.rs`, `raster_erkennen`).
-  - Leitungsführung: gezogene Leitungen folgen dem Mausweg (`leitung_bahn.rs`); beim Mitziehen ersetzt ein einfacher
-    Weg mit weniger Knicken die formerhaltende Führung (`leitung_kurz.rs`); übereinanderliegende Leitungen werden
-    vereinigt (`leitung_vereinigen.rs`); eine Leitung kann überall an einer anderen enden, ein freier Überstand wird
-    gekürzt (`leitung_anschluss.rs`); verschobene Objekte und gezogene Teilstücke rücken auf das Raster bzw. auf die
-    Flucht anderer Leitungen.
-  - Eine markierte und als Ganzes verschobene Leitung bleibt an nicht verschobenen Schienen, Klemmstellen und
-    Anschlüssen hängen (`src/schiene_halten.rs`).
+  - Leitungsnetz: Jede Bearbeitung (Verschieben, Teilstück/Knick ziehen, Skalieren, Drehen, Pfeiltasten) führt
+    alle angeschlossenen Leitungen nach demselben Verfahren nach, auch Abzweige auf einer gezogenen Leitung
+    (`src/netz_folgen.rs`); eine markierte und als Ganzes verschobene Leitung bleibt an nicht verschobenen Schienen,
+    Klemmstellen, Anschlüssen und Leitungen hängen; ein freies Leitungsende wandert mit seinem Teilstück.
+  - Leitungsführung: Beim Ziehen folgt die Leitung der Maus als einfacher Knick, ein fester Knick entsteht erst bei
+    einer Kehre der Maus (`leitung_bahn.rs`); die Vorschau hält ihre Form, solange sie nicht deutlich schlechter ist
+    (kein Umspringen); beim Mitziehen ersetzt ein einfacher Weg mit weniger Knicken die formerhaltende Führung
+    (`leitung_kurz.rs`); übereinanderliegende Leitungen werden vereinigt (`leitung_vereinigen.rs`), aneinanderstoßende
+    ohne Abzweig zu einer Leitung zusammengefasst (`leitung_zusammen.rs`); eine Leitung kann überall an einer anderen
+    enden – auf dem Raster, senkrecht darauf –, ein freier Überstand wird gekürzt (`leitung_anschluss.rs`).
+  - Fang: Leitungsenden und Klemmstellen fangen je Achse auf die Fluchten von Anschlüssen und Leitungsenden, ein
+    kleines Kreuz zeigt die tatsächliche Lage (`src/fang.rs`); verschobene Objekte und gezogene Teilstücke rücken auf
+    das Raster bzw. auf die Flucht anderer Leitungen.
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).

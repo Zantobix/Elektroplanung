@@ -213,8 +213,13 @@ pub fn ende_auf_schiene_fang(l: P, m: P, q: P, halb: f32, schiene: (f32, f32, f3
 /// getroffenen Stück, zur Seite von `von` (dort kommt die neue Leitung her). So tritt sie senkrecht auf und läuft
 /// nicht ein Stück auf der anderen entlang.
 pub fn richtung_auf_leitung(sheet: &Sheet, e: P, von: P) -> Option<P> {
+    richtung_auf_leitung_ohne(sheet, e, von, u64::MAX)
+}
+
+/// Wie `richtung_auf_leitung`, ohne die Leitung `ohne` (die gerade geführte selbst).
+pub fn richtung_auf_leitung_ohne(sheet: &Sheet, e: P, von: P, ohne: u64) -> Option<P> {
     const T: f32 = 0.05;
-    for o in &sheet.objects {
+    for o in sheet.objects.iter().filter(|o| o.id != ohne) {
         let stuecke: Vec<(P, P)> = match &o.kind {
             Kind::Wire { pts, .. } => pts.windows(2).map(|w| (w[0], w[1])).collect(),
             Kind::Busbar { a, x2, .. } => vec![(*a, P::new(*x2, a.y))],

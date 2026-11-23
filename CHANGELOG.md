@@ -9,6 +9,18 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Leitungen, allgemein überarbeitet (Runde 13):
+- Ein Verfahren für das Nachführen angeschlossener Leitungen bei jeder Bearbeitung (`netz_folgen.rs`): Abzweige
+  folgen jetzt auch, wenn ein Teilstück ihrer Leitung gezogen wird; Ketten von Abzweigen bleiben auf dem Raster;
+  ein Abzweig, dessen Leitung über ihn hinweg verschoben wird, kommt von der richtigen Seite.
+- Freie Leitungsenden wandern mit dem gezogenen Teilstück.
+- Aneinanderstoßende Leitungen ohne Abzweig werden zu einer zusammengefasst.
+- Ziehen: einfacher Knick statt eines Knicks bei jeder Richtungsänderung, ein fester Knick nur bei einer Kehre; das
+  Ende auf einer anderen Leitung liegt auf dem Raster unter der Maus und trifft sie senkrecht (vorher sprang es bis
+  zu 60 mm); die Vorschau hält ihre Form statt umzuspringen.
+- Fang je Achse auf die Fluchten von Anschlüssen und Leitungsenden; Fangkreuz an der tatsächlichen Lage.
+- Zufallstests: 300 Mausbahnen beim Zeichnen, über 700 Bearbeitungen auf allen Blättern von W2.
+
 Wie im Original (Entscheidung Runde 13):
 - Listen Export: Betriebsmittelliste mit den Spalten „Anlage, Ort, Betriebsmittel“ (je Symbol ohne Eigentümer),
   Klemmenliste mit „Anlage, Ort, Klemmleiste, Klemmenindex“ (je Klemmstelle), jeweils in Blatt- und

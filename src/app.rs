@@ -259,10 +259,6 @@ pub struct App {
     /// Eigentümer › Setzen: diese Symbole übernehmen die Kennzeichnung des als Nächstes angeklickten Symbols
     /// (Blatt der Ziele, Ziel-Ids) – der Eigentümer darf auf einem anderen Blatt liegen (z. B. Spule zum Kontakt)
     pub owner_pick: Option<(SheetRef, Vec<u64>)>,
-    /// Beim Verschieben mitgezogene Leitungen (Zustand beim Beginn des Ziehens)
-    pub move_follow: Vec<crate::mitziehen::Mitzieh>,
-    /// markierte Leitungen, die beim Verschieben an ihren Sammelschienen bleiben (schiene_halten.rs)
-    pub move_halt: Vec<crate::schiene_halten::Halt>,
     /// Objekte des Blattes vor der laufenden Änderung (netz_folgen.rs: Leitungsnetz wird von hier aus nachgeführt)
     pub netz_vorher: Vec<Obj>,
     /// Text für die System-Zwischenablage nach „Kopieren“ (view.rs gibt ihn an egui weiter): Unter Linux meldet
@@ -384,8 +380,6 @@ impl App {
             hold_press: [None, None],
             bt: Default::default(),
             owner_pick: None,
-            move_follow: vec![],
-            move_halt: vec![],
             netz_vorher: vec![],
             ablage_text: None,
             meldung: None,
@@ -964,7 +958,7 @@ impl App {
         self.checkpoint();
         let sel = self.selection.clone();
         let lib = self.lib.clone();
-        // angeschlossene Leitungen folgen den gedrehten/gespiegelten Anschlüssen (C2, anschluss_folgen.rs)
+        // angeschlossene Leitungen folgen den gedrehten/gespiegelten Anschlüssen (C2, netz_folgen.rs)
         self.netz_merken();
         self.with_sheet(|s, _| {
             // Original (ToolButton17Click 0x465994): gemeinsame Mitte aller markierten Objekte; hier für Auswahlen

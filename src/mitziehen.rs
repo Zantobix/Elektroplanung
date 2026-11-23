@@ -8,7 +8,6 @@
 //! (T-Abzweig, Knoten) folgen wie bisher nur mit dem Endstück: war es waagerecht bzw. senkrecht, bleibt es das –
 //! der Nachbarpunkt wird quer mitgeführt oder es entsteht ein Eckpunkt.
 
-use crate::app::App;
 use crate::canvas;
 use crate::model::*;
 use crate::symbols::SymDef;
@@ -310,10 +309,6 @@ pub fn hindernisse(umrisse: &[crate::leitung_hindernis::Umriss], w: &Mitzieh, d:
     crate::leitung_hindernis::wirksam(&crate::leitung_hindernis::hindernisse(umrisse, &[], &[]), enden[0], enden[1])
 }
 
-fn strecken_ohne(st: &[(u64, P, P)], id: u64) -> Vec<(P, P)> {
-    st.iter().filter(|(i, _, _)| *i != id).map(|(_, a, b)| (*a, *b)).collect()
-}
-
 /// Kennung einer in eine Leitung eingesetzten Klemmstelle, deren Kreis `p` berührt (Mittelpunkt oder eines der
 /// Leitungsenden 0,8 mm davor): Klemme und beide Teilleitungen verhalten sich beim Greifen wie eine Einheit.
 pub fn eingesetzte_klemme_bei(sheet: &Sheet, p: P) -> Option<u64> {
@@ -340,89 +335,6 @@ pub fn eingesetzte_klemme(sheet: &Sheet, p: P) -> bool {
         .filter(|e| e.dist(p) <= tol)
         .count();
     enden >= 2
-}
-
-impl App {
-    /// Mitzuziehende Leitungen für die verschobenen Objekte `moved` (Zustand vor dem Verschieben).
-    pub fn wire_followers(&self, moved: &[u64]) -> Vec<Mitzieh> {
-        match self.sheet() {
-            Some(s) => find_followers(s, &self.lib, moved, &self.selection, self.fix_active),
-            None => vec![],
-        }
-    }
-
-    /// Mitgezogene Leitungen auf die Gesamtverschiebung `d` (seit `wire_followers`) setzen. Ohne eigenen
-    /// Rückgängig-Schritt (gehört zum Verschieben).
-    pub fn apply_followers(&mut self, f: &[Mitzieh], d: P) {
-        if f.is_empty() {
-            return;
-        }
-        // Stich der Neuführung wie beim Zeichnen ein halbes Raster (leitung_route.rs)
-        let stich = self.raster() / 2.0;
-        // Abzweig auf einer Schiene bzw. Leitung: gerade auf das Gleis, der Abgriff wandert mit (schiene_halten.rs)
-        let (sch, gl) = self.sheet().map(|s| (crate::schiene_halten::schienen(s, &[]), crate::schiene_halten::gleise(s))).unwrap_or_default();
-        // Symbole als Hindernisse der Neuführung (M29); die Symbole sind schon verschoben
-        let umrisse = self.sheet().map(|s| crate::leitung_hindernis::umrisse(s, &self.lib)).unwrap_or_default();
-        let (f2, f): (Vec<&Mitzieh>, Vec<&Mitzieh>) = f.iter().partition(|w| w.wirt.is_some());
-        // Strecken aller Leitungen und Schienen (für Kreuzungen/Überdeckung der kurzen Neuführung)
-        let strecken: Vec<(u64, P, P)> = self
-            .sheet()
-            .map(|s| {
-                s.objects
-                    .iter()
-                    .flat_map(|o| match &o.kind {
-                        Kind::Wire { pts, .. } => pts.windows(2).map(|v| (o.id, v[0], v[1])).collect::<Vec<_>>(),
-                        Kind::Busbar { a, x2, .. } => vec![(o.id, *a, P::new(*x2, a.y))],
-                        _ => vec![],
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let mut neu: Vec<(u64, Vec<P>, bool)> = f
-            .iter()
-            .map(|w| {
-                let hind = hindernisse(&umrisse, w, d);
-                // gerade aufs Gleis nur, wenn sie kein Symbol durchquert (sonst Neuführung mit Ausweichen)
-                let gerade = crate::schiene_halten::gerade_zum_gleis(w.id, &w.pts, w.ends, d, w.dirs, &gl)
-                    .filter(|g| crate::leitung_hindernis::kreuzungen(g, &hind) == 0);
-                let pts = gerade.unwrap_or_else(|| {
-                    let form = crate::schiene_halten::abgreifen(&folgen_um(&w.pts, w.ends, d, w.dirs, w.profil, stich, &hind, &|p| self.snap(p)), &sch);
-                    // nur ein Ende bewegt: einfacher Weg mit weniger Knicken, wenn er nichts verschlechtert (leitung_kurz.rs)
-                    if w.ends[0] != w.ends[1] {
-                        let andere = strecken_ohne(&strecken, w.id);
-                        crate::leitung_kurz::kuerzer(&form, w.dirs[0], w.dirs[1], stich, &hind, &andere).unwrap_or(form)
-                    } else {
-                        form
-                    }
-                });
-                (w.id, pts, w.ends[0] && w.ends[1])
-            })
-            .collect();
-        // zweite Stufe: Abzweige auf umgeformten Leitungen folgen ihrem Wirt (Ende an dieselbe Stelle des Zuges)
-        for w in f2 {
-            let Some(wirt) = w.wirt else { continue };
-            let alt = f.iter().find(|h| h.id == wirt).map(|h| h.pts.clone());
-            let jetzt = neu.iter().find(|(id, _, _)| *id == wirt).map(|(_, p, _)| p.clone());
-            let (Some(alt), Some(jetzt)) = (alt, jetzt) else { continue };
-            let e = if w.ends[0] { w.pts[0] } else { w.pts[w.pts.len() - 1] };
-            let de = abzweig_lage(&alt, &jetzt, e).sub(e);
-            neu.push((w.id, folgen(&w.pts, w.ends, de, w.dirs, w.profil, stich, &|p| p), false));
-        }
-        self.with_sheet(|s, _| {
-            for (id, pts, ganz) in neu {
-                if let Some(o) = s.objects.iter_mut().find(|o| o.id == id) {
-                    if let Kind::Wire { pts: p, bez, .. } = &mut o.kind {
-                        // ganz verschobene Leitung: Bezeichnungen mitnehmen (relativ zum alten Anfang)
-                        if ganz {
-                            let dd = pts[0].sub(p[0]);
-                            bez.iter_mut().for_each(|(q, _)| *q = q.add(dd));
-                        }
-                        *p = pts;
-                    }
-                }
-            }
-        });
-    }
 }
 
 #[cfg(test)]

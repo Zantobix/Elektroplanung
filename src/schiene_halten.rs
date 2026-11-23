@@ -5,7 +5,8 @@
 //!   Verbindungspunkt blieb an der alten Stelle. Jetzt wandert der Abgriff auf der Schiene bis dorthin, wo die
 //!   Leitung die Schiene verlässt – keine Leitung liegt auf der Schiene.
 //! - **Kein Abreißen:** Wird viel markiert und verschoben (Leitungen ja, Schiene nicht), riss eine Leitung von der
-//!   Schiene ab. Jetzt bleibt ihr Ende auf der Schiene; das Endstück wird länger bzw. kürzer.
+//!   Schiene ab. Jetzt bleibt ihr Ende auf der Schiene; das Endstück wird länger bzw. kürzer (`binden`/`anbinden`,
+//!   aufgerufen vom allgemeinen Nachführen in netz_folgen.rs).
 
 use crate::model::{Kind, Sheet, P};
 
@@ -74,18 +75,6 @@ pub fn binden(v: &mut Vec<P>, s: Schiene) {
     }
 }
 
-/// Leitung einer verschobenen Markierung, deren Enden an nicht verschobenen Schienen bzw. Anschlüssen hängen.
-#[derive(Clone, Debug, Default)]
-pub struct Halt {
-    pub id: u64,
-    pub pts: Vec<P>,
-    pub schienen: [Option<Schiene>; 2],
-    /// Ende an einem festen Punkt (Anschluss eines nicht verschobenen Symbols, Kreis einer nicht verschobenen
-    /// Klemmstelle, nicht verschobene Leitung): bleibt dort (Nutzer-Befund Runde 11, Leitung löste sich von der
-    /// Klemmstelle)
-    pub punkte: [Option<P>; 2],
-}
-
 /// Ende `v[0]` (schon verschoben) wieder mit dem festen Punkt `q` verbinden. `alt` = Richtung des ersten Stücks
 /// vor dem Verschieben (vom Ende weg). Läuft die Verschiebung vom Anschluss weg, wird das Endstück in seiner
 /// Richtung länger und ein Querstück schließt an; sonst entsteht das Querstück am Anschluss und das Endstück wird
@@ -117,63 +106,6 @@ pub fn achse(a: P, b: P) -> Option<P> {
     } else {
         None
     }
-}
-
-/// Leitungen unter `moved`, deren Anfang oder Ende auf einer Schiene bzw. an einem festen Anschluss liegt, der
-/// nicht mit verschoben wird.
-pub fn finden(sheet: &Sheet, lib: &[crate::symbols::SymDef], moved: &[u64]) -> Vec<Halt> {
-    use crate::mitziehen::PIN_TOL;
-    let sch = schienen(sheet, moved);
-    let fest: Vec<&crate::model::Obj> = sheet.objects.iter().filter(|o| !moved.contains(&o.id)).collect();
-    let pins: Vec<P> = fest.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).flat_map(|o| crate::canvas::obj_pins(o, lib)).collect();
-    let klemmen: Vec<P> = fest.iter().filter_map(|o| if let Kind::Terminal { pos, .. } = &o.kind { Some(*pos) } else { None }).collect();
-    let r = crate::klemme_leitung::KLEMME_R + PIN_TOL;
-    let fester_punkt = |e: P| -> bool {
-        pins.iter().any(|q| q.dist(e) <= PIN_TOL)
-            || klemmen.iter().any(|k| k.dist(e) <= r)
-            || fest.iter().any(|o| match &o.kind {
-                // Abzweig auf einer festen Leitung; Ende an Ende zählt nicht (die andere Leitung folgt, mitziehen.rs)
-                Kind::Wire { pts, .. } if pts.len() >= 2 => {
-                    e.dist(pts[0]) > PIN_TOL && e.dist(pts[pts.len() - 1]) > PIN_TOL && pts.windows(2).any(|w| crate::model::seg_dist(e, w[0], w[1]) <= PIN_TOL)
-                }
-                _ => false,
-            })
-    };
-    sheet
-        .objects
-        .iter()
-        .filter(|o| moved.contains(&o.id))
-        .filter_map(|o| {
-            let Kind::Wire { pts, .. } = &o.kind else { return None };
-            if pts.len() < 2 {
-                return None;
-            }
-            let enden = [pts[0], pts[pts.len() - 1]];
-            let schienen = enden.map(|e| schiene_bei(e, &sch));
-            let punkte = [0, 1].map(|i| (schienen[i].is_none() && fester_punkt(enden[i])).then_some(enden[i]));
-            let halt = schienen.iter().any(|s| s.is_some()) || punkte.iter().any(|p| p.is_some());
-            halt.then(|| Halt { id: o.id, pts: pts.clone(), schienen, punkte })
-        })
-        .collect()
-}
-
-/// Punkte der Leitung nach dem Verschieben um `d` (gesamt): Enden an den Schienen bleiben dort.
-pub fn verschoben(h: &Halt, d: P, alle: &[Schiene]) -> Vec<P> {
-    let n = h.pts.len();
-    let mut v: Vec<P> = h.pts.iter().map(|p| p.add(d)).collect();
-    if let Some(s) = h.schienen[0] {
-        binden(&mut v, s);
-    } else if let Some(q) = h.punkte[0] {
-        anbinden(&mut v, q, achse(h.pts[0], h.pts[1]));
-    }
-    v.reverse();
-    if let Some(s) = h.schienen[1] {
-        binden(&mut v, s);
-    } else if let Some(q) = h.punkte[1] {
-        anbinden(&mut v, q, achse(h.pts[n - 1], h.pts[n - 2]));
-    }
-    v.reverse();
-    abgreifen(&v, alle)
 }
 
 /// Achsengerades Gleis, auf dem ein Abgriff wandern darf: Sammelschiene oder gerades Stück einer Leitung
@@ -262,42 +194,6 @@ pub fn gerade_zum_gleis(id: u64, pts: &[P], ends: [bool; 2], d: P, dirs: [Option
     Some(if k == 0 { vec![p, ziel] } else { vec![ziel, p] })
 }
 
-impl crate::app::App {
-    /// Markierte Leitungen nach dem Verschieben um `d` (gesamt seit `finden`) wieder an ihre Schienen binden.
-    pub fn schienen_halten(&mut self, halt: &[Halt], d: P) {
-        if halt.is_empty() {
-            return;
-        }
-        let alle = self.sheet().map(|s| schienen(s, &[])).unwrap_or_default();
-        let neu: Vec<(u64, Vec<P>)> = halt.iter().map(|h| (h.id, verschoben(h, d, &alle))).collect();
-        self.with_sheet(|s, _| {
-            for (id, pts) in neu {
-                if let Some(Kind::Wire { pts: p, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
-                    *p = pts;
-                }
-            }
-        });
-    }
-
-    /// Abgriff der Leitung `id` auf der Schiene nachführen (nach Teilstück-Ziehen bzw. Mitziehen).
-    pub fn abgriff_nachfuehren(&mut self, ids: &[u64]) {
-        let Some(alle) = self.sheet().map(|s| schienen(s, &[])) else { return };
-        if alle.is_empty() {
-            return;
-        }
-        self.with_sheet(|s, _| {
-            for o in s.objects.iter_mut().filter(|o| ids.contains(&o.id)) {
-                if let Kind::Wire { pts, .. } = &mut o.kind {
-                    let neu = abgreifen(pts, &alle);
-                    if neu.len() != pts.len() {
-                        *pts = neu;
-                    }
-                }
-            }
-        });
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,26 +223,6 @@ mod tests {
         let alt = [p(80.0, 20.0), p(80.0, 150.0), p(60.0, 150.0)];
         let neu = crate::segment_ziehen::verschieben(&alt, 0, p(40.0, 0.0));
         assert_eq!(abgreifen(&neu, &[L2]), vec![p(120.0, 20.0), p(120.0, 150.0), p(60.0, 150.0)]);
-    }
-
-    #[test]
-    fn markierung_verschoben_bleibt_an_schiene() {
-        let h = Halt { id: 1, pts: vec![p(80.0, 20.0), p(80.0, 150.0), p(60.0, 150.0)], schienen: [Some(L2), None], ..Default::default() };
-        // schräg nach rechts unten: senkrechtes Stück bleibt senkrecht, Anfang auf der Schiene
-        let v = verschoben(&h, p(10.0, 30.0), &[L2]);
-        assert_eq!(v, vec![p(90.0, 20.0), p(90.0, 180.0), p(70.0, 180.0)]);
-        // nach oben über die Schiene hinaus: bleibt trotzdem angeschlossen
-        let v = verschoben(&h, p(0.0, -10.0), &[L2]);
-        assert_eq!(v[0], p(80.0, 20.0));
-    }
-
-    #[test]
-    fn ueber_das_schienenende_hinaus() {
-        let h = Halt { id: 1, pts: vec![p(290.0, 20.0), p(290.0, 100.0)], schienen: [Some(L2), None], ..Default::default() };
-        let v = verschoben(&h, p(30.0, 10.0), &[L2]);
-        assert_eq!(v[0], p(300.0, 20.0));
-        assert!(v.windows(2).all(|w| (w[0].x - w[1].x).abs() < EPS || (w[0].y - w[1].y).abs() < EPS), "{v:?}");
-        assert_eq!(*v.last().unwrap(), p(320.0, 110.0));
     }
 
     #[test]

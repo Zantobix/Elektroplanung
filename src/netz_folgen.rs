@@ -2,8 +2,9 @@
 //! generalisieren“).
 //!
 //! Vorher gab es je Bearbeitung eine eigene Behandlung (Verschieben: `mitziehen`, Teilstück/Knick ziehen: keine,
-//! Skalieren/Drehen: `anschluss_folgen`, markierte Leitungen an Schienen: `schiene_halten`, Pfeiltasten: wieder
-//! eigene Aufrufe). Dabei fehlten Fälle, z. B. folgte eine Leitung, die als Abzweig auf einer anderen endet, nicht,
+//! Skalieren/Drehen: eigenes Modul `anschluss_folgen`, markierte Leitungen an Schienen: `schiene_halten`,
+//! Pfeiltasten: wieder eigene Aufrufe); diese Ablaufteile sind entfallen, `mitziehen`/`leitung_profil`/
+//! `leitung_kurz`/`leitung_hindernis`/`schiene_halten` liefern nur noch die Bausteine der Führung. Dabei fehlten Fälle, z. B. folgte eine Leitung, die als Abzweig auf einer anderen endet, nicht,
 //! wenn man ein Teilstück der anderen zog (Nutzerbild 23.11.2026).
 //!
 //! Jetzt gilt für **jede** Änderung dasselbe:
@@ -233,9 +234,14 @@ pub fn fuehren(vorher: &Sheet, jetzt: &Sheet, lib: &[SymDef], id: u64, alt: &[P]
         return Some(Gefuehrt { pts: alt.iter().map(|p| p.add(d[0])).collect(), ganz: Some(d[0]) });
     }
     let alt_dirs = [ende_richtung(vorher, lib, enden[0], nachbar(alt, 0)), ende_richtung(vorher, lib, enden[1], nachbar(alt, 1))];
-    let dirs = [0, 1].map(|i| match ziel[i] {
-        Some(q) => crate::leitung_route::anschluss_richtung(jetzt, lib, q).or(alt_dirs[i]),
-        None => alt_dirs[i],
+    // Richtung am neuen Ende: am Anschluss dessen Richtung; auf einer Leitung bzw. Schiene quer dazu zur Seite des
+    // anderen Endes (sonst lief ein Abzweig, dessen Wirt über ihn hinweg verschoben wurde, über den Wirt hinaus und
+    // kam von der anderen Seite zurück – Maustest Runde 13)
+    // (auch am festen Ende: liegt es auf einer Leitung und wandert das andere Ende auf deren andere Seite)
+    let dirs = [0, 1].map(|i| {
+        let q = ziel[i].unwrap_or(enden[i]);
+        let anderes = ziel[1 - i].unwrap_or(enden[1 - i]);
+        crate::leitung_route::anschluss_richtung(jetzt, lib, q).or_else(|| crate::leitung_route::richtung_auf_leitung_ohne(jetzt, q, anderes, id)).or(alt_dirs[i])
     });
     // Profil nur ohne fremde Anschlüsse im Innern (T-Abzweig, Knoten), sonst nur das Endstück
     let innen = |q: P| q.dist(enden[0]) > PIN_TOL && q.dist(enden[1]) > PIN_TOL && alt.windows(2).any(|w| seg_dist(q, w[0], w[1]) <= PIN_TOL);
