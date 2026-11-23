@@ -9,6 +9,14 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
+Wie im Original (Entscheidung Runde 13):
+- Listen Export: Betriebsmittelliste mit den Spalten „Anlage, Ort, Betriebsmittel“ (je Symbol ohne Eigentümer),
+  Klemmenliste mit „Anlage, Ort, Klemmleiste, Klemmenindex“ (je Klemmstelle), jeweils in Blatt- und
+  Objektreihenfolge; die leeren Zeilen, die das Original anhängt, entfallen.
+- Optionen „Fixierung aktivieren“ wird nur gespeichert; der Knopf Fixierung startet immer gedrückt.
+- Symboleditor: „Option Ein und Ausschalten“ zeigt gedrückt, wenn das markierte Element zur gewählten Zusatzoption
+  gehört.
+
 Angleichungen nach statischer Prüfung der Dialoge (Runde 12):
 - Optionen: „Hochformat“ gilt für jedes neue Blatt; neue Projekte übernehmen Standardschrift und Schriftfeld „aus
   Datei“; „Doppelklick auf Verweise“ in der Reihenfolge des Originals.

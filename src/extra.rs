@@ -642,7 +642,9 @@ impl App {
             }
             // Option ein/aus: markierte Elemente gehören zur gewählten Seite bzw. Zusatzoption (oder wieder zu allen)
             let sel = self.selection.clone();
-            if gbtn(ui, I::OptionToggle, "Option Ein und Ausschalten", has, false).clicked() {
+            // gedrückt, wenn das (erste) markierte Element zur gewählten Zusatzoption gehört (SymOptionChange 0x481138)
+            let down = e.cur_flag > 0 && sel.first().is_some_and(|id| e.flags.get(id) == Some(&e.cur_flag));
+            if gbtn(ui, I::OptionToggle, "Option Ein und Ausschalten", has, down).clicked() {
                 if let Some(e) = &mut self.sym_edit {
                     for id in sel {
                         if e.cur_flag > 0 {

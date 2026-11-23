@@ -586,7 +586,9 @@ impl App {
         self.path_align = o.pfadfang;
         self.auto_conn = o.autoverbindung;
         self.size_frame = o.rahmen_groesse;
-        self.fix_active = o.fixierung;
+        // „Fixierung aktivieren“ wird wie im Original nur gespeichert (TFORM4.Anker, +0xa3a nirgends gelesen):
+        // der Knopf Fixierung startet immer gedrückt (DFM Down=True)
+        self.fix_active = true;
         self.invert_wheel = o.mausrad_umkehren;
         self.sheet_color = Color32::from_rgb(o.blatt_farbe[0], o.blatt_farbe[1], o.blatt_farbe[2]);
         self.grid_color = farbe(o.raster_farbe);

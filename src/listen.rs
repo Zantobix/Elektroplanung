@@ -1,9 +1,8 @@
 //! Listen Export (TListExport des Originals): Auswahl der Liste, Vorschau als Tabelle, Export als Textdatei.
 //! Listen wie im Original: „Stückliste“, „Betriebsmittelkennzeichnung“, „Klemmenbezeichnung“; Dateiformate
 //! „Tabulator“, „Trennzeichen(;)“, „Trennzeichen(#)“ (*.txt).
-//! Die Spalten der Stückliste sind die des Originals (0x49b014); die der beiden anderen
-//! Listen sind nicht belegt und so gewählt, dass sie zum Beschriften taugen: je Zeile ein Betriebsmittel bzw. eine
-//! Klemme.
+//! Spalten wie im Original: Stückliste 0x49b014, Betriebsmittel- und Klemmenliste 0x49e19c (Wine-Gegenprobe
+//! 23.11.2026: Kopfzeile, Trennzeichen, CRLF).
 
 use crate::canvas::{bmk_ctx, natural_key};
 use crate::model::*;
@@ -34,46 +33,38 @@ pub fn liste(p: &Project, art: usize) -> (Vec<&'static str>, Vec<Vec<String>>) {
             rows.sort_by_key(|r| natural_key(&r[0]));
             (STUECKLISTE.to_vec(), rows)
         }
-        // je Betriebsmittel (aufgelöste BMK) eine Zeile, erste Fundstelle
-        1 => {
-            let mut rows: Vec<Vec<String>> = vec![];
-            for a in &p.anlagen {
-                for s in &a.sheets {
-                    let ctx = bmk_ctx(a, s);
-                    for o in &s.objects {
-                        if let Kind::Symbol { value, ext, pos, .. } = &o.kind {
-                            // angezeigte BMK, bei Symbolen mit Eigentümer dessen Kennzeichnung
-                            let b = crate::eigentuemer::anzeige_in(&p.anlagen, o, &ctx);
-                            if b.is_empty() || rows.iter().any(|r| r[0] == a.name && r[1] == b) {
-                                continue;
-                            }
-                            rows.push(vec![a.name.clone(), b, crate::klemmplan::pfad(s, pos.x), value.clone(), ext.funktion.clone()]);
+        // Betriebsmittel- und Klemmenliste wie im Original (0x49e19c): je Anlage (Kurzform, sonst Name) und Blatt
+        // (Ort des Blattes) in der Reihenfolge der Objekte eine Zeile je Symbol ohne Eigentümer bzw. je
+        // Klemmstelle. Die leeren Zeilen, die das Original für die übrigen Objekte anhängt, entfallen.
+        1 => (vec!["Anlage", "Ort", "Betriebsmittel"], zeilen(p, false)),
+        _ => (vec!["Anlage", "Ort", "Klemmleiste", "Klemmenindex"], zeilen(p, true)),
+    }
+}
+
+fn zeilen(p: &Project, klemmen: bool) -> Vec<Vec<String>> {
+    let mut rows = vec![];
+    for a in &p.anlagen {
+        let anlage = if a.set.kurz.is_empty() { a.name.clone() } else { a.set.kurz.clone() };
+        for s in &a.sheets {
+            let ctx = bmk_ctx(a, s);
+            for o in &s.objects {
+                match &o.kind {
+                    Kind::Symbol { .. } if !klemmen && crate::eigentuemer::eigentuemer_in(&p.anlagen, o).is_none() => {
+                        let b = crate::eigentuemer::anzeige_in(&p.anlagen, o, &ctx);
+                        if !b.is_empty() {
+                            rows.push(vec![anlage.clone(), s.ort.clone(), b]);
                         }
                     }
+                    Kind::Terminal { leiste, nr, level, .. } if klemmen => {
+                        let c = if *level > 0 { format!("{nr}{}", (b'A' + level - 1) as char) } else { nr.to_string() };
+                        rows.push(vec![anlage.clone(), s.ort.clone(), leiste.clone(), c]);
+                    }
+                    _ => {}
                 }
             }
-            rows.sort_by(|x, y| x[0].cmp(&y[0]).then_with(|| natural_key(&x[1]).cmp(&natural_key(&y[1]))));
-            (vec!["Anlage", "Kennzeichnung", "Pfad", "Wert", "Funktion"], rows)
-        }
-        // je Klemme (Leiste, Nummer, Etage) eine Zeile in der Reihenfolge des Klemmplans
-        _ => {
-            let mut rows: Vec<Vec<String>> = vec![];
-            for a in &p.anlagen {
-                let mut leisten: Vec<String> = a.klemmleisten.clone();
-                for k in &a.klemmen {
-                    if !leisten.contains(&k.name) {
-                        leisten.push(k.name.clone());
-                    }
-                }
-                for l in leisten {
-                    for z in crate::klemmplan::plan_projekt(p, a, &l, &p.symdefs).zeilen {
-                        rows.push(vec![a.name.clone(), l.clone(), z.label, z.funktion]);
-                    }
-                }
-            }
-            (vec!["Anlage", "Klemmleiste", "Klemme", "Funktion"], rows)
         }
     }
+    rows
 }
 
 /// Liste als Text: Spalten durch Tabulator, ';' oder '#' getrennt, Zeilenende CRLF wie unter Windows.
@@ -151,8 +142,9 @@ mod tests {
         s.objects.push(Obj { id: 2, kind: Kind::Terminal { pos: P::new(80.0, 50.0), leiste: "X1".into(), nr: 1, level: 0, text_off: None, tpl: String::new(), opt: crate::klemmen::KlemmOpt { funktion: "Licht".into(), ..Default::default() } }, pen: 0, fixed: false, group: None, raw: None });
         let (h, rows) = liste(&p, 2);
         assert_eq!(h.len(), 4);
-        assert_eq!(rows, vec![vec!["Anlage 1", "X1", "X1.1", "Licht"], vec!["Anlage 1", "X1", "X1.2", ""]]);
-        assert_eq!(text(&h, &rows[..1], 1), "Anlage;Klemmleiste;Klemme;Funktion\r\nAnlage 1;X1;X1.1;Licht\r\n");
+        // Reihenfolge der Objekte auf dem Blatt, Ort des Blattes (hier leer)
+        assert_eq!(rows, vec![vec!["Anlage 1", "", "X1", "2"], vec!["Anlage 1", "", "X1", "1"]]);
+        assert_eq!(text(&h, &rows[..1], 1), "Anlage;Ort;Klemmleiste;Klemmenindex\r\nAnlage 1;;X1;2\r\n");
     }
 
     /// Stückliste mit den Spalten des Originals: je Bauteil eine Zeile, Anzahl = Verwendungen über alle Anlagen.
