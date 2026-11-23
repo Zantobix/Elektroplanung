@@ -345,6 +345,49 @@ impl crate::app::App {
         self.ueberstaende_kuerzen();
         let ids = self.geaenderte_leitungen();
         self.leitungen_zusammenfassen(&ids);
+        self.rechtwinklig_halten();
+    }
+
+    /// Absicherung nach dem Aufräumen (Nutzerbild Runde 13: schräge Leitung nach dem Verschieben einer Lampe):
+    /// Geänderte Leitungen, die vor der Bearbeitung rechtwinklig waren und es jetzt nicht mehr sind, werden zwischen
+    /// ihren Enden rechtwinklig neu geführt (Stiche aus den Anschlüssen, um Symbole herum).
+    pub fn rechtwinklig_halten(&mut self) {
+        let (Some(r), Some(s)) = (self.cur(), self.sheet()) else { return };
+        let Some(alt) = self.undo.last().and_then(|p| p.sheet(r)) else { return };
+        let stich = self.raster() / 2.0;
+        let lib = &self.lib;
+        let umr = crate::leitung_hindernis::umrisse(s, lib);
+        let mut neu: Vec<(u64, Vec<P>)> = vec![];
+        for o in &s.objects {
+            let Kind::Wire { pts, .. } = &o.kind else { continue };
+            if pts.len() < 2 || crate::netz_folgen::rechtwinklig(pts) {
+                continue;
+            }
+            let war = match alt.objects.iter().find(|x| x.id == o.id).map(|x| &x.kind) {
+                Some(Kind::Wire { pts: q, .. }) => crate::netz_folgen::rechtwinklig(q),
+                // neue Leitungen: gezeichnete sind immer rechtwinklig gemeint
+                _ => true,
+            };
+            if !war {
+                continue;
+            }
+            let (a, b) = (pts[0], pts[pts.len() - 1]);
+            let da = crate::leitung_route::anschluss_richtung(s, lib, a);
+            let db = crate::leitung_route::anschluss_richtung(s, lib, b);
+            let hind = crate::leitung_hindernis::wirksam(&crate::leitung_hindernis::hindernisse(&umr, &[], &[]), a, b);
+            let weg = crate::leitung_route::mit_stichen(a, da, b, db, stich);
+            neu.push((o.id, crate::leitung_hindernis::umgehen(&weg, da, db, &hind, 2.0 * stich, false)));
+        }
+        if neu.is_empty() {
+            return;
+        }
+        self.with_sheet(|s, _| {
+            for (id, p) in neu {
+                if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
+                    *pts = p;
+                }
+            }
+        });
     }
 
     /// Leitungsenden, die vor dem Ziehen verbunden waren und jetzt frei sind (Maustest Runde 12: Teilstück auf eine
