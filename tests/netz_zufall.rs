@@ -87,12 +87,20 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
             app.aufraeumen();
             versuche += 1;
             let n = app.sheet().unwrap().clone();
-            for (id, k) in &vorher_ange {
-                let Some(Kind::Wire { pts, .. }) = n.objects.iter().find(|x| x.id == *id).map(|x| &x.kind) else { continue };
-                let p = if *k == 0 { pts[0] } else { pts[pts.len() - 1] };
-                if freies_ende(&n, &lib, *id, p) {
-                    fehler.push(format!("Blatt {b}: {was}: Ende {k} der Leitung {id} bei {p:?} jetzt frei"));
+            // keine neuen freien Enden: Lagen freier Leitungsenden nachher, die vorher keine freien Enden waren und
+            // nicht zu einer bewegten Leitung gehören (Leitungen können zusammengelegt werden, deshalb nach Lage)
+            let _ = &vorher_ange;
+            let frei_vorher: Vec<P> = enden(&s).into_iter().filter(|(id, _, p)| freies_ende(&s, &lib, *id, *p)).map(|(_, _, p)| p).collect();
+            for (id, k, p) in enden(&n) {
+                if !freies_ende(&n, &lib, id, p) || frei_vorher.iter().any(|q| q.dist(p) < 0.01) {
+                    continue;
                 }
+                // freies Ende einer verschobenen freien Leitung (wandert mit) ist kein Fehler
+                let war_frei = s.objects.iter().find(|x| x.id == id).is_some_and(|x| matches!(&x.kind, Kind::Wire { pts, .. } if freies_ende(&s, &lib, id, if k == 0 { pts[0] } else { pts[pts.len() - 1] })));
+                if war_frei {
+                    continue;
+                }
+                fehler.push(format!("Blatt {b}: {was}: Ende {k} der Leitung {id} bei {p:?} jetzt frei"));
             }
             for x in &n.objects {
                 if let Kind::Wire { pts, .. } = &x.kind {

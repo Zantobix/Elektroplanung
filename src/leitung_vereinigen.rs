@@ -344,6 +344,8 @@ impl crate::app::App {
         self.leitungen_vereinigen(&ids);
         self.ueberstaende_kuerzen();
         let ids = self.geaenderte_leitungen();
+        self.leitungen_glaetten(&ids);
+        let ids = self.geaenderte_leitungen();
         self.leitungen_zusammenfassen(&ids);
         self.rechtwinklig_halten();
     }

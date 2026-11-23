@@ -25,6 +25,9 @@ Leitungen, allgemein überarbeitet (Runde 13):
 - Abzweig mit Umschalt beginnt im Raster; das Fangkreuz (grünes „+“) zeigt den Anfang schon vor dem Klick.
 - Nach dem Verschieben entstehen keine automatischen Verbindungen mehr (Ablegen aus der Bibliothek und Taste A
   bleiben).
+- Nach dem Loslassen: eine Treppe am Abgriff (kurz quer, längs, quer) rückt auf der Schiene bzw. Leitung nach;
+  endet eine Leitung an einem Knick einer anderen und läuft dort gerade weiter, werden beide zu einem durchgehenden
+  Strang zusammengelegt, der Rest bleibt Abzweig.
 - Linux/Wayland: Fensterrahmen im Adwaita-Stil mit Titel statt des grauen Rahmens ohne Titel.
 
 Wie im Original (Entscheidung Runde 13):

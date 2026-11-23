@@ -184,3 +184,36 @@ fn video_gezogene_leitung_mit_gemeinsamem_punkt_auf_n() {
     let w3 = pts(&app, 3);
     assert_eq!(w3, vec![p(25.0, 85.0), p(105.0, 85.0), p(105.0, 125.0)], "Anfang wandert auf N");
 }
+
+/// Nutzervideo 23.11.2026 15:50: senkrechtes Stück der roten Leitung (Abgriff an der Schiene mit kleinem Versatz)
+/// auf die Ecke der schwarzen Leitung gezogen. Danach: Abgriff rückt auf der Schiene nach (kein kleines Stück oben),
+/// rote und schwarze Leitung werden zu einem durchgehenden Strang zusammengelegt, das Stück von E2 bleibt Abzweig.
+#[test]
+fn video_knoten_auf_knoten_und_abgriff_nachziehen() {
+    let schiene = Obj { id: 9, kind: Kind::Busbar { a: P::new(5.0, 25.0), x2: 295.0, name: "L1".into(), label: P::new(0.0, -4.0), style: 0, sms: 0, xin: String::new(), xout: String::new(), lage: 1, versatz: 2.5 }, pen: 0, fixed: false, group: None, raw: None };
+    let mut app = app_mit(vec![
+        schiene,
+        klemme(10, 84.2, 145.0),
+        // schwarz: von E2 (85,145) nach rechts zur Ecke (115,145), dann runter
+        wire(2, &[(85.0, 145.0), (115.0, 145.0), (115.0, 205.0)]),
+        // rot: Abgriff (85,25) kurz runter, rechts, runter auf schwarz (95,145)
+        wire(1, &[(85.0, 25.0), (85.0, 35.0), (95.0, 35.0), (95.0, 145.0)]),
+        // E3-Abzweig auf rot
+        klemme(11, 14.2, 65.0),
+        wire(3, &[(15.0, 65.0), (95.0, 65.0)]),
+    ]);
+    app.selection = vec![1];
+    assert!(app.teilstueck_greifen(1, p(95.0, 100.0), 1.0));
+    app.teilstueck_ziehen(p(115.0, 100.0));
+    app.drag = elektroplanung::app::Drag::None;
+    app.aufraeumen();
+    let s = app.sheet().unwrap();
+    let wires: Vec<(u64, Vec<P>)> = s.objects.iter().filter_map(|o| match &o.kind { Kind::Wire { pts, .. } => Some((o.id, pts.clone())), _ => None }).collect();
+    // ein durchgehender senkrechter Strang von der Schiene bis unten
+    let strang = wires.iter().find(|(_, w)| w.first() == Some(&p(115.0, 25.0)) || w.last() == Some(&p(115.0, 25.0)));
+    assert!(strang.is_some_and(|(_, w)| w.len() == 2 && w.contains(&p(115.0, 205.0))), "{wires:?}");
+    // E2-Stück endet als Abzweig am Strang
+    assert!(wires.iter().any(|(_, w)| w.len() == 2 && w.contains(&p(85.0, 145.0)) && w.contains(&p(115.0, 145.0))), "{wires:?}");
+    // E3-Abzweig endet auf dem Strang
+    assert!(wires.iter().any(|(_, w)| *w == vec![p(15.0, 65.0), p(115.0, 65.0)]), "{wires:?}");
+}
