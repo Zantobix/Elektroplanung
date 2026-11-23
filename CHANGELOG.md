@@ -7,7 +7,10 @@ eigenes Dateiformat (`.epj`) noch ändern.
 Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, erzeugt die Pipeline das Tag
 `v<Version>` und ein Release mit dem passenden Abschnitt dieser Datei als Text.
 
-## [Unveröffentlicht]
+## [0.3.0]
+
+Schwerpunkt: Leitungen allgemein überarbeitet (ein Verfahren für alle Bearbeitungen, Zeichnen ohne Springen,
+Aufräumen beim Loslassen, Zufallstests), Dialoge und Listen wie im Original, Befunde der Maustests.
 
 Leitungen, allgemein überarbeitet (Runde 13):
 - Ein Verfahren für das Nachführen angeschlossener Leitungen bei jeder Bearbeitung (`netz_folgen.rs`): Abzweige
