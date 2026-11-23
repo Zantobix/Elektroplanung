@@ -8,6 +8,9 @@
 #   Text des Releases: der Abschnitt "## [<Version>]" aus CHANGELOG.md.
 # - Push auf main ohne neue Version: das Vorab-Release "entwicklung" (Tag `entwicklung`) wird durch den neuen
 #   Stand ERSETZT – so gibt es immer einen aktuellen Download. Veröffentlichte Versionen bleiben unverändert.
+# - macOS ist optional: GitHub hat zeitweise keine Mac-Rechner frei (Job wird nach langer Wartezeit abgebrochen).
+#   Release und Entwicklungsstand erscheinen dann mit Linux und Windows; der Text vermerkt das fehlende Mac-Programm.
+#   Linux und Windows sind Pflicht.
 name: Bauen
 
 on:
@@ -55,11 +58,14 @@ jobs:
             datei: Elektroplanung-${{ needs.version.outputs.version }}-x86_64.AppImage
           - os: macos-latest
             datei: Elektroplanung-${{ needs.version.outputs.version }}-macos-arm64.dmg
+            optional: true
           - os: windows-latest
             datei: Elektroplanung-${{ needs.version.outputs.version }}-windows-x86_64.exe
             # C-Laufzeit fest einbinden: die Exe läuft ohne installiertes Visual-C++-Paket
             rustflags: -C target-feature=+crt-static
     runs-on: ${{ matrix.os }}
+    # macOS darf fehlschlagen, ohne Release/Entwicklungsstand aufzuhalten
+    continue-on-error: ${{ matrix.optional == true }}
     env:
       DATEI: ${{ matrix.datei }}
       VERSION: ${{ needs.version.outputs.version }}
@@ -141,7 +147,8 @@ jobs:
 
   release:
     needs: [version, bauen]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.neu == 'true'
+    # always(): auch wenn der optionale Mac-Build abgebrochen wurde; Pflicht-Programme prüft der erste Schritt
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.result == 'success' && needs.version.outputs.neu == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -151,11 +158,20 @@ jobs:
         with:
           path: pakete
           merge-multiple: true
+      - name: Pflicht-Programme vorhanden (Linux, Windows); fehlt macOS, Hinweis im Text
+        run: |
+          ls -l pakete
+          ls pakete/*.AppImage pakete/*.exe > /dev/null || { echo "::error::Linux- oder Windows-Programm fehlt"; exit 1; }
+          if ls pakete/*.dmg > /dev/null 2>&1; then echo "" > mac_hinweis.md; else
+            echo "::warning::macOS-Programm fehlt (kein Mac-Rechner bei GitHub verfügbar)"
+            printf '\n> Hinweis: Das macOS-Programm fehlt in dieser Ausführung (GitHub hatte keinen Mac-Rechner frei).\n' > mac_hinweis.md
+          fi
       - name: Release-Text aus CHANGELOG.md
         run: |
           V="${{ needs.version.outputs.version }}"
           awk -v v="## [$V]" 'index($0, v) == 1 {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md > notizen.md
           [ -s notizen.md ] || echo "Version $V" > notizen.md
+          cat mac_hinweis.md >> notizen.md
           cat notizen.md
       - uses: softprops/action-gh-release@v2
         with:
@@ -168,7 +184,7 @@ jobs:
   # Aktueller Stand von main als Vorab-Release (wird bei jedem Push ersetzt, nie "Latest")
   entwicklung:
     needs: [version, bauen]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.neu == 'false'
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.result == 'success' && needs.version.outputs.neu == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,6 +197,14 @@ jobs:
         with:
           path: pakete
           merge-multiple: true
+      - name: Pflicht-Programme vorhanden (Linux, Windows); fehlt macOS, Hinweis im Text
+        run: |
+          ls -l pakete
+          ls pakete/*.AppImage pakete/*.exe > /dev/null || { echo "::error::Linux- oder Windows-Programm fehlt"; exit 1; }
+          if ls pakete/*.dmg > /dev/null 2>&1; then echo "" > mac_hinweis.md; else
+            echo "::warning::macOS-Programm fehlt (kein Mac-Rechner bei GitHub verfügbar)"
+            printf '\n> Hinweis: Das macOS-Programm fehlt in dieser Ausführung (GitHub hatte keinen Mac-Rechner frei).\n' > mac_hinweis.md
+          fi
       - name: Vorab-Release "entwicklung" ersetzen
         run: |
           KURZ=$(echo "$GITHUB_SHA" | cut -c1-7)
@@ -188,6 +212,7 @@ jobs:
             echo "Automatisch gebauter Stand von \`main\` (Commit $KURZ, $(date -u +%Y-%m-%d)) – nicht getestet wie eine Version."
             echo
             awk 'index($0, "## [Unveröffentlicht]") == 1 {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md
+            cat mac_hinweis.md
           } > notizen.md
           gh release delete entwicklung --yes --cleanup-tag || true
           gh release create entwicklung pakete/* --prerelease --latest=false --target "$GITHUB_SHA" \

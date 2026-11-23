@@ -7,6 +7,14 @@ eigenes Dateiformat (`.epj`) noch ändern.
 Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, erzeugt die Pipeline das Tag
 `v<Version>` und ein Release mit dem passenden Abschnitt dieser Datei als Text.
 
+## [Unveröffentlicht]
+
+Änderungen nach 0.3.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
+erhält der Abschnitt deren Nummer.
+
+- Pipeline: der macOS-Build ist optional – hat GitHub keinen Mac-Rechner frei, erscheinen Release bzw.
+  Entwicklungsstand mit Linux und Windows und einem Hinweis.
+
 ## [0.3.0]
 
 Schwerpunkt: Leitungen allgemein überarbeitet (ein Verfahren für alle Bearbeitungen, Zeichnen ohne Springen,
