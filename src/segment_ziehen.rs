@@ -56,6 +56,13 @@ fn achsengerade(a: P, b: P) -> bool {
 /// wird ein Nachbarstück schräg (oder ist das Teilstück das erste/letzte), entsteht ein Querstück über den alten
 /// Eckpunkt.
 pub fn verschieben(orig: &[P], idx: usize, d: P) -> Vec<P> {
+    verschieben_frei(orig, idx, d, [false, false])
+}
+
+/// Wie `verschieben`; ein **freies** Leitungsende (`frei`: Anfang, Ende – an nichts angeschlossen) ist kein
+/// Festpunkt: gehört es zum gezogenen Teilstück, wandert es mit, statt ein Querstück zu bekommen (Nutzer
+/// 23.11.2026: „ein Leitungsende wird immer als dedizierter Endpunkt interpretiert, bitte nicht“).
+pub fn verschieben_frei(orig: &[P], idx: usize, d: P, frei: [bool; 2]) -> Vec<P> {
     let n = orig.len();
     if n < 2 || idx + 1 >= n {
         return orig.to_vec();
@@ -64,12 +71,12 @@ pub fn verschieben(orig: &[P], idx: usize, d: P) -> Vec<P> {
     let b = P::new(orig[idx + 1].x + d.x, orig[idx + 1].y + d.y);
     let mut out: Vec<P> = orig[..idx].to_vec();
     // vorne: am festen Anfang bzw. bei schrägem Nachbarstück den alten Eckpunkt behalten
-    if idx == 0 || !achsengerade(orig[idx - 1], a) {
+    if (idx == 0 && !frei[0]) || (idx > 0 && !achsengerade(orig[idx - 1], a)) {
         out.push(orig[idx]);
     }
     out.push(a);
     out.push(b);
-    if idx + 1 == n - 1 || !achsengerade(b, orig[idx + 2]) {
+    if (idx + 1 == n - 1 && !frei[1]) || (idx + 1 < n - 1 && !achsengerade(b, orig[idx + 2])) {
         out.push(orig[idx + 1]);
     }
     out.extend_from_slice(&orig[(idx + 2).min(n)..]);
@@ -155,6 +162,7 @@ impl App {
             },
         };
         let orig = pts.clone();
+        self.netz_merken();
         self.drag = Drag::Teilstueck { id, idx, orig, start: self.snap(m), moved: false, knick };
         true
     }
@@ -171,13 +179,18 @@ impl App {
         }
         // Abgriff an der Sammelschiene wandert mit (keine Leitung auf der Schiene, schiene_halten.rs)
         let sch = self.sheet().map(|s| crate::schiene_halten::schienen(s, &[])).unwrap_or_default();
-        let neu_pts = if knick { crate::knick_ziehen::knick_verschieben(&orig, idx, d) } else { verschieben(&orig, idx, d) };
+        // freie Enden (vor dem Ziehen an nichts angeschlossen) wandern mit dem Teilstück
+        let n = orig.len();
+        let frei = [0, n - 1].map(|i| !self.netz_vorher.is_empty() && crate::leitung_anschluss::freies_ende_in(&self.netz_vorher, &self.lib, id, orig[i]));
+        let neu_pts = if knick { crate::knick_ziehen::knick_verschieben_frei(&orig, idx, d, frei) } else { verschieben_frei(&orig, idx, d, frei) };
         let neu = crate::schiene_halten::abgreifen(&neu_pts, &sch);
         self.with_sheet(|s, _| {
             if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
                 *pts = neu;
             }
         });
+        // Abzweige auf der gezogenen Leitung folgen (netz_folgen.rs)
+        self.netz_nachfuehren(&[id], false);
         self.drag = Drag::Teilstueck { id, idx, orig, start, moved: true, knick };
     }
 }

@@ -70,9 +70,8 @@ fn relais_verschoben_leitung_bleibt_an_klemme() {
         app.raster_idx = ri;
         app.active = 0;
         app.selection = vec![9];
-        let f = app.wire_followers(&[9]);
-        app.with_sheet(|s, _| s.objects.iter_mut().filter(|o| o.id == 9).for_each(|o| o.kind.translate(d)));
-        app.apply_followers(&f, d);
+        app.netz_merken();
+        app.netz_verschieben(&[9], d);
         let q = pts(&app, 13);
         assert!(q.last().unwrap().dist(P::new(225.0, 65.8)) < 0.01, "{d:?}: {q:?}");
     }
@@ -92,10 +91,8 @@ fn markierte_leitung_bleibt_an_klemme_und_relais() {
         app.open_path(pfad.clone(), false);
         app.active = 0;
         app.selection = vec![13];
-        let halt = elektroplanung::schiene_halten::finden(app.sheet().unwrap(), &app.lib, &[13]);
-        assert_eq!(halt.len(), 1);
-        app.with_sheet(|s, _| s.objects.iter_mut().filter(|o| o.id == 13).for_each(|o| o.kind.translate(d)));
-        app.schienen_halten(&halt, d);
+        app.netz_merken();
+        app.netz_verschieben(&[13], d);
         let q = pts(&app, 13);
         assert!(q[0].dist(P::new(166.4, 128.0)) < 0.01, "{d:?}: {q:?}");
         assert!(q.last().unwrap().dist(P::new(225.0, 65.8)) < 0.01, "{d:?}: {q:?}");

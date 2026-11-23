@@ -12,7 +12,7 @@
 //! Anschlüssen. Wie genau das Original den Knick führt, ist noch im Original zu prüfen.
 
 use crate::model::P;
-use crate::segment_ziehen::{quer, verschieben};
+use crate::segment_ziehen::quer;
 
 const EPS: f32 = 1e-3;
 
@@ -33,11 +33,16 @@ fn gleich(a: P, b: P) -> bool {
 /// Punkte nach dem Verschieben des inneren Eckpunkts `i` von `orig` um `d`: erst das Teilstück davor, dann das
 /// danach, jeweils quer zu seiner Richtung (`segment_ziehen::verschieben`).
 pub fn knick_verschieben(orig: &[P], i: usize, d: P) -> Vec<P> {
+    knick_verschieben_frei(orig, i, d, [false, false])
+}
+
+/// Wie `knick_verschieben`; freie Leitungsenden (`frei`) wandern mit (segment_ziehen::verschieben_frei).
+pub fn knick_verschieben_frei(orig: &[P], i: usize, d: P, frei: [bool; 2]) -> Vec<P> {
     if i == 0 || i + 1 >= orig.len() {
         return orig.to_vec();
     }
     let d1 = quer(orig[i - 1], orig[i], d);
-    let pts1 = if d1.x.abs() < EPS && d1.y.abs() < EPS { orig.to_vec() } else { verschieben(orig, i - 1, d1) };
+    let pts1 = if d1.x.abs() < EPS && d1.y.abs() < EPS { orig.to_vec() } else { crate::segment_ziehen::verschieben_frei(orig, i - 1, d1, frei) };
     // der Knick nach dem ersten Schritt: dort beginnt das zweite Teilstück (zum alten Nachbarpunkt)
     let v = P::new(orig[i].x + d1.x, orig[i].y + d1.y);
     let Some(j) = (0..pts1.len().saturating_sub(1)).find(|&j| gleich(pts1[j], v) && gleich(pts1[j + 1], orig[i + 1])) else { return pts1 };
@@ -45,7 +50,7 @@ pub fn knick_verschieben(orig: &[P], i: usize, d: P) -> Vec<P> {
     if d2.x.abs() < EPS && d2.y.abs() < EPS {
         return pts1;
     }
-    verschieben(&pts1, j, d2)
+    crate::segment_ziehen::verschieben_frei(&pts1, j, d2, frei)
 }
 
 impl crate::app::App {

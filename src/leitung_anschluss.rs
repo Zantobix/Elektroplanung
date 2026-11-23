@@ -22,7 +22,12 @@ use crate::symbols::SymDef;
 
 /// Ist das Ende `p` der Leitung `wid` frei (kein Anschluss, keine Klemmstelle, keine Schiene, keine Leitung)?
 pub fn freies_ende(sheet: &Sheet, lib: &[SymDef], wid: u64, p: P) -> bool {
-    !sheet.objects.iter().filter(|o| o.id != wid).any(|o| match &o.kind {
+    freies_ende_in(&sheet.objects, lib, wid, p)
+}
+
+/// Wie `freies_ende` für die Objekte `objs`.
+pub fn freies_ende_in(objs: &[Obj], lib: &[SymDef], wid: u64, p: P) -> bool {
+    !objs.iter().filter(|o| o.id != wid).any(|o| match &o.kind {
         Kind::Wire { pts, .. } => pts.windows(2).any(|s| seg_dist(p, s[0], s[1]) <= PIN_TOL),
         Kind::Busbar { a, x2, .. } => (p.y - a.y).abs() <= PIN_TOL && p.x >= a.x.min(*x2) - PIN_TOL && p.x <= a.x.max(*x2) + PIN_TOL,
         Kind::Terminal { pos, .. } => pos.dist(p) <= crate::klemme_leitung::KLEMME_R + PIN_TOL,
@@ -79,7 +84,14 @@ impl App {
                 }
             });
         }
-        Some(id)
+        // stößt sie ohne Abzweig an eine andere Leitung: zu einer zusammenfassen (leitung_zusammen.rs); die
+        // gezeichnete kann dabei in der älteren aufgehen
+        self.leitungen_zusammenfassen(&[id]);
+        if self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == id)) {
+            return Some(id);
+        }
+        // aufgegangen: die Leitung, die jetzt an ihrer Stelle liegt
+        self.sheet().and_then(|s| s.objects.iter().filter(|o| matches!(&o.kind, Kind::Wire { pts, .. } if pts.windows(2).any(|w| seg_dist(enden[0], w[0], w[1]) < 0.01) && pts.windows(2).any(|w| seg_dist(enden[1], w[0], w[1]) < 0.01))).map(|o| o.id).next())
     }
 
     /// Umschalt + Drücken auf einer Leitung (Auswahlwerkzeug): dort eine neue Leitung beginnen (Abzweig, A8). Der

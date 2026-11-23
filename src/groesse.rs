@@ -270,10 +270,9 @@ impl App {
                 }
             }
         });
-        // angeschlossene Leitungen folgen den neuen Anschlusslagen (C1, anschluss_folgen.rs)
-        let f = std::mem::take(&mut self.move_follow);
-        self.anschluesse_nachfuehren(orig, &f);
-        self.move_follow = f;
+        // angeschlossene Leitungen folgen den neuen Anschlusslagen (C1, netz_folgen.rs)
+        let ids: Vec<u64> = orig.iter().filter(|o| !(o.fixed && fix)).map(|o| o.id).collect();
+        self.netz_nachfuehren(&ids, false);
     }
 }
 

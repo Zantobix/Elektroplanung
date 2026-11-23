@@ -1496,7 +1496,7 @@ impl App {
                         if let Some(hi) = frame_handles(mn, mx).iter().enumerate().position(|(i, q)| !(nur_ecken && i % 2 == 1) && (q.x - m.x).abs() <= r && (q.y - m.y).abs() <= r) {
                             self.checkpoint();
                             let orig = self.selected_objs();
-                            self.move_follow = self.wire_followers(&self.selection.clone());
+                            self.netz_merken();
                             self.drag = Drag::Scale { handle: hi, start: (mn, mx), orig };
                             return;
                         }
@@ -1660,18 +1660,12 @@ impl App {
             if (d.x.abs() > 1e-4 || d.y.abs() > 1e-4) && !movable.is_empty() {
                 if !moved {
                     self.checkpoint();
-                    // angeschlossene Leitungen im Zustand vor dem Verschieben merken
-                    self.move_follow = self.wire_followers(&movable);
-                    self.move_halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &self.lib, &movable)).unwrap_or_default();
+                    // Stand vor dem Verschieben merken: das Leitungsnetz wird von dort aus nachgeführt (netz_folgen.rs)
+                    self.netz_merken();
                 }
-                self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| movable.contains(&o.id)).for_each(|o| o.kind.translate(d)));
-                // Leitungsenden folgen den Anschlüssen (gleicher Rückgängig-Schritt, aus der Gesamtverschiebung)
-                let follow = std::mem::take(&mut self.move_follow);
-                self.apply_followers(&follow, total);
-                self.move_follow = follow;
-                let halt = std::mem::take(&mut self.move_halt);
-                self.schienen_halten(&halt, total);
-                self.move_halt = halt;
+                // verschobene Objekte aus dem gemerkten Stand um die Gesamtverschiebung, Leitungen folgen bzw. bleiben
+                // an festen Anschlüssen (gleicher Rückgängig-Schritt)
+                self.netz_verschieben(&movable, total);
                 self.drag = Drag::Move { start, applied: total, moved: true };
             }
         }
@@ -2278,12 +2272,10 @@ impl App {
             };
             self.checkpoint();
             let sel: Vec<u64> = self.selected_objs().iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
-            let follow = self.wire_followers(&sel);
-            let halt = self.sheet().map(|s| crate::schiene_halten::finden(s, &self.lib, &sel)).unwrap_or_default();
-            self.with_sheet(|s, _| s.objects.iter_mut().filter(|o| sel.contains(&o.id)).for_each(|o| o.kind.translate(d)));
-            // angeschlossene Leitungen mitziehen, markierte Leitungen bleiben an ihren Schienen
-            self.apply_followers(&follow, d);
-            self.schienen_halten(&halt, d);
+            // angeschlossene Leitungen folgen, markierte Leitungen bleiben an festen Anschlüssen (netz_folgen.rs)
+            self.netz_merken();
+            self.netz_verschieben(&sel, d);
+            self.aufraeumen();
             // mit gehaltener Taste A wie im Original: freie Anschlüsse nach dem Schritt automatisch verbinden
             if self.hold_a {
                 if let Some(p) = self.hold_press[1].as_mut() {

@@ -55,7 +55,7 @@ pub fn abgreifen(pts: &[P], sch: &[Schiene]) -> Vec<P> {
 
 /// Ende `p0` (Nachbarpunkt `p1`, beide schon verschoben) wieder an die Schiene `s` binden: Punkte, die vor `p0`
 /// einzusetzen sind bzw. `p0` ersetzen. Senkrechtes Endstück: nur `p0` rückt auf die Schiene.
-fn binden(v: &mut Vec<P>, s: Schiene) {
+pub fn binden(v: &mut Vec<P>, s: Schiene) {
     let p0 = v[0];
     let x = p0.x.clamp(s.1, s.2);
     let neu = P::new(x, s.0);
@@ -90,7 +90,7 @@ pub struct Halt {
 /// vor dem Verschieben (vom Ende weg). Läuft die Verschiebung vom Anschluss weg, wird das Endstück in seiner
 /// Richtung länger und ein Querstück schließt an; sonst entsteht das Querstück am Anschluss und das Endstück wird
 /// kürzer (Rückläufer verschmelzen in `bereinigen`).
-fn anbinden(v: &mut Vec<P>, q: P, alt: Option<P>) {
+pub fn anbinden(v: &mut Vec<P>, q: P, alt: Option<P>) {
     let p0 = v[0];
     let d = p0.sub(q);
     if d.x.abs() < EPS && d.y.abs() < EPS {
@@ -108,7 +108,7 @@ fn anbinden(v: &mut Vec<P>, q: P, alt: Option<P>) {
 }
 
 /// Achsenrichtung des ersten Stücks (Einheitsvektor) oder `None` (schräg bzw. Länge 0).
-fn achse(a: P, b: P) -> Option<P> {
+pub fn achse(a: P, b: P) -> Option<P> {
     let d = b.sub(a);
     if d.x.abs() < EPS && d.y.abs() >= EPS {
         Some(P::new(0.0, d.y.signum()))

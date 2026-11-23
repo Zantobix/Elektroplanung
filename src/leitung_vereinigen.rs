@@ -327,13 +327,24 @@ impl crate::app::App {
     /// Beim Loslassen der linken Taste: nach Teilstück-/Knick-Ziehen bzw. Verschieben übereinanderliegende
     /// Leitungen vereinigen (gleicher Rückgängig-Schritt).
     pub fn nach_ziehen_vereinigen(&mut self) {
-        let ids = match &self.drag {
-            crate::app::Drag::Teilstueck { id, moved: true, .. } => vec![*id],
-            crate::app::Drag::Move { moved: true, .. } => self.geaenderte_leitungen(),
+        match &self.drag {
+            crate::app::Drag::Teilstueck { moved: true, .. } | crate::app::Drag::Move { moved: true, .. } | crate::app::Drag::Scale { .. } => {}
             _ => return,
-        };
+        }
+        self.aufraeumen();
+    }
+
+    /// Nach jeder Bearbeitung von Leitungen (gleicher Rückgängig-Schritt): übereinanderliegende vereinigen,
+    /// Überstände kürzen, stoßende Leitungen zu einer zusammenfassen (leitung_zusammen.rs).
+    pub fn aufraeumen(&mut self) {
+        let ids = self.geaenderte_leitungen();
+        if ids.is_empty() {
+            return;
+        }
         self.leitungen_vereinigen(&ids);
         self.ueberstaende_kuerzen();
+        let ids = self.geaenderte_leitungen();
+        self.leitungen_zusammenfassen(&ids);
     }
 
     /// Leitungsenden, die vor dem Ziehen verbunden waren und jetzt frei sind (Maustest Runde 12: Teilstück auf eine

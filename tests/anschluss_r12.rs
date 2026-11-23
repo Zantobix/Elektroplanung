@@ -71,7 +71,7 @@ fn skalieren_leitungen_folgen() {
         let (mn, mx) = app.sel_frame().unwrap();
         app.checkpoint();
         let orig = app.selected_objs();
-        app.move_follow = app.wire_followers(&[1]);
+        app.netz_merken();
         // Eckgriff 4 = rechts unten (Festpunkt links oben), 0 = links oben, 2 = rechts oben
         let fest = match griff {
             0 => mx,
@@ -140,13 +140,14 @@ fn ende_auf_leitung_kuerzt_freien_ueberstand() {
     let n0 = app.undo.len();
     let id = app.leitung_anschliessen(vec![P::new(80.0, 100.0), P::new(80.0, 50.0)]).unwrap();
     assert_eq!(app.undo.len(), n0 + 1, "ein Rückgängig-Schritt");
-    assert_eq!(pts(&app, 10), vec![P::new(20.0, 50.0), P::new(80.0, 50.0)]);
-    assert_eq!(pts(&app, id), vec![P::new(80.0, 100.0), P::new(80.0, 50.0)]);
+    // gekürzt bis zum Anschlusspunkt; beide stoßen dort ohne Abzweig an → eine Leitung (Runde 13, leitung_zusammen.rs)
+    assert_eq!(id, 10);
+    assert_eq!(pts(&app, 10), vec![P::new(20.0, 50.0), P::new(80.0, 50.0), P::new(80.0, 100.0)]);
     // Ecke: kein Knoten
     assert!(elektroplanung::knoten::punkte(app.sheet().unwrap()).is_empty());
     app.do_undo();
     assert_eq!(pts(&app, 10), vec![P::new(20.0, 50.0), P::new(120.0, 50.0)]);
-    assert!(app.sheet().unwrap().objects.iter().all(|o| o.id != id));
+    assert_eq!(app.sheet().unwrap().objects.len(), 2);
 }
 
 #[test]

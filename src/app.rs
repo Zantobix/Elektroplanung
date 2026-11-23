@@ -263,6 +263,8 @@ pub struct App {
     pub move_follow: Vec<crate::mitziehen::Mitzieh>,
     /// markierte Leitungen, die beim Verschieben an ihren Sammelschienen bleiben (schiene_halten.rs)
     pub move_halt: Vec<crate::schiene_halten::Halt>,
+    /// Objekte des Blattes vor der laufenden Änderung (netz_folgen.rs: Leitungsnetz wird von hier aus nachgeführt)
+    pub netz_vorher: Vec<Obj>,
     /// Text für die System-Zwischenablage nach „Kopieren“ (view.rs gibt ihn an egui weiter): Unter Linux meldet
     /// egui Strg+V nur, wenn dort Text liegt – sonst blieb Einfügen per Tastatur wirkungslos (Maustest Runde 11)
     pub ablage_text: Option<String>,
@@ -384,6 +386,7 @@ impl App {
             owner_pick: None,
             move_follow: vec![],
             move_halt: vec![],
+            netz_vorher: vec![],
             ablage_text: None,
             meldung: None,
             multi_props: None,
@@ -962,7 +965,7 @@ impl App {
         let sel = self.selection.clone();
         let lib = self.lib.clone();
         // angeschlossene Leitungen folgen den gedrehten/gespiegelten Anschlüssen (C2, anschluss_folgen.rs)
-        let (follow, alt) = (self.wire_followers(&sel), self.selected_objs());
+        self.netz_merken();
         self.with_sheet(|s, _| {
             // Original (ToolButton17Click 0x465994): gemeinsame Mitte aller markierten Objekte; hier für Auswahlen
             // nur aus Zeichenobjekten (Symbole und Sonderobjekte drehen weiter um ihren Einfügepunkt)
@@ -1014,7 +1017,8 @@ impl App {
                 }
             }
         });
-        self.anschluesse_nachfuehren(&alt, &follow);
+        self.netz_nachfuehren(&sel, false);
+        self.aufraeumen();
     }
 
     pub fn group_selection(&mut self, on: bool) {
