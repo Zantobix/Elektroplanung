@@ -84,6 +84,32 @@ pub fn linien(sheet: &Sheet, lib: &[SymDef], bewegt: &[u64]) -> Vec<Linie> {
     v
 }
 
+/// Bewertung eines Zielanschlusses beim Zeichnen (nach QElectroTech `Terminal`: grün frei, orange schon belegt,
+/// rot nicht erlaubt).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Ziel {
+    Frei,
+    Belegt,
+    Verboten,
+}
+
+/// Ziel `q` für eine Leitung, die bei `start` beginnt: verboten ist der Anfangsanschluss selbst; belegt, wenn dort
+/// schon eine Leitung endet (Klemmstellen: am Kreis, daher 1 mm Fangweite).
+pub fn ziel(sheet: &Sheet, q: P, start: Option<P>) -> Ziel {
+    if start.is_some_and(|a| a.dist(q) <= 1.0) {
+        return Ziel::Verboten;
+    }
+    let belegt = sheet.objects.iter().any(|o| match &o.kind {
+        Kind::Wire { pts, .. } if pts.len() >= 2 => [pts[0], pts[pts.len() - 1]].iter().any(|e| e.dist(q) <= 1.0),
+        _ => false,
+    });
+    if belegt {
+        Ziel::Belegt
+    } else {
+        Ziel::Frei
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +137,15 @@ mod tests {
         // B daneben: keine Treffer mehr
         s.objects[1] = schliesser(2, 110.0, 155.0);
         assert!(!linien(&s, &lib, &[1]).iter().any(|x| x.art == Art::Treffer));
+    }
+
+    #[test]
+    fn zielbewertung() {
+        let mut s = Sheet::new(1);
+        s.objects = vec![schliesser(1, 105.0, 105.0), wire(2, P::new(105.0, 98.0), P::new(105.0, 60.0))];
+        assert_eq!(ziel(&s, P::new(105.0, 98.0), None), Ziel::Belegt);
+        assert_eq!(ziel(&s, P::new(105.0, 112.0), None), Ziel::Frei);
+        assert_eq!(ziel(&s, P::new(105.0, 112.0), Some(P::new(105.0, 112.0))), Ziel::Verboten);
     }
 
     #[test]

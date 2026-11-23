@@ -1252,10 +1252,24 @@ impl App {
         } else if let Some(t) = self.pin_near(m, 6.0 / xf.z, &[]) {
             ziel.push(t);
         }
+        // beim Zeichnen nach QElectroTech gefärbt: grün frei, orange schon belegt, rot der eigene Anfang
+        let start = match &self.drag {
+            Drag::Wire { f } => f.pts.first().copied(),
+            _ => None,
+        };
         for t in ziel {
+            let farbe = if wire {
+                match crate::hilfslinien::ziel(sheet, t, start) {
+                    crate::hilfslinien::Ziel::Frei => hit,
+                    crate::hilfslinien::Ziel::Belegt => Color32::from_rgb(230, 140, 0),
+                    crate::hilfslinien::Ziel::Verboten => Color32::from_rgb(210, 0, 0),
+                }
+            } else {
+                hit
+            };
             let c = xf.s(t);
-            p.circle_stroke(c, 5.0, Stroke::new(2.0, hit));
-            p.circle_filled(c, 2.0, hit);
+            p.circle_stroke(c, 5.0, Stroke::new(2.0, farbe));
+            p.circle_filled(c, 2.0, farbe);
         }
     }
 
