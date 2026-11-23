@@ -869,23 +869,20 @@ impl App {
     }
 
     /// Verweis (Start/Ziel): Pfeil und Beschriftung.
+    /// Verweis einfügen (Kontextmenü › Verweis einfügen › Start/Ziel) als Verweisobjekt wie im Original (OBJ,
+    /// `Kind::Verweis`): Start mit der Spitze nach rechts und dem Text rechts daneben, Ziel mit der Spitze an der Lage
+    /// und dem Text links davor. Nachzeichnen 24.11.2026: vorher entstanden ein loses Dreieck (Vieleck) und ein Text
+    /// als Gruppe – winzig, mit Skalierungsgriffen über dem ganzen Objekt; ein leerer Text ging beim Laden verloren.
     pub fn add_reference(&mut self, at: P, start: bool, text: String) {
         self.checkpoint();
-        let gid = self.project.alloc_id() + 1_000_000;
-        let tri = if start {
-            vec![at, P::new(at.x + 3.0, at.y - 1.5), P::new(at.x + 3.0, at.y + 1.5)]
-        } else {
-            vec![P::new(at.x - 3.0, at.y - 1.5), at, P::new(at.x - 3.0, at.y + 1.5)]
-        };
-        let id1 = self.project.alloc_id();
-        let id2 = self.project.alloc_id();
-        let tp = if start { P::new(at.x + 4.0, at.y) } else { P::new(at.x - 4.0, at.y) };
-        let al = if start { Align::Left } else { Align::Right };
-        self.with_sheet(|s, _| {
-            s.objects.push(Obj { id: id1, kind: Kind::Poly { pts: tri }, pen: 0, fixed: false, group: Some(gid), raw: None });
-            s.objects.push(Obj { id: id2, kind: Kind::Text { pos: tp, text, size: 2.5, align: al, vertical: false, style: Default::default() }, pen: 0, fixed: false, group: Some(gid), raw: None });
-        });
-        self.selection = vec![id1, id2];
+        let id = self.project.alloc_id();
+        let breite = text.chars().count() as f32 * 0.55 * canvas::VERWEIS_TEXT;
+        let (dx, spitze) = if start { (2.4 + 1.0 + breite / 2.0, false) } else { (-(2.4 + 1.0 + breite / 2.0), true) };
+        // Textversatz = Mitte der Textoberkante (canvas::verweis_textmitte): Textmitte auf Höhe der Lage
+        let text_pos = P::new(at.x + dx, at.y - 0.6 * canvas::VERWEIS_TEXT);
+        let kind = Kind::Verweis { pos: at, text_pos, text, dir: 0, vertical: false, spitze, ziel: None };
+        self.with_sheet(|s, _| s.objects.push(Obj { id, kind, pen: 0, fixed: false, group: None, raw: None }));
+        self.selection = vec![id];
     }
 
 
@@ -1734,7 +1731,11 @@ impl App {
                     ui.strong(if *start { "Verweis – Start" } else { "Verweis – Ziel" });
                     ui.horizontal(|ui| {
                         ui.label("Beschriftung (z. B. /3.4 oder =UV1+W2)");
-                        ui.text_edit_singleline(text);
+                        // Fokus ins Feld (Nachzeichnen 24.11.2026: ohne Klick ins Feld ging die Eingabe verloren)
+                        let r = ui.text_edit_singleline(text);
+                        if ui.memory(|m| m.focused().is_none()) {
+                            r.request_focus();
+                        }
                     });
                 }
                 XDialog::SymName { name, bmk } => {

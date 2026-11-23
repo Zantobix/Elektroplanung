@@ -980,6 +980,21 @@ impl App {
         if self.cur().is_none() {
             return;
         }
+        // beim Ziehen über den Rand der Zeichenfläche die Ansicht mitschieben (rand_schieben.rs)
+        let geste = !matches!(self.drag, Drag::None | Drag::Pan { .. } | Drag::Kurve(_));
+        let taste = ui.input(|i| (i.pointer.primary_down() || i.pointer.secondary_down()) && i.pointer.is_decidedly_dragging());
+        if geste && taste && !ui.ctx().any_popup_open() {
+            if let Some(m) = ui.input(|i| i.pointer.latest_pos()) {
+                let v = crate::rand_schieben::schritt(area, m);
+                if v != Vec2::ZERO {
+                    let (sw, sh) = self.sheet().map(|s| s.dims()).unwrap_or((SHEET_W, SHEET_H));
+                    let blatt = Vec2::new(sw * self.view.zoom, sh * self.view.zoom);
+                    self.view.offset = crate::rand_schieben::begrenzt(self.view.offset, v, area.size(), blatt);
+                    self.view.user = true;
+                    ui.ctx().request_repaint();
+                }
+            }
+        }
         let xf0 = Xf { origin: area.min + self.view.offset, z: self.view.zoom };
         self.handle_canvas_input(ui, &resp, area, xf0);
         // Statuszeile wie PaintBox1MouseMove: DeltaX/DeltaY beim Ziehen, Objekt unter der Maus (meldungen.rs)
