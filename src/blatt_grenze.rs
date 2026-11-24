@@ -10,7 +10,14 @@ use crate::symbols::SymDef;
 
 /// Gesamtverschiebung `total` der Objekte `bewegt` (aus `objs`, jetzt um `angewandt` verschoben) begrenzen.
 pub fn begrenzen(sheet: &Sheet, lib: &[SymDef], objs: &[Obj], bewegt: &[u64], angewandt: P, total: P) -> P {
+    begrenzen_mit(sheet, lib, objs, bewegt, angewandt, total, 0.0)
+}
+
+/// Wie `begrenzen`, ohne die unteren `unten` mm des Rahmens (Schriftfeld; Nachzeichnen 24.11.2026, B50/S10: eine
+/// Steckdose ließ sich ins Schriftfeld ziehen).
+pub fn begrenzen_mit(sheet: &Sheet, lib: &[SymDef], objs: &[Obj], bewegt: &[u64], angewandt: P, total: P, unten: f32) -> P {
     let (x0, y0, x1, y1) = sheet.frame();
+    let y1 = if y1 >= y0 { y1 - unten } else { y1 + unten };
     let mut mn = P::new(f32::MAX, f32::MAX);
     let mut mx = P::new(f32::MIN, f32::MIN);
     for o in objs.iter().filter(|o| bewegt.contains(&o.id)) {
@@ -53,5 +60,8 @@ mod tests {
         // innerhalb: unverändert
         assert_eq!(begrenzen(&s, &lib, std::slice::from_ref(&o), &[1], P::default(), P::new(10.0, -10.0)), P::new(10.0, -10.0));
         let _ = w;
+        // mit Schriftfeld (20 mm): Unterkante endet über dem Schriftfeld
+        let t = begrenzen_mit(&s, &lib, std::slice::from_ref(&o), &[1], P::default(), P::new(0.0, 500.0), 20.0);
+        assert!((b.y.max(a.y) + t.y - (fy0.max(fy1) - 20.0)).abs() < 1e-3, "{t:?}");
     }
 }

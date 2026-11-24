@@ -707,7 +707,11 @@ impl App {
             let resp = ui.interact(rr, ui.scope_id().with(("tab", i)), Sense::click_and_drag());
             let p = ui.painter();
             p.rect_filled(rr, 0.0, if sel { Color32::WHITE } else { BG });
-            p.rect_stroke(rr, 0.0, Stroke::new(1.0, Color32::from_gray(217)), StrokeKind::Inside);
+            p.rect_stroke(rr, 0.0, Stroke::new(1.0, Color32::from_gray(if sel { 140 } else { 217 })), StrokeKind::Inside);
+            // aktiver Reiter deutlich (Nachzeichnen 24.11.2026, B2/S1): blauer Balken oben
+            if sel {
+                p.rect_filled(Rect::from_min_size(rr.left_top(), Vec2::new(rr.width(), 3.0)), 0.0, Color32::from_rgb(0, 120, 215));
+            }
             p.galley(Pos2::new(rr.left() + 6.0, rr.top() + 3.0), g, Color32::BLACK);
             if resp.clicked() {
                 clicked = Some(i);
@@ -1590,7 +1594,22 @@ impl App {
                         self.drag = Drag::Move { start: self.snap(m), applied: P::default(), moved: false };
                         return;
                     }
-                    if let Some(pin) = self.pin_near(m, tol, &[]).filter(|p| !ctrl && klemme_bei(*p).is_none()) {
+                    // ein kurzes Leitungsstück, das ganz im Fangbereich des Pins liegt, lässt sich abseits des Pins
+                    // markieren statt dort eine neue Leitung zu beginnen (Nachzeichnen 24.11.2026, B51/S6: ein 3-mm-
+                    // Stück am PE-Pin ließ sich nur mit Strg+Klick löschen)
+                    let kurz_getroffen = |pin: P| {
+                        m.dist(pin) > tol * 0.4
+                            && self.sheet().is_some_and(|s| {
+                                s.objects.iter().any(|o| match &o.kind {
+                                    Kind::Wire { pts, .. } => {
+                                        let l: f32 = pts.windows(2).map(|w| w[0].dist(w[1])).sum();
+                                        l < 2.0 * tol && pts.iter().any(|q| q.dist(pin) < 0.05) && canvas::hit(o, m, tol * 0.5, &self.lib)
+                                    }
+                                    _ => false,
+                                })
+                            })
+                    };
+                    if let Some(pin) = self.pin_near(m, tol, &[]).filter(|p| !ctrl && klemme_bei(*p).is_none() && !kurz_getroffen(*p)) {
                         let on_selected = self.selected_objs().iter().any(|o| canvas::hit(o, m, tol, &self.lib));
                         if !on_selected {
                             self.drag = Drag::Wire { f: crate::leitung_fuehrung::Fuehrung::neu(pin) };
@@ -1730,7 +1749,9 @@ impl App {
             // Papiers, die Leitungen liefen durch das Schriftfeld hinaus): Verschiebung so begrenzen, dass der Umriss der
             // bewegten Objekte im Blatt bleibt
             if let Some(s) = self.sheet().filter(|_| !movable.is_empty()) {
-                total = crate::blatt_grenze::begrenzen(s, &self.lib, &objs, &movable, applied, total);
+                // nicht ins Schriftfeld (außer auf dem Deckblatt, das keins hat)
+                let schriftfeld = if s.blattart() == 0 { 0.0 } else { self.project.title_h() };
+                total = crate::blatt_grenze::begrenzen_mit(s, &self.lib, &objs, &movable, applied, total, schriftfeld);
             }
             let d = total.sub(applied);
             if (d.x.abs() > 1e-4 || d.y.abs() > 1e-4) && !movable.is_empty() {
@@ -2243,7 +2264,10 @@ impl App {
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
         self.blatt_verfolgen();
-        if ctx.egui_wants_keyboard_input() || self.dialog.is_some() || self.xdlg.is_some() || self.opt_dlg.is_some() || self.ask_save.is_some() || self.multi_props.is_some() {
+        // bei offenem Dialog, Variantenrad oder Kontextmenü wirken keine Zeichnungskürzel (Nachzeichnen 24.11.2026,
+        // B23/S3: Strg+A/C/V und Alt+Enter wirkten bei offenem Eigenschaftendialog auf die Zeichnung)
+        let modal = self.props.is_some() || self.dlg2.is_some() || self.dlg3.is_some() || self.ring.is_some() || self.meldung.is_some() || ctx.any_popup_open();
+        if modal || ctx.egui_wants_keyboard_input() || self.dialog.is_some() || self.xdlg.is_some() || self.opt_dlg.is_some() || self.ask_save.is_some() || self.multi_props.is_some() {
             self.hold_s = false;
             self.hold_a = false;
             self.no_snap = false;

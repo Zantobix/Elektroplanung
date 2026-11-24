@@ -246,6 +246,8 @@ impl App {
         if esc || press_r {
             self.placing = None;
             self.lib_drag = false;
+            // Rückmeldung statt stillem Abbruch (Nachzeichnen 24.11.2026, B8/S7)
+            self.info = "Ablegen abgebrochen".into();
             return true;
         }
         let c = xf.s(ring.at);
@@ -261,6 +263,7 @@ impl App {
         }
         if setzen {
             self.place_symbol_opt(ring.key.clone(), ring.at, ring.sel as u16);
+            self.info = format!("Symbol abgelegt (Bild {})", ring.sel + 1);
             self.placing = None;
             self.lib_drag = false;
             self.tool = crate::app::Tool::Select;

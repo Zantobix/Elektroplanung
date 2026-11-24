@@ -1202,8 +1202,11 @@ impl App {
         if let Some(i) = self.tabs.iter().position(|t| *t == r) {
             self.active = i;
         } else {
-            self.tabs.push(r);
-            self.active = self.tabs.len() - 1;
+            // nach Anlage und Blatt einsortieren (Nachzeichnen 24.11.2026, B5/S1: neues Blatt der Anlage 1 stand
+            // hinter den Blättern der Anlage 2, bis zum Neuladen)
+            let i = self.tabs.iter().position(|t| (t.anlage, t.sheet) > (r.anlage, r.sheet)).unwrap_or(self.tabs.len());
+            self.tabs.insert(i, r);
+            self.active = i;
         }
         self.selection.clear();
     }
