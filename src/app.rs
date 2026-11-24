@@ -672,6 +672,16 @@ impl App {
         self.mark_sheet_changed();
     }
 
+    /// Hat der letzte Rückgängig-Schritt auf dem aktuellen Blatt nichts verändert (z. B. ein Ziehen, das der
+    /// Netz-Wächter ganz abgewiesen hat), wird er entfernt – sonst nähme Strg+Z „nichts“ zurück (Nachzeichnen
+    /// 24.11.2026, Befund 82).
+    pub fn leeren_schritt_entfernen(&mut self) {
+        let (Some(r), Some(s)) = (self.cur(), self.sheet()) else { return };
+        if self.undo.last().and_then(|p| p.sheet(r)).is_some_and(|alt| alt.objects == s.objects) {
+            self.undo.pop();
+        }
+    }
+
     pub fn do_undo(&mut self) {
         if let Some(p) = self.undo.pop() {
             self.redo.push(std::mem::replace(&mut self.project, p));

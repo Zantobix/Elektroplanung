@@ -2404,6 +2404,7 @@ impl App {
             self.netz_merken();
             self.netz_verschieben(&sel, d);
             self.aufraeumen();
+            self.leeren_schritt_entfernen();
             // mit gehaltener Taste A wie im Original: freie Anschlüsse nach dem Schritt automatisch verbinden
             if self.hold_a {
                 if let Some(p) = self.hold_press[1].as_mut() {

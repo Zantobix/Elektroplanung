@@ -343,6 +343,7 @@ impl crate::app::App {
             _ => return,
         }
         self.aufraeumen();
+        self.leeren_schritt_entfernen();
     }
 
     /// Nach jeder Bearbeitung von Leitungen (gleicher Rückgängig-Schritt): übereinanderliegende vereinigen,

@@ -33,6 +33,8 @@ erhält der Abschnitt deren Nummer.
 - Lange Texte im Schriftfeld (z. B. Blattnamen) halten 0,5 mm Abstand zu den Feldlinien.
 - Doppelklick knapp neben ein Objekt (bis 12 Pixel, z. B. eine Sammelschiene) öffnet dessen Eigenschaften statt der
   Blatteigenschaften.
+- Ein Verschieben oder Pfeiltasten-Schritt, der nichts verändert hat (z. B. vom Netz-Wächter abgewiesen), hinterlässt
+  keinen leeren Rückgängig-Schritt mehr.
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]
