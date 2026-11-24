@@ -1493,11 +1493,27 @@ impl App {
             return;
         }
 
+        if inside && self.tool == Tool::Select && self.opt.mehrfachklick_leitung && !ctrl && ui.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)) {
+            if let Some(id) = self.selection.first().copied().filter(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == *id && matches!(o.kind, Kind::Wire { .. })))) {
+                self.drag = Drag::None;
+                self.netz_markieren(id);
+                return;
+            }
+        }
         if inside && dbl && self.tool == Tool::Select {
             // Verweis / Querverweis einer Sammelschiene: zum Ziel springen (Option "Doppelklick auf Verweise")
             // knapp daneben (bis 12 px) zählt noch als Treffer, bevor die Blatteigenschaften aufgehen (Nachzeichnen
             // 24.11.2026, B34: Doppelklick knapp neben eine Sammelschiene öffnete die Blatteigenschaften)
             let top = self.doppelklick_ziel(m, tol);
+            // Mehrfachklick auf eine Leitung (Option, nach PADS): Doppelklick = bis zum nächsten Knoten,
+            // Dreifachklick = ganzes Netz; Eigenschaften über Alt+Enter bzw. Kontextmenü
+            if self.opt.mehrfachklick_leitung && !ctrl {
+                if let Some(id) = self.hit_top(m, tol).filter(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == *id && matches!(o.kind, Kind::Wire { .. })))) {
+                    self.drag = Drag::None;
+                    self.kette_markieren(id);
+                    return;
+                }
+            }
             if self.verweis_doppelklick(top, m, tol) {
                 self.drag = Drag::None;
                 return;

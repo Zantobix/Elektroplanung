@@ -157,7 +157,61 @@ pub fn anschluesse(sheet: &Sheet, lib: &[SymDef], netz: &[u64]) -> Vec<(u64, P)>
         .collect()
 }
 
+/// Leitungskette um die Leitung `id` (Mehrfachklick, Nutzer 24.11.2026 nach PADS): an jedem Ende weiter, solange dort
+/// genau eine andere Leitung mit ihrem Ende anschließt und sonst nichts (kein Anschluss, keine Klemmstelle, keine
+/// Schiene, kein Abzweig) – also bis zum nächsten Knoten.
+pub fn kette(sheet: &Sheet, lib: &[SymDef], id: u64) -> Vec<u64> {
+    let enden = |o: &crate::model::Obj| match &o.kind {
+        Kind::Wire { pts, .. } if pts.len() >= 2 => Some([pts[0], pts[pts.len() - 1]]),
+        _ => None,
+    };
+    let pins: Vec<P> = sheet.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).flat_map(|o| obj_pins(o, lib)).collect();
+    let mut out = vec![id];
+    let mut offen = vec![id];
+    while let Some(w) = offen.pop() {
+        let Some(e) = sheet.objects.iter().find(|o| o.id == w).and_then(|o| enden(o)) else { continue };
+        for p in e {
+            if pins.iter().any(|q| q.dist(p) <= crate::mitziehen::PIN_TOL) {
+                continue;
+            }
+            let mut naechste = vec![];
+            let mut sonst = false;
+            for o in sheet.objects.iter().filter(|o| o.id != w) {
+                match &o.kind {
+                    Kind::Wire { pts, .. } if pts.len() >= 2 => {
+                        if pts[0].dist(p) < T || pts[pts.len() - 1].dist(p) < T {
+                            naechste.push(o.id);
+                        } else if im_innern(pts, p) {
+                            sonst = true;
+                        }
+                    }
+                    k => {
+                        if beruehrt(k, p) {
+                            sonst = true;
+                        }
+                    }
+                }
+            }
+            // auch ein Abzweig im Innern einer Kettenleitung an diesem Punkt zählt nicht weiter (Knoten)
+            if !sonst && naechste.len() == 1 && !out.contains(&naechste[0]) {
+                out.push(naechste[0]);
+                offen.push(naechste[0]);
+            }
+        }
+    }
+    out.sort_unstable();
+    out
+}
+
 impl crate::app::App {
+    /// Doppelklick auf eine Leitung: die Kette bis zum nächsten Knoten markieren.
+    pub fn kette_markieren(&mut self, id: u64) {
+        let Some(s) = self.sheet() else { return };
+        let ids = kette(s, &self.lib, id);
+        self.info = format!("Leitung bis zum nächsten Knoten: {} Leitung(en) (Dreifachklick: ganzes Netz)", ids.len());
+        self.selection = ids;
+    }
+
     /// Kontextmenü „Netz markieren“ (bewusste Erweiterung): alle Leitungen markieren, die mit der Leitung `id`
     /// elektrisch zusammenhängen.
     pub fn netz_markieren(&mut self, id: u64) {
@@ -232,5 +286,23 @@ mod tests {
         n.sort();
         assert_eq!(n, vec![vec![1, 2], vec![3]]);
         assert!(anschluesse(&s, &[], &[1, 2]).is_empty());
+    }
+
+    #[test]
+    fn kette_bis_zum_knoten() {
+        let w = |id: u64, v: &[(f32, f32)]| Obj { id, kind: Kind::Wire { pts: v.iter().map(|&(x, y)| p(x, y)).collect(), leitung: 0, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None };
+        let mut s = Sheet::new(1);
+        // 1 → 2 → 3 Ende an Ende, an (20|10) ein Knoten mit 4 und 5; 6 hängt frei an 5
+        s.objects.push(w(1, &[(0.0, 0.0), (10.0, 0.0)]));
+        s.objects.push(w(2, &[(10.0, 0.0), (10.0, 10.0)]));
+        s.objects.push(w(3, &[(10.0, 10.0), (20.0, 10.0)]));
+        s.objects.push(w(4, &[(20.0, 10.0), (30.0, 10.0)]));
+        s.objects.push(w(5, &[(20.0, 10.0), (20.0, 30.0)]));
+        s.objects.push(w(6, &[(20.0, 30.0), (40.0, 30.0)]));
+        assert_eq!(kette(&s, &[], 2), vec![1, 2, 3]);
+        assert_eq!(kette(&s, &[], 5), vec![5, 6]);
+        assert_eq!(kette(&s, &[], 4), vec![4]);
+        // ganzes Netz: alle sechs
+        assert_eq!(netze(&s, &[]).len(), 1);
     }
 }

@@ -246,6 +246,10 @@ nicht. Gemessen werden stattdessen:
     Pfeiltasten und Einfügen verbinden nie ungewollt fremde Netze –
     was nur mit Kurzschluss, Trennung oder zwei Potentialen übereinander ginge, wird nicht ausgeführt (Meldung in der
     Statuszeile); ein freies Leitungsende darf gezielt verbinden (`src/netz_waechter.rs`, abschaltbar).
+  - Mehrfachklick auf Leitungen (nach PADS, Nutzer 24.11.2026): Klick markiert die Leitung, Doppelklick die Kette bis
+    zum nächsten Knoten (Abzweig, Anschluss, Klemmstelle, Schiene), Dreifachklick das ganze Netz. Eigenschaften einer
+    Leitung dann über Alt+Enter oder das Kontextmenü; bei Symbolen und allem anderen öffnet der Doppelklick weiter die
+    Eigenschaften (Option, `src/netz.rs` `kette`).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).

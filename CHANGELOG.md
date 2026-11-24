@@ -45,6 +45,9 @@ erhält der Abschnitt deren Nummer.
 - Blattreiter: ein Blatt lässt sich in die freie Fläche hinter den letzten Reiter ziehen (ans Ende der Anlage); die
   Ablagemarke zeigt, ob vor oder hinter dem Ziel eingefügt wird; nach Rückgängig/Wiederholen folgen die Reiter wieder
   der Blattfolge.
+- Mehrfachklick auf Leitungen (wie in PADS): Doppelklick markiert bis zum nächsten Knoten, Dreifachklick das ganze
+  Netz; die Eigenschaften einer Leitung öffnen dann mit Alt+Enter oder über das Kontextmenü (Optionen ›
+  Programmverhalten, abschaltbar – dann wie im Original).
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]

@@ -50,6 +50,10 @@ pub struct Optionen {
     pub einbinden_beim_verschieben: bool,
     /// Bearbeitungen abweisen, die fremde Netze kurzschließen würden (Nachbau-Erweiterung, `netz_waechter.rs`)
     pub netz_waechter: bool,
+    /// Mehrfachklick auf Leitungen wie in PADS: Doppelklick markiert bis zum nächsten Knoten, Dreifachklick das ganze
+    /// Netz; Eigenschaften dann über Alt+Enter bzw. Kontextmenü (Nutzer 24.11.2026). Aus = Doppelklick öffnet wie im
+    /// Original die Eigenschaften.
+    pub mehrfachklick_leitung: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
     pub sym_hoehe: f32,
@@ -117,6 +121,7 @@ impl Default for Optionen {
             hilfslinien: true,
             einbinden_beim_verschieben: true,
             netz_waechter: true,
+            mehrfachklick_leitung: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
             blatt_farbe: [238, 221, 221],
@@ -339,6 +344,7 @@ impl App {
                                     mark(ui, &mut o.hilfslinien, "Hilfslinien beim Verschieben");
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
+                                    mark(ui, &mut o.mehrfachklick_leitung, "Leitung: Doppelklick bis Knoten, Dreifachklick ganzes Netz");
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
                                     mark(ui, &mut o.markieren_cad, "Markierrichtung wie CAD (→ eingeschlossen, ← berührt)");
                                     ui.horizontal(|ui| {
