@@ -54,7 +54,7 @@ pub struct Optionen {
     /// Netz; Eigenschaften dann über Alt+Enter bzw. Kontextmenü (Nutzer 24.11.2026). Aus = Doppelklick öffnet wie im
     /// Original die Eigenschaften.
     pub mehrfachklick_leitung: bool,
-    /// Linux-AppImage: Startmenü-Eintrag mit Programmsymbol im Benutzerordner anlegen (desktop_eintrag.rs)
+    /// Linux: Startmenü-Eintrag mit Programmsymbol im Benutzerordner anlegen (AppImage bzw. direkt gestartet, desktop_eintrag.rs)
     pub desktop_eintrag: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
@@ -64,6 +64,9 @@ pub struct Optionen {
     /// Farbe des Rastergitters (Original: "Rasterdarstellung", dort ausgeblendet)
     pub raster_farbe: [u8; 3],
     pub mausrad_umkehren: bool,
+    /// Ziehen mit der mittleren Maustaste: aus = das Blatt folgt der Maus (greifen), an = die Ansicht wandert in die
+    /// Richtung, in die die Maus zeigt (Blatt entgegen); Nutzer 24.11.2026
+    pub mitte_umkehren: bool,
     // Projektvorgaben1
     pub format: (i32, i32),
     pub hochformat: bool,
@@ -130,6 +133,7 @@ impl Default for Optionen {
             blatt_farbe: [238, 221, 221],
             raster_farbe: rgb(RASTER_MITTEL),
             mausrad_umkehren: false,
+            mitte_umkehren: false,
             format: a.format,
             hochformat: false,
             raender: a.raender,
@@ -325,6 +329,7 @@ impl App {
                                     ui.set_width(245.0);
                                     ui.label("Maus");
                                     mark(ui, &mut o.mausrad_umkehren, "Mausrad umkehren");
+                                    mark(ui, &mut o.mitte_umkehren, "Mittlere Maustaste: Ansicht in Mausrichtung");
                                 });
                             });
                             ui.vertical(|ui| {
@@ -349,7 +354,7 @@ impl App {
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
                                     mark(ui, &mut o.mehrfachklick_leitung, "Leitung: Doppelklick bis Knoten, Dreifachklick ganzes Netz");
                                     if cfg!(target_os = "linux") {
-                                        mark(ui, &mut o.desktop_eintrag, "AppImage im Startmenü eintragen (mit Symbol)");
+                                        mark(ui, &mut o.desktop_eintrag, "Im Startmenü eintragen (mit Programmsymbol)");
                                     }
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
                                     mark(ui, &mut o.markieren_cad, "Markierrichtung wie CAD (→ eingeschlossen, ← berührt)");

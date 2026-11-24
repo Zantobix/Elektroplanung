@@ -718,6 +718,11 @@ pub fn draw_object(dc: &DrawCtx, o: &Obj, color_override: Option<Color32>) {
                 }
             };
             if !xin.is_empty() {
+                // Schiene läuft unter dem Pfeil weiter bis zu seiner Grundseite: die Spitze geht wie im Original-Ausdruck
+                // in die Linie über (Nutzer 24.11.2026: Pfeil „abgesetzt, nicht an die Leitung integriert“)
+                if pfeile {
+                    p.line_segment([xf.s(P::new(a.x - 2.0, a.y)), xf.s(*a)], st);
+                }
                 arrow(*a);
                 p.text(xf.s(P::new(a.x - 2.2, a.y)), Align2::RIGHT_CENTER, xin, times(1.8 * z), tc);
             }

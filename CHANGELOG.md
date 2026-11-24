@@ -16,8 +16,18 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 Änderungen nach 0.5.1 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `### Behoben` (leere weglassen).
 
+### Neu
+
+- Optionen › Maus: „Mittlere Maustaste: Ansicht in Mausrichtung“ – kehrt die Richtung beim Verschieben der Ansicht
+  mit gedrückter mittlerer Maustaste um (Standard bleibt: das Blatt folgt der Maus).
+
 ### Geändert
 
+- Neues Programmsymbol (Schaltplan-Blatt mit Schalter und Lampe) statt des Blitzes.
+- Linux: auch das direkt gestartete Programm (nicht nur das AppImage) trägt sich mit Symbol ins Startmenü ein, wenn
+  noch kein Eintrag besteht – sonst zeigte GNOME/Wayland im Dock das Ersatzsymbol.
+- Der Verschiebe-Zeiger hat kräftigere Pfeile; über den Querverweistexten der Sammelschienen erscheinen kein
+  gestrichelter Rahmen und kein Zusatzzeichen mehr (Strg+Klick springt weiter zum Ziel).
 - Ein vorhandenes Symbol lässt sich nicht mehr auf ein anderes schieben oder drehen (Körper übereinander): es bleibt
   an der letzten zulässigen Stelle stehen, mit Hinweis in der Statuszeile. Eingefügte Kopien sind ausgenommen.
 - Hinweise, dass eine Bearbeitung nicht ausgeführt wurde, bleiben jetzt einige Sekunden in der Statuszeile stehen
@@ -25,6 +35,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Sammelschienen „mit Pfeilen“: der Pfeil am Anfang saß abgesetzt vor der Linie; die Schiene läuft jetzt wie im
+  Original-Ausdruck bis in den Pfeil.
 - Leitungen zeichnen: eine neu gezogene Leitung verbindet nur noch, wo sie anfängt und endet. Vorher konnte ihr Weg
   über einen fremden Anschluss, ein fremdes Leitungsende oder eine Klemmstelle laufen oder einen Knick auf eine
   fremde Leitung setzen – und damit zwei Netze ungewollt verbinden (Zufallsprüfung auf einem großen Beispielplan:

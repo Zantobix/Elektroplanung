@@ -173,7 +173,8 @@ pub fn waehlen(z: &Zustand) -> Zeigerwahl {
         // eigenständige Texte sind im Original Zeichenobjekte: Pfeilkreuz wie Linie oder Rechteck
         Ziel::Text { .. } => Zeigerwahl::pfeil(Verschieben),
         Ziel::Verweis { .. } if z.strg => Zeigerwahl::nur(CursorIcon::PointingHand),
-        Ziel::Verweis { text: true, .. } => Zeigerwahl::pfeil(Text),
+        // Querverweistext einer Schiene: kein Verschiebe-/Textzeiger (Nutzer 24.11.2026), Hinweis Strg+Klick bleibt
+        Ziel::Verweis { text: true, .. } => Zeigerwahl::nur(CursorIcon::Default),
         Ziel::Verweis { .. } => Zeigerwahl::pfeil(Anschluss),
         // Knick einer Leitung: Zeiger 5 wie an den Punkten der Zeichenobjekte (knick_ziehen.rs)
         Ziel::Leitung { .. } if z.knick => Zeigerwahl::pfeil(Punkt),
@@ -268,10 +269,14 @@ pub fn zusatz(p: &egui::Painter, c: Pos2, z: Zusatz) {
     let (x, y) = (Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0));
     match z {
         Zusatz::Verschieben => {
-            zug(p, &[c - x * 5.0, c + x * 5.0]);
-            zug(p, &[c - y * 5.0, c + y * 5.0]);
+            // kräftiger als die übrigen Zusätze (Nutzer 24.11.2026: Pfeile nach rechts/links/oben/unten kaum zu
+            // erkennen): breitere Striche, größere Spitzen
+            for st in [Stroke::new(5.0, Color32::WHITE), Stroke::new(2.5, Color32::BLACK)] {
+                p.add(Shape::line_segment([c - x * 6.0, c + x * 6.0], st));
+                p.add(Shape::line_segment([c - y * 6.0, c + y * 6.0], st));
+            }
             for d in [x, -x, y, -y] {
-                spitze(p, c + d * 7.0, d, 2.2);
+                spitze(p, c + d * 9.5, d, 3.4);
             }
         }
         Zusatz::Text => {
@@ -407,7 +412,7 @@ mod tests {
     fn strg_und_verweise() {
         let verweis = |text| Some(Ziel::Verweis { id: 1, mn: P::default(), mx: P::default(), text });
         assert_eq!(waehlen(&zustand(verweis(false))).zusatz, Some(Zusatz::Anschluss));
-        assert_eq!(waehlen(&zustand(verweis(true))).zusatz, Some(Zusatz::Text));
+        assert_eq!(waehlen(&zustand(verweis(true))), Zeigerwahl { system: CursorIcon::Default, zusatz: None });
         let mut s = zustand(verweis(false));
         s.strg = true;
         assert_eq!(waehlen(&s), Zeigerwahl { system: CursorIcon::PointingHand, zusatz: None });

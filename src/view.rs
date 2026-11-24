@@ -1408,7 +1408,9 @@ impl App {
         if let Drag::Pan { last } = self.drag.clone() {
             if down_m {
                 if let Some(h) = hover {
-                    self.view.offset += h - last;
+                    // Standard: das Blatt folgt der Maus; Option „Mittlere Maustaste: Ansicht in Mausrichtung“ kehrt um
+                    let d = h - last;
+                    self.view.offset += if self.opt.mitte_umkehren { -d } else { d };
                     self.view.user = true;
                     self.drag = Drag::Pan { last: h };
                 }

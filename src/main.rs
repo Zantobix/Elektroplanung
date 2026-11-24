@@ -38,7 +38,7 @@ fn main() -> eframe::Result {
         if shot.is_none() && a.opt.update_pruefen {
             a.update.starten(&cc.egui_ctx, false);
         }
-        // Linux-AppImage: Startmenü-Eintrag mit Symbol (Option, desktop_eintrag.rs)
+        // Linux: Startmenü-Eintrag mit Symbol (AppImage oder direkt gestartet; Option, desktop_eintrag.rs)
         if shot.is_none() && a.opt.desktop_eintrag {
             if let Some(m) = elektroplanung::desktop_eintrag::einrichten() {
                 a.info = m;
@@ -52,32 +52,12 @@ fn main() -> eframe::Result {
     }))
 }
 
-/// Programmsymbol aus resources/elektroplanung.png; ersatzweise ein kleines gezeichnetes (Blitz auf Blatt).
+/// Programmsymbol aus resources/elektroplanung.png (tools/symbol_erzeugen.py); ersatzweise eine blaue Fläche.
 fn app_icon() -> egui::IconData {
     if let Some((rgba, width, height)) = elektroplanung::desktop_eintrag::fenster_symbol() {
         return egui::IconData { rgba, width, height };
     }
     let n = 32usize;
-    let mut rgba = vec![0u8; n * n * 4];
-    for y in 0..n {
-        for x in 0..n {
-            let i = (y * n + x) * 4;
-            let inside = (3..29).contains(&x) && (2..30).contains(&y);
-            let border = inside && (x == 3 || x == 28 || y == 2 || y == 29);
-            let (fx, fy) = (x as f32, y as f32);
-            let bolt = (fy > 5.0 && fy < 17.0 && (fx - (20.0 - (fy - 5.0) * 0.6)).abs() < 2.5)
-                || (fy >= 15.0 && fy < 27.0 && (fx - (17.0 - (fy - 15.0) * 0.6)).abs() < 2.5);
-            let c: [u8; 4] = if border {
-                [40, 40, 40, 255]
-            } else if bolt {
-                [230, 180, 0, 255]
-            } else if inside {
-                [255, 255, 255, 255]
-            } else {
-                [0, 0, 0, 0]
-            };
-            rgba[i..i + 4].copy_from_slice(&c);
-        }
-    }
+    let rgba = [30u8, 90, 160, 255].repeat(n * n);
     egui::IconData { rgba, width: n as u32, height: n as u32 }
 }

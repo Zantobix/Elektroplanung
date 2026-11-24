@@ -193,6 +193,8 @@ nicht. Gemessen werden stattdessen:
   und vergibt eine neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
 - Bewusste Erweiterungen gegenüber dem Original (bleiben, auch wenn das Original sie nicht hat):
+  - Ansicht mit gedrückter mittlerer Maustaste verschieben; Optionen › Maus „Mittlere Maustaste: Ansicht in
+    Mausrichtung“ kehrt die Richtung um (Standard: das Blatt folgt der Maus).
   - Textgenerator: Zähler wie im Original (`@` + ein Zeichen, Start 0 oder Wert in Klammern), dazu die Werte
     `@{Blatt}`, `@{Pfad}`, `@{Anlage}` und `@{Text}` (bisheriger Text).
   - Rasterweite je Projekt: Die gewählte Weite wird je Datei gemerkt; ist keine gemerkt, stellt das Öffnen die

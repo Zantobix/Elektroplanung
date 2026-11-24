@@ -47,6 +47,8 @@ impl Ziel {
     /// Umriss der Vormarkierung (None = keine).
     pub fn umriss(&self) -> Option<(P, P)> {
         match *self {
+            // Querverweistext einer Sammelschiene: kein Rahmen (Nutzer 24.11.2026 – er ist kein eigenes Objekt)
+            Ziel::Verweis { text: true, .. } => None,
             Ziel::Beschriftung { mn, mx, .. } | Ziel::Verweis { mn, mx, .. } | Ziel::Text { mn, mx, .. } | Ziel::Objekt { mn, mx, .. } => Some((mn, mx)),
             _ => None,
         }
@@ -137,6 +139,7 @@ mod tests {
         let objekt = Ziel::Objekt { id: 1, mn: r.0, mx: r.1, art: Objektart::Verschiebbar };
         assert!(Ziel::Anschluss.umriss().is_none() && Ziel::Griff(1).umriss().is_none() && objekt.umriss() == Some(r));
         assert!(Ziel::Leitung { id: 1 }.umriss().is_none());
-        assert_eq!(Ziel::Verweis { id: 1, mn: r.0, mx: r.1, text: true }.umriss(), Some(r));
+        assert_eq!(Ziel::Verweis { id: 1, mn: r.0, mx: r.1, text: true }.umriss(), None);
+        assert_eq!(Ziel::Verweis { id: 1, mn: r.0, mx: r.1, text: false }.umriss(), Some(r));
     }
 }
