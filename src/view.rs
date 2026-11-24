@@ -1165,7 +1165,13 @@ impl App {
             Drag::Rubber { start } => {
                 if let Some(h) = hover {
                     let r = Rect::from_two_pos(xf.s(*start), h);
-                    clip.add(egui::Shape::dashed_line(&[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()], Stroke::new(1.0, Color32::BLACK), 4.0, 3.0));
+                    // CAD-Markieren: links→rechts (eingeschlossen) durchgezogen, rechts→links (berührt) gestrichelt
+                    if self.opt.markieren_cad && h.x >= xf.s(*start).x {
+                        clip.rect_stroke(r, 0.0, Stroke::new(1.0, Color32::from_rgb(0, 0, 200)), StrokeKind::Middle);
+                    } else {
+                        let farbe = if self.opt.markieren_cad { Color32::from_rgb(0, 140, 0) } else { Color32::BLACK };
+                        clip.add(egui::Shape::dashed_line(&[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()], Stroke::new(1.0, farbe), 4.0, 3.0));
+                    }
                 }
             }
             Drag::Create { tool, start } => {
@@ -1780,8 +1786,9 @@ impl App {
                                 .objects
                                 .iter()
                                 .filter(|o| self.selectable(o))
-                                // wie im Original: Bezugspunkt im Rahmen (rahmenauswahl.rs)
-                                .filter(|o| crate::rahmenauswahl::im_rahmen(&o.kind, mn, mx))
+                                // wie im Original: Bezugspunkt im Rahmen; mit Option wie im CAD nach der Zugrichtung
+                                // (rahmenauswahl.rs)
+                                .filter(|o| if self.opt.markieren_cad { crate::rahmenauswahl::cad_treffer(o, &self.lib, start, m) } else { crate::rahmenauswahl::im_rahmen(&o.kind, mn, mx) })
                                 .map(|o| o.id)
                                 .collect();
                             for id in ids {
@@ -2219,6 +2226,10 @@ impl App {
                 if ui.button("Wunsch äußern…").clicked() {
                     self.meldung = Some(crate::fehlermeldung::Meldung::neu(crate::fehlermeldung::Art::Wunsch));
                 }
+                // Projektkopie, Eingabeprotokoll und Fensterbild in einen Ordner (fehlerbericht.rs)
+                if ui.button("Fehlerbericht speichern (F12)").clicked() {
+                    self.bericht_req = true;
+                }
                 ui.separator();
                 if ui.button("Nach neuer Version suchen").clicked() {
                     self.update.starten(ui.ctx(), true);
@@ -2601,6 +2612,10 @@ impl eframe::App for App {
         // Querverweise der Sammelschienen (Blatt/Pfad des vorigen und nächsten Vorkommens, Pfeile) nach Ablegen,
         // Verschieben, Löschen, Rückgängig sofort nachführen
         crate::epr::update_busbar_xrefs(&mut self.project);
+        // F12 bzw. Hilfe › Fehlerbericht speichern (fehlerbericht.rs)
+        if std::mem::take(&mut self.bericht_req) {
+            self.fehlerbericht_melden(&ctx);
+        }
         // Absturzschutz: bei ungespeicherten Änderungen zwischenspeichern (wiederherstellung.rs)
         if self.shot.is_none() {
             self.zwischenspeichern();
@@ -2670,6 +2685,8 @@ impl eframe::App for App {
         self.ask_save_ui(&ctx);
         self.suche_ui(&ctx);
         self.make_pdf(&ctx);
+        // Eingaben dieses Bildes für den Fehlerbericht merken (nach der Verarbeitung: Lage und Geste stimmen)
+        self.protokollieren(&ctx);
     }
 }
 
@@ -2941,6 +2958,7 @@ impl App {
                 self.drag = Drag::None;
                 self.zoom_tool = false;
             }
+            "fehlerbericht" => self.bericht_req = true,
             "w_linie" => self.werkzeug_melden(Tool::Line, "Linie"),
             "w_rechteck" => self.werkzeug_melden(Tool::Rect, "Rechteck"),
             "w_kreis" => self.werkzeug_melden(Tool::Circle, "Kreis"),

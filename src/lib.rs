@@ -73,6 +73,7 @@ pub mod mitziehen;
 pub mod netz_folgen;
 pub mod update_pruefung;
 pub mod wiederherstellung;
+pub mod fehlerbericht;
 pub mod hilfslinien;
 pub mod leitung_gedaechtnis;
 pub mod blatt_grenze;

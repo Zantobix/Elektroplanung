@@ -36,6 +36,8 @@ erhält der Abschnitt deren Nummer.
 - Schriftfeld „Geändert“ zeigt gleich das Datum statt „Heute“; Alternativtexte lesbar; „Benutzerdefiniert“ im
   Blattformat der Optionen gibt Breite und Höhe frei; Statuszeile zeigt die Zahl der markierten Objekte; Speichern
   eines neuen Projekts schlägt den Projektnamen im Ordner des zuletzt geöffneten Projekts vor.
+- Fehlerbericht: F12 bzw. Hilfe › Fehlerbericht speichern legt Projektkopie, Eingabeprotokoll und Fensterbild in
+  einen Ordner; Option „Markierrichtung wie CAD“ (links→rechts eingeschlossen, rechts→links berührt).
 
 ## [0.3.0]
 

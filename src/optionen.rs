@@ -40,6 +40,9 @@ pub struct Optionen {
     /// Absturzschutz: bei ungespeicherten Änderungen alle n Minuten zwischenspeichern, 0 = aus (Nachbau-Erweiterung,
     /// `wiederherstellung.rs`)
     pub sicherung_min: u32,
+    /// Rahmenauswahl wie im CAD: links→rechts eingeschlossen, rechts→links berührt (Nachbau-Erweiterung,
+    /// `rahmenauswahl.rs`); aus = wie im Original (Bezugspunkt im Rahmen)
+    pub markieren_cad: bool,
     /// Hilfslinien an den Anschlüssen beim Verschieben von Symbolen (Nachbau-Erweiterung, `hilfslinien.rs`)
     pub hilfslinien: bool,
     /// ein verschobenes Symbol ohne Leitungen, das auf eine Leitung abgelegt wird, in sie einbinden (Nachbau-
@@ -108,6 +111,7 @@ impl Default for Optionen {
             brueckenboegen: true,
             update_pruefen: true,
             sicherung_min: 2,
+            markieren_cad: false,
             hilfslinien: true,
             einbinden_beim_verschieben: true,
             sym_breite: 100.0,
@@ -332,6 +336,7 @@ impl App {
                                     mark(ui, &mut o.hilfslinien, "Hilfslinien beim Verschieben");
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
+                                    mark(ui, &mut o.markieren_cad, "Markierrichtung wie CAD (→ eingeschlossen, ← berührt)");
                                     ui.horizontal(|ui| {
                                         ui.label(RichText::new("Zwischenspeichern alle").font(bold(13.0)));
                                         ui.add(egui::DragValue::new(&mut o.sicherung_min).range(0..=60));

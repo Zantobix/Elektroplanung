@@ -244,6 +244,9 @@ pub struct App {
     pub update: crate::update_pruefung::Pruefung,
     /// Absturzschutz: Zwischenspeichern (wiederherstellung.rs)
     pub sicherung: crate::wiederherstellung::Stand,
+    /// letzte Eingaben für den Fehlerbericht (fehlerbericht.rs) und Auftrag „Bericht anlegen“ (F12)
+    pub protokoll: crate::fehlerbericht::Protokoll,
+    pub bericht_req: bool,
     /// weitere Dialoge (dialoge3.rs)
     pub dlg3: Option<crate::dialoge3::Dlg3>,
     /// Bibliotheksverwaltung: Reiter und Synchronisierung
@@ -383,6 +386,8 @@ impl App {
             show_library: false,
             update: Default::default(),
             sicherung: Default::default(),
+            protokoll: Default::default(),
+            bericht_req: false,
             dlg3: None,
             lib_tab: 0,
             lib_sync: (String::new(), true, true, 0, String::new()),

@@ -219,6 +219,11 @@ nicht. Gemessen werden stattdessen:
     (`wiederherstellung`), Wiederherstellen beim nächsten Start (`src/wiederherstellung.rs`).
   - Statuszeile ohne Objekt unter der Maus: bei einer Markierung deren Umfang („3 Objekte markiert“) statt „Kein
     Objekt“; Speichern eines neuen Projekts schlägt den Projektnamen im Ordner des zuletzt geöffneten Projekts vor.
+  - Markierrichtung wie CAD (Option, Programmverhalten): Rahmen von links nach rechts markiert nur ganz
+    eingeschlossene Objekte (Rahmen durchgezogen), von rechts nach links alles Berührte (gestrichelt); ohne Option wie
+    im Original (Bezugspunkt im Rahmen).
+  - Fehlerbericht (F12 bzw. Hilfe › Fehlerbericht speichern): Projektkopie, Protokoll der letzten Eingaben und Bild
+    des Fensters in einen Ordner unter `fehlerberichte` in den Einstellungen (`src/fehlerbericht.rs`).
   - Suche nach neuer Version: Hilfe › Nach neuer Version suchen und (abschaltbar unter Optionen ›
     Programmverhalten) einmal beim Start; fragt mit dem `curl` des Systems das neueste Release auf GitHub ab und zeigt
     bei einer neueren Version einen Hinweis mit Link, lädt aber nichts herunter (`src/update_pruefung.rs`).

@@ -45,6 +45,7 @@ pub const BEFEHLE: &[Befehl] = &[
     Befehl { id: "w_kreis", name: "Werkzeug: Kreis", vorgabe: "K" },
     Befehl { id: "w_text", name: "Werkzeug: Text", vorgabe: "T" },
     Befehl { id: "w_klemme", name: "Werkzeug: Klemmstelle", vorgabe: "X" },
+    Befehl { id: "fehlerbericht", name: "Fehlerbericht speichern", vorgabe: "F12" },
 ];
 
 /// Belegung eines Befehls (eigene aus den Optionen, sonst Vorgabe; leer = keine).
