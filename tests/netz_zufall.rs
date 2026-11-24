@@ -101,12 +101,19 @@ fn neue_bruecken(s: &Sheet, n: &Sheet, lib: &[elektroplanung::symbols::SymDef]) 
     out
 }
 
-#[test]
-fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
-    let Some(f) = std::env::var_os("EP_SAMPLE") else { return };
+/// Ergebnis eines Zufallslaufs: Bearbeitungen, Befunde (freie Enden, schräg, doppelte Punkte), Netzänderungen,
+/// abgewiesene Schritte, mitgeführte Leitungen über fremden Anschlüssen.
+struct Lauf {
+    fehler: usize,
+    netz: usize,
+    abgewiesen: usize,
+    ueber: usize,
+}
+
+fn zufall_lauf(f: std::ffi::OsString, seed: u64) -> Lauf {
     let mut app = test_app();
     app.open_path(std::path::PathBuf::from(f), false);
-    let mut z = Zufall(777);
+    let mut z = Zufall(seed);
     let (mut versuche, mut fehler) = (0, vec![]);
     let mut ueber_anschluss: Vec<String> = vec![];
     let mut netzfehler: Vec<String> = vec![];
@@ -241,15 +248,37 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     for (k, v) in &abgewiesen {
         println!("(abgewiesen) {v} × {k}");
     }
+    Lauf { fehler: fehler.len(), netz: netzfehler.len(), abgewiesen: app.netz_abgewiesen, ueber: ueber_anschluss.len() }
+}
+
+#[test]
+fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
+    let Some(f) = std::env::var_os("EP_SAMPLE") else { return };
+    let l = zufall_lauf(f, 777);
     // T2 Netz-Invariante, hart seit 24.11.2026 (erste Messung 150 von 733 verbanden fremde Netze; Netz-Wächter
     // netz_waechter.rs, Vereinigen nur im selben Netz, Gleis-Wandern nur auf dem eigenen Gleis, Querstück mit Stich)
-    assert!(netzfehler.is_empty(), "{} Bearbeitungen mit geänderten Netzen", netzfehler.len());
+    assert_eq!(l.netz, 0, "Bearbeitungen mit geänderten Netzen");
     // Kennzahl: vom Netz-Wächter abgewiesene Schritte (meist Zufallsziel auf einer fremden Leitung) – darf nur sinken
-    assert!(app.netz_abgewiesen <= 123, "{} Schritte abgewiesen", app.netz_abgewiesen);
-    assert!(fehler.is_empty());
+    assert!(l.abgewiesen <= 123, "{} Schritte abgewiesen", l.abgewiesen);
+    assert_eq!(l.fehler, 0);
     // Kennzahl (Runde 13): übrig sind Fälle, in denen die Zufallsverschiebung ein Objekt auf fremde Leitungen bzw.
     // Anschlüsse setzt und es keinen sauberen Weg mehr gibt
-    assert!(ueber_anschluss.len() <= 1, "{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
+    assert!(l.ueber <= 1, "{} mitgeführte Leitungen über fremden Anschlüssen", l.ueber);
+}
+
+/// Dasselbe auf dem mit der Maus nachgezeichneten Plan (todo N0: Netz-Invariante je nachgezeichnetem Blatt);
+/// private Datei `EP_FIXTURES/nachzeichnen/nachgezeichnet_2026-11-24c.epr`, ohne sie übersprungen.
+#[test]
+fn nachgezeichnet_zufaellige_bearbeitungen_halten_netze() {
+    let Some(dir) = std::env::var_os("EP_FIXTURES") else { return };
+    let f = std::path::PathBuf::from(dir).join("nachzeichnen/nachgezeichnet_2026-11-24c.epr");
+    if !f.exists() {
+        return;
+    }
+    let l = zufall_lauf(f.into_os_string(), 4711);
+    assert_eq!(l.netz, 0, "Bearbeitungen mit geänderten Netzen");
+    assert_eq!(l.fehler, 0);
+    println!("nachgezeichnet: {} abgewiesen, {} über fremden Anschlüssen", l.abgewiesen, l.ueber);
 }
 
 
