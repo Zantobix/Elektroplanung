@@ -74,3 +74,30 @@ fn n_leitung_nicht_durch_die_anschlussreihe() {
     let n = w.len();
     assert!((w[n - 2].x - w[n - 1].x).abs() < 0.01 && w[n - 2].y < w[n - 1].y, "{w:?}");
 }
+
+/// Motor rechts abgelegt: die automatische Verbindung (Strahl wie im Original) lief vom Anschluss N 145 mm nach links
+/// durch den Taster -Q2 bis zur PE-Leitung. Ein fremdes Symbol auf dem Strahl beendet ihn ohne Verbindung.
+#[test]
+fn auto_verbindung_nicht_durch_fremde_symbole() {
+    let Some(dir) = std::env::var("EP_FIXTURES").ok() else { return };
+    let pfad = std::path::PathBuf::from(dir).join("nachzeichnen/f3_motor.epr");
+    if !pfad.exists() {
+        return;
+    }
+    let mut app = test_app();
+    app.open_path(pfad, false);
+    app.tabs = vec![SheetRef { anlage: 1, sheet: 3 }];
+    app.active = 0;
+    let s = app.sheet().unwrap().clone();
+    // der Motor (im Nachbau ohne BMK abgelegt) hat Anschluss N bei (182,5 | 132,5)
+    let motor = s.objects.iter().find(|o| elektroplanung::canvas::obj_pins(o, &app.lib).iter().any(|q| q.dist(p(182.5, 132.5)) < 0.05)).expect("Motor").id;
+    let umrisse = elektroplanung::leitung_hindernis::umrisse(&s, &app.lib);
+    let wires = elektroplanung::app::auto_wires(&s, &app.lib, &[motor], elektroplanung::app::AUTO_CONN_MAX);
+    for (a, b) in &wires {
+        for u in umrisse.iter().filter(|u| u.id != motor) {
+            let (mn, mx) = (P::new(u.r.0.x.min(u.r.1.x) + 0.2, u.r.0.y.min(u.r.1.y) + 0.2), P::new(u.r.0.x.max(u.r.1.x) - 0.2, u.r.0.y.max(u.r.1.y) - 0.2));
+            let quer = if (a.y - b.y).abs() < 0.01 { a.y > mn.y && a.y < mx.y && a.x.max(b.x) > mn.x && a.x.min(b.x) < mx.x } else { a.x > mn.x && a.x < mx.x && a.y.max(b.y) > mn.y && a.y.min(b.y) < mx.y };
+            assert!(!quer, "automatische Leitung {a:?}–{b:?} durch Symbol {}", u.id);
+        }
+    }
+}

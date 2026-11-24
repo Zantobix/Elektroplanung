@@ -23,6 +23,13 @@ erhält der Abschnitt deren Nummer.
   die Netze ändern würden, unterbleiben.
 - Teilstück ziehen: ein Leitungsende auf einer Leitung wandert nicht mehr über eine Ecke auf eine fremde Schiene;
   am Anschluss entsteht bei Bedarf ein Stich vor dem Querstück (statt quer durch den Nachbaranschluss).
+- Zeichnen: eine neue Leitung läuft nicht mehr über fremde Anschlüsse, wenn die Vorschau ihre Form hält (vorher
+  konnte N auf Anschlusshöhe durch L- und N-Anschlüsse einer Steckdosenreihe laufen); Ersatzwege verlassen und
+  erreichen Anschlüsse bevorzugt in deren Richtung.
+- Automatische Verbindungen beim Ablegen enden an einem fremden Symbol statt durch es hindurch bis zur nächsten
+  Leitung zu laufen.
+- Nach der Auswahl im Rasterfang-Feld (oder einem Dialog) wirkten Strg+S, Strg+Z, Entf usw. nicht mehr, bis man
+  woanders hinklickte; ein Klick auf die Zeichenfläche gibt die Tastatur jetzt zurück.
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]

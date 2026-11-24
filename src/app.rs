@@ -1983,6 +1983,7 @@ pub fn auto_wires(sheet: &Sheet, lib: &[SymDef], ids: &[u64], max: f32) -> Vec<(
         .filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts) } else { None })
         .flat_map(|pts| pts.windows(2).map(|w| (w[0], w[1])).collect::<Vec<_>>())
         .collect();
+    let umrisse = crate::leitung_hindernis::umrisse(sheet, lib);
     for o in sheet.objects.iter().filter(|o| ids.contains(&o.id)) {
         if !matches!(o.kind, Kind::Symbol { .. } | Kind::Terminal { .. }) {
             continue;
@@ -2026,6 +2027,10 @@ pub fn auto_wires(sheet: &Sheet, lib: &[SymDef], ids: &[u64], max: f32) -> Vec<(
                         take(t);
                     }
                 }
+                // ein fremdes Symbol auf dem Strahl vor dem Ziel: keine Verbindung (Nachzeichnen 24.11.2026, Blatt
+                // -F3: der Strahl vom N des Motors lief 145 mm quer über das Blatt durch einen Taster bis zur PE-Leitung)
+                let durch = umrisse.iter().filter(|u| u.id != o.id).filter_map(|u| strahl_in_rechteck(p, d, u.r)).fold(f32::MAX, f32::min);
+                let best = best.filter(|t| *t < durch);
                 if let Some(t) = best {
                     out.push((p, P::new(p.x + d.x * t, p.y + d.y * t)));
                     break;
@@ -2034,6 +2039,29 @@ pub fn auto_wires(sheet: &Sheet, lib: &[SymDef], ids: &[u64], max: f32) -> Vec<(
         }
     }
     out
+}
+
+/// Strecke `t` (> 0), nach der der achsparallele Strahl `p + t·d` ins Innere des Rechtecks `r` eintritt (0,2 mm Rand
+/// nach innen, damit ein Strahl am Rand bzw. in einen Anschluss am Rand nicht zählt).
+fn strahl_in_rechteck(p: P, d: P, r: crate::leitung_hindernis::Rechteck) -> Option<f32> {
+    const R: f32 = 0.2;
+    let (mn, mx) = (P::new(r.0.x.min(r.1.x) + R, r.0.y.min(r.1.y) + R), P::new(r.0.x.max(r.1.x) - R, r.0.y.max(r.1.y) - R));
+    if mn.x >= mx.x || mn.y >= mx.y {
+        return None;
+    }
+    if d.y.abs() < 0.5 {
+        if p.y <= mn.y || p.y >= mx.y {
+            return None;
+        }
+        let t = if d.x > 0.0 { mn.x - p.x } else { p.x - mx.x };
+        (t > 0.0).then_some(t)
+    } else {
+        if p.x <= mn.x || p.x >= mx.x {
+            return None;
+        }
+        let t = if d.y > 0.0 { mn.y - p.y } else { p.y - mx.y };
+        (t > 0.0).then_some(t)
+    }
 }
 
 /// Richtungen nach außen für einen Anschluss am Umriss (mn, mx); an Ecken zuerst entlang der längeren Seite des
