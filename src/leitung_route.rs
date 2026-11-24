@@ -344,10 +344,53 @@ impl crate::app::App {
         } else {
             w
         };
+        let w = if f.klickbetrieb { w } else { self.ende_auf_schiene_verschieben(s, f, w) };
         let w = crate::klemme_leitung::enden_an_klemmen(s, w);
         // gegen Umspringen: Form des letzten Bildes halten, solange sie nicht deutlich schlechter ist
         let w = self.formhalt(f, ende, w);
         crate::klemme_leitung::enden_an_klemmen(s, w)
+    }
+
+    /// Läuft der Weg `w` durch ein Symbol und endet er auf einer Schiene bzw. Leitung (nicht an einem Anschluss), darf
+    /// sein Ende auf ihr in Rasterschritten entlangrutschen (nächste Lage zuerst, höchstens 10 Raster), bis der Weg
+    /// frei ist. Nachzeichnen 24.11.2026: PE vom oberen Pin der Steckdose senkrecht nach unten zur PE-Schiene – das
+    /// Ende lag genau unter der Steckdose, das senkrechte Stück konnte nicht ausweichen und lief durch sie hindurch.
+    fn ende_auf_schiene_verschieben(&self, s: &Sheet, f: &crate::leitung_fuehrung::Fuehrung, w: Vec<P>) -> Vec<P> {
+        let (Some(&a), Some(&e)) = (w.first(), w.last()) else { return w };
+        if anschluss_richtung(s, &self.lib, e).is_some() || !liegt_auf_leitung(s, e) {
+            return w;
+        }
+        let alle: Vec<_> = crate::leitung_hindernis::umrisse(s, &self.lib).into_iter().map(|u| u.r).collect();
+        let frei = |c: &[P]| crate::leitung_hindernis::kreuzungen(c, &crate::leitung_hindernis::wirksam(&alle, a, *c.last().unwrap())) == 0;
+        if frei(&w) {
+            return w;
+        }
+        // Richtung der Schiene/Leitung am Ende = quer zur Zulaufrichtung
+        let von = f.bahn.last().copied().unwrap_or_else(|| f.letzter());
+        let Some(d) = richtung_auf_leitung(s, e, von) else { return w };
+        let entlang = P::new(-d.y, d.x);
+        let r = self.raster().max(1.0);
+        // alle freien Lagen bewerten (Länge + je Knick ein Raster), die günstigste gewinnt; bei Gleichstand die
+        // nähere (Nachzeichnen: die erste freie Lage rechts führte PE von -X7 34 mm an der Schiene entlang)
+        let kosten = |c: &[P]| c.windows(2).map(|v| v[0].dist(v[1])).sum::<f32>() + r * c.len().saturating_sub(2) as f32;
+        let mut best: Option<(f32, Vec<P>)> = None;
+        for k in 1..=10 {
+            for v in [1.0, -1.0] {
+                let e2 = P::new(e.x + entlang.x * r * k as f32 * v, e.y + entlang.y * r * k as f32 * v);
+                // noch auf derselben Schiene/Leitung (und nicht an einem Anschluss)
+                if !liegt_auf_leitung(s, e2) || anschluss_richtung(s, &self.lib, e2).is_some() || richtung_auf_leitung(s, e2, von) != Some(d) {
+                    continue;
+                }
+                let c = crate::leitung_fuehrung::bereinigen(self.leitungsweg_roh(f, e2));
+                if frei(&c) && !ueberlappt(s, &c) && !ueber_fremdem_anschluss(s, &self.lib, &c) {
+                    let k = kosten(&c);
+                    if best.as_ref().is_none_or(|(b, _)| k < *b - 0.01) {
+                        best = Some((k, c));
+                    }
+                }
+            }
+        }
+        best.map(|(_, c)| c).unwrap_or(w)
     }
 
     fn leitungsweg_roh(&self, f: &crate::leitung_fuehrung::Fuehrung, ende: P) -> Vec<P> {

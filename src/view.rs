@@ -1653,8 +1653,13 @@ impl App {
         }
         // Knickrichtung nach dem gezeichneten Ende (gefangen) verfolgen: Form halten bis Länge 0 (leitung_knick.rs)
         self.leitung_zug_bewegen(m, xf.z);
-        if matches!(self.drag, Drag::Teilstueck { .. }) {
-            self.teilstueck_ziehen(m);
+        // erst ziehen, wenn sich die Maus seit dem Drücken bewegt hat: ein bloßer Klick auf eine Leitung neben dem Raster
+        // rückte sonst ihr Teilstück auf das Raster (Nachzeichnen 24.11.2026, Klick auf PE-Leitung 155,7 → 155 mm)
+        if let Drag::Teilstueck { moved, .. } = self.drag {
+            let bewegt = ui.input(|i| i.pointer.press_origin().zip(i.pointer.hover_pos()).is_some_and(|(a, b)| a.distance(b) > 3.0));
+            if moved || bewegt {
+                self.teilstueck_ziehen(m);
+            }
         }
         if matches!(self.drag, Drag::Zeichenpunkt { .. }) {
             self.zeichenpunkt_ziehen(m, xf.z);
