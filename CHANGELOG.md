@@ -9,8 +9,14 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
-Änderungen nach 0.3.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
+Änderungen nach 0.4.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer.
+
+## [0.4.0]
+
+Schwerpunkt: Befunde aus dem Nachzeichnen eines echten Plans mit der Maus, Absturzschutz mit Wiederherstellen,
+Fehlerbericht (F12), DXF-Importfenster mit Ebenen, Markierrichtung wie im CAD, Querstück einer gezogenen Leitung am
+Knick des Mauswegs.
 
 - Pipeline: der macOS-Build ist optional – hat GitHub keinen Mac-Rechner frei, erscheinen Release bzw.
   Entwicklungsstand mit Linux und Windows und einem Hinweis.
