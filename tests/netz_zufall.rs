@@ -24,6 +24,43 @@ fn enden(s: &Sheet) -> Vec<(u64, usize, P)> {
         .collect()
 }
 
+
+/// Knoten der elektrischen Netze eines Blattes: Symbolanschlüsse als (Symbol, Anschlussnummer), Klemmstellen,
+/// Schienen und Verweise als (Objekt, u32::MAX); je Knoten die Nummer seines Netzes (T2, todo N10).
+fn netz_knoten(s: &Sheet, lib: &[elektroplanung::symbols::SymDef]) -> std::collections::HashMap<(u64, u32), usize> {
+    let mut out = std::collections::HashMap::new();
+    for (ni, netz) in elektroplanung::netz::netze(s, lib).iter().enumerate() {
+        for o in s.objects.iter().filter(|o| netz.contains(&o.id) && !matches!(o.kind, Kind::Wire { .. })) {
+            out.insert((o.id, u32::MAX), ni);
+        }
+        for (sym, q) in elektroplanung::netz::anschluesse(s, lib, netz) {
+            if let Some(o) = s.objects.iter().find(|o| o.id == sym) {
+                if let Some(k) = elektroplanung::canvas::obj_pins(o, lib).iter().position(|a| a.dist(q) < 0.01) {
+                    out.insert((sym, k as u32), ni);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Trennungen und Kurzschlüsse zwischen zwei Netzeinteilungen, ohne Knoten des Objekts `ohne`.
+fn netz_aenderungen(vorher: &std::collections::HashMap<(u64, u32), usize>, nachher: &std::collections::HashMap<(u64, u32), usize>, ohne: u64) -> (usize, usize) {
+    use std::collections::{HashMap, HashSet};
+    let mut v2n: HashMap<usize, HashSet<usize>> = HashMap::new();
+    let mut n2v: HashMap<usize, HashSet<usize>> = HashMap::new();
+    for (k, a) in vorher {
+        if k.0 == ohne {
+            continue;
+        }
+        if let Some(b) = nachher.get(k) {
+            v2n.entry(*a).or_default().insert(*b);
+            n2v.entry(*b).or_default().insert(*a);
+        }
+    }
+    (v2n.values().filter(|s| s.len() > 1).count(), n2v.values().filter(|s| s.len() > 1).count())
+}
+
 #[test]
 fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     let Some(f) = std::env::var_os("EP_SAMPLE") else { return };
@@ -32,6 +69,7 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     let mut z = Zufall(777);
     let (mut versuche, mut fehler) = (0, vec![]);
     let mut ueber_anschluss: Vec<String> = vec![];
+    let mut netzfehler: Vec<String> = vec![];
     let blaetter = app.tabs.len();
     for b in 0..blaetter {
         app.active = b;
@@ -48,6 +86,7 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
             if d.x == 0.0 && d.y == 0.0 {
                 continue;
             }
+            let netz_vorher = netz_knoten(&s, &lib);
             let vorher_ange: Vec<(u64, usize)> = enden(&s).into_iter().filter(|(id, _, p)| !freies_ende(&s, &lib, *id, *p)).map(|(id, k, _)| (id, k)).collect();
             let was;
             let art = z.next();
@@ -88,6 +127,11 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
             if std::env::var("OHNE_AUFR").is_err() { app.aufraeumen(); }
             versuche += 1;
             let n = app.sheet().unwrap().clone();
+            // T2 Netz-Invariante: außerhalb des bearbeiteten Objekts dieselben elektrischen Netze
+            let (getrennt, verbunden) = netz_aenderungen(&netz_vorher, &netz_knoten(&n, &lib), o.id);
+            if getrennt + verbunden > 0 {
+                netzfehler.push(format!("Blatt {b}: {was}: {getrennt} Netze getrennt, {verbunden} Netze verbunden"));
+            }
             // keine neuen freien Enden: Lagen freier Leitungsenden nachher, die vorher keine freien Enden waren und
             // nicht zu einer bewegten Leitung gehören (Leitungen können zusammengelegt werden, deshalb nach Lage)
             let _ = &vorher_ange;
@@ -135,6 +179,13 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
         println!("(Kennzahl) {f}");
     }
     println!("{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
+    for f in netzfehler.iter().take(20) {
+        println!("(Netz) {f}");
+    }
+    println!("{} Bearbeitungen mit geänderten Netzen", netzfehler.len());
+    // Kennzahl T2 (24.11.2026, erste Messung 150 von 733, fast nur „verbunden“ = Kurzschluss fremder Netze durch
+    // mitgeführte Leitungen; todo L-C): darf nur sinken
+    assert!(netzfehler.len() <= 150, "{} Bearbeitungen mit geänderten Netzen", netzfehler.len());
     assert!(fehler.is_empty());
     // Kennzahl (Runde 13): übrig sind Fälle, in denen die Zufallsverschiebung ein Objekt auf fremde Leitungen bzw.
     // Anschlüsse setzt und es keinen sauberen Weg mehr gibt
