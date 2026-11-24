@@ -26,6 +26,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 - Hinzufügen › Blatt: hinter dem Dialog wurde das neue Blatt im Querformat gezeigt, während der Dialog das
   Hochformat des vorigen Blattes vorschlug. Das Blatt hat jetzt gleich die vorgeschlagene Ausrichtung.
+- Dialoge Sammelschiene, Klemmleiste und Texteigenschaft/Symboltitel/Symbolwert: der Fokus steht beim Öffnen im
+  ersten Eingabefeld und dessen Text ist markiert – Tippen ersetzt den Vorschlag. Vorher ging die Eingabe ohne
+  Klick ins Feld verloren.
 
 ## [0.6.0]
 

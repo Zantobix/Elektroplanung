@@ -57,11 +57,30 @@ fn lbl(ui: &mut egui::Ui, w: f32, t: &str) {
     let (r, _) = ui.allocate_exact_size(Vec2::new(w, 20.0), egui::Sense::hover());
     ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, t, bold(13.0), Color32::BLACK);
 }
-fn field(ui: &mut egui::Ui, w: f32, t: &str, s: &mut String, fw: f32) {
+fn field(ui: &mut egui::Ui, w: f32, t: &str, s: &mut String, fw: f32) -> egui::Response {
     ui.horizontal(|ui| {
         lbl(ui, w, t);
-        ui.add(egui::TextEdit::singleline(s).desired_width(fw));
-    });
+        ui.add(egui::TextEdit::singleline(s).desired_width(fw))
+    })
+    .inner
+}
+
+/// Merker „Anfangsfokus gesetzt“ des offenen Dialogs (wird beim Schließen gelöscht).
+const ERSTER_FOKUS: &str = "dlg3_erster_fokus";
+
+/// Fokus beim Öffnen einmal ins erste Eingabefeld (Nachzeichnen 24.11.2026, Befund 76/S4: ohne Klick ins Feld ging
+/// die Eingabe verloren). Danach nicht mehr – sonst holte jedes Bild den Fokus von anderen Feldern zurück.
+/// Der vorhandene Text wird dabei markiert wie bei Windows-Eingabefeldern (AutoSelect): Tippen ersetzt den Vorschlag.
+fn erster_fokus(ui: &egui::Ui, r: &egui::Response, text: &str) {
+    let id = egui::Id::unique(ERSTER_FOKUS);
+    if !ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false) {
+        r.request_focus();
+        let mut st = egui::text_edit::TextEditState::load(ui.ctx(), r.id).unwrap_or_default();
+        let alles = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(text.chars().count()));
+        st.cursor.set_char_range(Some(alles));
+        st.store(ui.ctx(), r.id);
+        ui.data_mut(|d| d.insert_temp(id, true));
+    }
 }
 fn combo(ui: &mut egui::Ui, id: &str, items: &[String], sel: &mut usize, w: f32) -> bool {
     let mut changed = false;
@@ -432,7 +451,10 @@ impl App {
 
     /// Dialoge zeichnen und anwenden.
     pub fn dialoge3_ui(&mut self, ctx: &egui::Context) {
-        let Some(mut d) = self.dlg3.take() else { return };
+        let Some(mut d) = self.dlg3.take() else {
+            ctx.data_mut(|m| m.remove::<bool>(egui::Id::unique(ERSTER_FOKUS)));
+            return;
+        };
         let mut done: Option<bool> = None;
         let (title, size): (&str, [f32; 2]) = match &d {
             Dlg3::BusbarObj { .. } | Dlg3::Verbindung { .. } | Dlg3::Klemme { .. } | Dlg3::Verweis { .. } | Dlg3::Bild { .. } => ("Eigenschaften", [300.0, 400.0]),
@@ -523,7 +545,8 @@ impl App {
                 }
                 Dlg3::Schiene { name, set, pots, stifte, folgt, name0, .. } => {
                     // Name = freier Name (SMS Byte 0), Kürzel = Schlüssel der Schiene (TIT, steht auf dem Blatt)
-                    field(ui, 70.0, "Name", &mut set.name, 180.0);
+                    let r = field(ui, 70.0, "Name", &mut set.name, 180.0);
+                    erster_fokus(ui, &r, &set.name);
                     if *folgt && set.name != *name0 && !set.name.trim().is_empty() {
                         *name = set.name.trim().to_string();
                     }
@@ -753,7 +776,8 @@ impl App {
                         lbl(ui, 52.0, "Anlage");
                         ui.label(self.project.anlagen.get(*anlage).map(|a| a.name.clone()).unwrap_or_default());
                     });
-                    field(ui, 52.0, "Name", name, 200.0);
+                    let r = field(ui, 52.0, "Name", name, 200.0);
+                    erster_fokus(ui, &r, name);
                     ui.horizontal(|ui| {
                         lbl(ui, 52.0, "Titel");
                         ui.add(egui::TextEdit::singleline(titel).desired_width(110.0));
@@ -960,7 +984,8 @@ impl App {
                     }
                 }
                 Dlg3::TextChange { text, wert, .. } => {
-                    field(ui, 40.0, "Text", text, 220.0);
+                    let r = field(ui, 40.0, "Text", text, 220.0);
+                    erster_fokus(ui, &r, text);
                     // Symboltitel: Label mit den Textvariablen als Platzhalter (Edit1Change 0x4abe54, textvariablen.rs)
                     if *wert == Some(false) {
                         ui.horizontal(|ui| {
