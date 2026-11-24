@@ -224,6 +224,10 @@ nicht. Gemessen werden stattdessen:
     im Original (Bezugspunkt im Rahmen).
   - Fehlerbericht (F12 bzw. Hilfe › Fehlerbericht speichern): Projektkopie, Protokoll der letzten Eingaben und Bild
     des Fensters in einen Ordner unter `fehlerberichte` in den Einstellungen (`src/fehlerbericht.rs`).
+  - DXF-Import mit eigenem Fenster: Ebenen an/aus (Farbe, Anzahl), Maßstab nach der Einheit der Datei oder fest,
+    Einpassen und Gruppieren wählbar, Ebenenfarben als Stifte, Vorschau; zusätzlich Blöcke (INSERT), MTEXT und
+    ELLIPSE (`src/dxf.rs`, `src/dxf_dialog.rs`).
+  - Meldung „Fehler in den Daten“: Blöcke ohne Darstellung lassen sich dort entfernen.
   - Suche nach neuer Version: Hilfe › Nach neuer Version suchen und (abschaltbar unter Optionen ›
     Programmverhalten) einmal beim Start; fragt mit dem `curl` des Systems das neueste Release auf GitHub ab und zeigt
     bei einer neueren Version einen Hinweis mit Link, lädt aber nichts herunter (`src/update_pruefung.rs`).

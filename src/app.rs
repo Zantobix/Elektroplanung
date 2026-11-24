@@ -247,6 +247,8 @@ pub struct App {
     /// letzte Eingaben für den Fehlerbericht (fehlerbericht.rs) und Auftrag „Bericht anlegen“ (F12)
     pub protokoll: crate::fehlerbericht::Protokoll,
     pub bericht_req: bool,
+    /// Importfenster für DXF (dxf_dialog.rs)
+    pub dxf_dlg: Option<crate::dxf_dialog::DxfDialog>,
     /// weitere Dialoge (dialoge3.rs)
     pub dlg3: Option<crate::dialoge3::Dlg3>,
     /// Bibliotheksverwaltung: Reiter und Synchronisierung
@@ -388,6 +390,7 @@ impl App {
             sicherung: Default::default(),
             protokoll: Default::default(),
             bericht_req: false,
+            dxf_dlg: None,
             dlg3: None,
             lib_tab: 0,
             lib_sync: (String::new(), true, true, 0, String::new()),
@@ -1748,35 +1751,6 @@ impl App {
                 });
             }
             _ => {}
-        }
-    }
-
-    /// DXF-Datei auf das aktuelle Blatt übernehmen (als Gruppe).
-    pub fn dxf_import(&mut self) {
-        // Original (0x49d9a0): ohne geöffnetes Blatt kein Dateidialog
-        if self.cur().is_none() {
-            return;
-        }
-        let Some(p) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).pick_file() else { return };
-        let frame = self.sheet().map(|s| s.frame()).unwrap_or((5.0, 20.0, 292.0, 205.0));
-        match crate::dxf::import(&p, frame) {
-            Ok(kinds) => {
-                if self.cur().is_none() {
-                    return;
-                }
-                self.checkpoint();
-                let gid = self.project.alloc_id() + 1_000_000;
-                let mut ids = vec![];
-                for k in kinds {
-                    let id = self.project.alloc_id();
-                    let pen = self.pen;
-                    self.with_sheet(|s, _| s.objects.push(Obj { id, kind: k, pen, fixed: false, group: Some(gid), raw: None }));
-                    ids.push(id);
-                }
-                self.info = format!("DXF Import: {} Elemente", ids.len());
-                self.selection = ids;
-            }
-            Err(e) => crate::meldungen::warnung(crate::meldungen::T_FEHLER_X, &format!("{}\n{e}", crate::meldungen::DXF_FEHLER)),
         }
     }
 

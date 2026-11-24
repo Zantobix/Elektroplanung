@@ -26,6 +26,7 @@ pub mod druck_seite;
 pub mod einspeisung;
 pub mod knick_ziehen;
 pub mod dxf;
+pub mod dxf_dialog;
 pub mod eigentuemer;
 pub mod eigentuemer_dialog;
 pub mod epr;

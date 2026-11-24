@@ -38,6 +38,13 @@ erhält der Abschnitt deren Nummer.
   eines neuen Projekts schlägt den Projektnamen im Ordner des zuletzt geöffneten Projekts vor.
 - Fehlerbericht: F12 bzw. Hilfe › Fehlerbericht speichern legt Projektkopie, Eingabeprotokoll und Fensterbild in
   einen Ordner; Option „Markierrichtung wie CAD“ (links→rechts eingeschlossen, rechts→links berührt).
+- DXF-Import mit Importfenster: Ebenen wählen (Farbe, Anzahl), Maßstab (Einheit der Datei, mm, cm, m, Zoll oder
+  Faktor), einpassen und gruppieren wählbar, Ebenenfarben als Stifte, Vorschau; Blöcke, MTEXT und Ellipsen werden
+  übernommen.
+- „Fehler in den Daten“: Blöcke ohne Darstellung (z. B. defekte Verweise eines älteren Nachbaus) lassen sich entfernen.
+- Ziehen einer Leitung: das Querstück liegt auf der Höhe, auf der die Maus abgebogen ist; Enter bestätigt einzeilige
+  Dialoge; bei offenen Dialogen wirken keine Zeichnungskürzel; aktiver Blattreiter hervorgehoben; Objekte lassen sich
+  nicht mehr ins Schriftfeld ziehen; kurze Leitungsstücke an Anschlüssen lassen sich markieren.
 
 ## [0.3.0]
 

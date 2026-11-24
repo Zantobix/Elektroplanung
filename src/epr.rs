@@ -436,6 +436,34 @@ pub fn terminal_label(tpl: &str, leiste: &str, nr: u32, level: u8) -> String {
 
 /// Hinweise nach dem Laden: Unterblöcke von Blättern, die keine Darstellung haben (z. B. Verbindungen mit nur
 /// einem Punkt). Sie bleiben beim Speichern unverändert erhalten.
+/// Bekannte, harmlose Blöcke ohne Darstellung: Verbindung mit nur einem Punkt, Sammelschiene ohne Länge.
+fn harmlos(k: &crate::eprfile::Block) -> bool {
+    (k.is("VBG") && k.kids_of("VBP").count() < 2) || (k.is("OBJ") && k.i32(4) == 0xffff)
+}
+
+/// Blöcke ohne Darstellung (die `load_warnings` meldet) aus den Blättern entfernen; Rückgabe: Anzahl. Nutzer
+/// 24.11.2026: ein defekter Verweis-Block aus einem alten Nachbau meldete sich bei jedem Laden.
+pub fn fehlbloecke_entfernen(p: &mut Project) -> usize {
+    let mut n = 0;
+    for a in &mut p.anlagen {
+        for s in &mut a.sheets {
+            if let Some(r) = s.raw.as_mut() {
+                let mut i = 0;
+                while i < r.map.len() && i < r.block.kids.len() {
+                    if r.map[i].is_none() && !harmlos(&r.block.kids[i]) {
+                        r.block.kids.remove(i);
+                        r.map.remove(i);
+                        n += 1;
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+        }
+    }
+    n
+}
+
 pub fn load_warnings(p: &Project) -> Vec<String> {
     let mut out = vec![];
     for a in &p.anlagen {
@@ -443,9 +471,7 @@ pub fn load_warnings(p: &Project) -> Vec<String> {
             if let Some(r) = &s.raw {
                 for (i, m) in r.map.iter().enumerate() {
                     let k = &r.block.kids[i];
-                    // bekannte, harmlose Fälle: Verbindung mit nur einem Punkt, Sammelschiene ohne Länge
-                    let harmless = (k.is("VBG") && k.kids_of("VBP").count() < 2) || (k.is("OBJ") && k.i32(4) == 0xffff);
-                    if m.is_none() && !harmless {
+                    if m.is_none() && !harmlos(k) {
                         out.push(format!("{} / {}: {}-Block Nr. {} ohne Darstellung (bleibt beim Speichern erhalten)", a.name, s.name, k.tag_str(), i + 1));
                     }
                 }

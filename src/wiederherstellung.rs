@@ -148,6 +148,12 @@ impl crate::app::App {
             if crate::meldungen::frage("Wiederherstellen", &text) {
                 self.open_path(s.projekt.clone(), false);
                 self.path = s.kopf.pfad.as_ref().map(PathBuf::from);
+                // die Sicherungsdatei gehört nicht in „zuletzt geöffnet“, wohl aber das Projekt
+                let sicherung = s.projekt.to_string_lossy().to_string();
+                self.recent.retain(|r| *r != sicherung);
+                if let Some(p) = self.path.clone() {
+                    self.remember_recent(&p);
+                }
                 self.dirty = true;
                 self.info = format!("Wiederhergestellt: {} (Stand {})", s.kopf.name, s.kopf.zeit);
                 let _ = std::fs::remove_file(&s.projekt);

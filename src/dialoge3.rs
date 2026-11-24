@@ -975,6 +975,14 @@ impl App {
                             ui.label(l);
                         }
                     });
+                    // Blöcke ohne Darstellung (z. B. defekter Verweis aus einem alten Nachbau) auf Wunsch entfernen
+                    if lines.iter().any(|l| l.contains("ohne Darstellung")) && ui.button("Blöcke ohne Darstellung entfernen").on_hover_text("Entfernt die gemeldeten Blöcke beim nächsten Speichern aus der Datei (Rückgängig möglich)").clicked() {
+                        self.checkpoint();
+                        let n = crate::epr::fehlbloecke_entfernen(&mut self.project);
+                        self.dirty = true;
+                        lines.retain(|l| !l.contains("ohne Darstellung"));
+                        self.info = if n == 1 { "1 Block ohne Darstellung entfernt".into() } else { format!("{n} Blöcke ohne Darstellung entfernt") };
+                    }
                 }
                 Dlg3::ListExport { art, format, msg } => {
                     if let Some(m) = crate::listen::ui(ui, &self.project, art, format) {

@@ -145,3 +145,27 @@ fn pe_untere_reihe_kurzer_umweg() {
     let laenge: f32 = w.windows(2).map(|v| v[0].dist(v[1])).sum();
     assert!(w.len() <= 4 && laenge <= 45.0, "Umweg zu lang ({laenge} mm): {w:?}");
 }
+
+/// Nutzerfrage 24.11.2026: Die Nachzeichen-Datei meldete bei jedem Laden „ZCN-Block Nr. 24 ohne Darstellung“
+/// (defekter Verweis aus einem alten Nachbau). Entfernen → speichern → laden: keine Meldung mehr, sonst gleich.
+#[test]
+fn bloecke_ohne_darstellung_entfernen() {
+    let Some(dir) = std::env::var("EP_FIXTURES").ok() else { return };
+    let pfad = std::path::PathBuf::from(dir).join("nachzeichnen/nachgezeichnet_2026-11-24.epr");
+    if !pfad.exists() {
+        return;
+    }
+    let mut p = elektroplanung::epr::import(&pfad).unwrap();
+    let vorher = elektroplanung::epr::load_warnings(&p);
+    assert_eq!(vorher.len(), 1, "{vorher:?}");
+    let objekte: usize = p.anlagen.iter().flat_map(|a| &a.sheets).map(|s| s.objects.len()).sum();
+    assert_eq!(elektroplanung::epr::fehlbloecke_entfernen(&mut p), 1);
+    let bytes = elektroplanung::epr_write::to_bytes(&p).unwrap();
+    let tmp = std::env::temp_dir().join(format!("ep_fehlblock_{}.epr", std::process::id()));
+    std::fs::write(&tmp, &bytes).unwrap();
+    let q = elektroplanung::epr::import(&tmp).unwrap();
+    let _ = std::fs::remove_file(&tmp);
+    assert!(elektroplanung::epr::load_warnings(&q).is_empty());
+    let nachher: usize = q.anlagen.iter().flat_map(|a| &a.sheets).map(|s| s.objects.len()).sum();
+    assert_eq!(objekte, nachher);
+}

@@ -2709,6 +2709,7 @@ impl eframe::App for App {
         self.ask_save_ui(&ctx);
         self.suche_ui(&ctx);
         self.make_pdf(&ctx);
+        self.dxf_dialog_ui(&ctx);
         // Eingaben dieses Bildes für den Fehlerbericht merken (nach der Verarbeitung: Lage und Geste stimmen)
         self.protokollieren(&ctx);
     }
