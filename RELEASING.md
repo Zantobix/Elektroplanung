@@ -19,7 +19,7 @@ einer Arbeitsrunde, wenn **alle** Punkte erfüllt sind:
 
 1. Seit dem letzten Release gibt es mindestens eine neue sichtbare Funktion **oder** mindestens fünf behobene Fehler.
 2. Alle Tests sind lokal grün (`cargo test --release --no-fail-fast`), die Pipeline auf `main` war beim letzten
-   Push grün (Linux und Windows; macOS läuft nur bei neuer Version, nach dem Release).
+   Push grün (Workflow „Bauen“: Linux und Windows; der eigene Workflow „macOS“ darf fehlen).
 3. Kein bekannter, in dieser Runde neu entstandener Fehler, der Daten verliert, falsch speichert oder Netze falsch
    verbindet, ist offen.
 4. `## [Unveröffentlicht]` im CHANGELOG beschreibt alle Änderungen für Nutzer verständlich.

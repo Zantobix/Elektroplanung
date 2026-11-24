@@ -8,9 +8,9 @@
 #   Text des Releases: der Abschnitt "## [<Version>]" aus CHANGELOG.md.
 # - Push auf main ohne neue Version: das Vorab-Release "entwicklung" (Tag `entwicklung`) wird durch den neuen
 #   Stand ERSETZT – so gibt es immer einen aktuellen Download. Veröffentlichte Versionen bleiben unverändert.
-# - macOS (Nutzer 24.11.2026, Mac-Rechner bei GitHub sind oft knapp): eigener Job `macos`, nur bei neuer Version
-#   (oder von Hand gestartet). Er wartet nicht vorher, sondern läuft NACH dem Release und lädt die .dmg nach; bis dahin
-#   vermerkt der Release-Text, dass das Mac-Programm folgt. Normale Pushes bauen nur Linux und Windows (Pflicht).
+# - macOS steht in einem eigenen Workflow (macos.yml): GitHub hat zu wenige Mac-Rechner, ein nie gestarteter Job wird
+#   nach ~15 min abgebrochen und färbt den Lauf rot. So bleibt „Bauen“ grün; macos.yml läuft danach, baut nur, wenn
+#   ein Release ohne .dmg existiert, und hängt sie an. Bis dahin vermerkt der Release-Text, dass sie folgt.
 name: Bauen
 
 on:
@@ -124,7 +124,7 @@ jobs:
         run: |
           ls -l pakete
           ls pakete/*.AppImage pakete/*.exe > /dev/null || { echo "::error::Linux- oder Windows-Programm fehlt"; exit 1; }
-          # diese Zeile entfernt der Job `macos`, sobald die .dmg hochgeladen ist
+          # diese Zeile entfernt der Workflow macos.yml, sobald die .dmg hochgeladen ist
           printf '\n> Das macOS-Programm wird nachgereicht, sobald GitHub einen Mac-Rechner frei hat.\n' > mac_hinweis.md
       - name: Release-Text aus CHANGELOG.md
         run: |
@@ -175,66 +175,3 @@ jobs:
           gh release create entwicklung pakete/* --prerelease --latest=false --target "$GITHUB_SHA" \
             --title "Entwicklungsstand ($KURZ)" --notes-file notizen.md
 
-  # macOS getrennt: nur bei neuer Version (nach dem Release, lädt die .dmg nach) oder von Hand gestartet
-  # (workflow_dispatch, dann nur als Artefakt). Wartet GitHub lange auf einen Mac, hält das nichts anderes auf.
-  macos:
-    needs: [version, release]
-    if: always() && needs.version.result == 'success' && ((needs.release.result == 'success') || github.event_name == 'workflow_dispatch')
-    runs-on: macos-14
-    permissions:
-      contents: write
-    env:
-      DATEI: Elektroplanung-${{ needs.version.outputs.version }}-macos-arm64.dmg
-      VERSION: ${{ needs.version.outputs.version }}
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Testen
-        run: cargo test --release --locked
-      - name: Bauen
-        run: cargo build --release --locked
-      - name: macOS – App in einem Disk-Image
-        if: runner.os == 'macOS'
-        run: |
-          APP=dmg/Elektroplanung.app
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp target/release/Elektroplanung "$APP/Contents/MacOS/"
-          mkdir symbol.iconset
-          for g in 16 32 128 256; do
-            sips -z $g $g resources/elektroplanung.png --out symbol.iconset/icon_${g}x${g}.png > /dev/null
-            sips -z $((g*2)) $((g*2)) resources/elektroplanung.png --out symbol.iconset/icon_${g}x${g}@2x.png > /dev/null
-          done
-          iconutil -c icns symbol.iconset -o "$APP/Contents/Resources/elektroplanung.icns"
-          cat > "$APP/Contents/Info.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>CFBundleName</key><string>Elektroplanung</string>
-            <key>CFBundleDisplayName</key><string>Elektroplanung</string>
-            <key>CFBundleIdentifier</key><string>io.github.zantobix.elektroplanung</string>
-            <key>CFBundleExecutable</key><string>Elektroplanung</string>
-            <key>CFBundleIconFile</key><string>elektroplanung</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>$VERSION</string>
-            <key>CFBundleVersion</key><string>$VERSION</string>
-            <key>LSMinimumSystemVersion</key><string>11.0</string>
-            <key>NSHighResolutionCapable</key><true/>
-          </dict></plist>
-          EOF
-          codesign --force --deep -s - "$APP"
-          ln -s /Applications dmg/Programme
-          hdiutil create -volname Elektroplanung -srcfolder dmg -ov -format UDZO "$DATEI"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.DATEI }}
-          path: ${{ env.DATEI }}
-      - name: An das Release anhängen, Hinweis entfernen
-        if: needs.release.result == 'success'
-        run: |
-          gh release upload "v$VERSION" "$DATEI" --clobber
-          gh release view "v$VERSION" --json body -q .body | grep -v "macOS-Programm wird nachgereicht" > notizen.md
-          gh release edit "v$VERSION" --notes-file notizen.md

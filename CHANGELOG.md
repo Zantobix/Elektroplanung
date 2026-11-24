@@ -16,6 +16,12 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 Änderungen nach 0.5.1 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `### Behoben` (leere weglassen).
 
+### Behoben
+
+- Pipeline: der Mac-Bau stand in 0.5.1 auf einer Mac-Version, die GitHub nicht mehr anbietet, und brach sofort ab.
+  Er läuft jetzt als eigener Workflow „macOS“ (aktueller Mac) nach „Bauen“ und nur, wenn einem Release die .dmg
+  fehlt; fehlt GitHub ein Mac-Rechner, wird nur dieser Workflow rot, „Bauen“ bleibt grün.
+
 ## [0.5.1]
 
 **Zusammenfassung:** Wartungsversion – am Programm ändert sich gegenüber 0.5.0 nichts; Releases erscheinen jetzt sofort
