@@ -1477,7 +1477,9 @@ impl App {
 
         if inside && dbl && self.tool == Tool::Select {
             // Verweis / Querverweis einer Sammelschiene: zum Ziel springen (Option "Doppelklick auf Verweise")
-            let top = self.hit_top(m, tol);
+            // knapp daneben (bis 12 px) zählt noch als Treffer, bevor die Blatteigenschaften aufgehen (Nachzeichnen
+            // 24.11.2026, B34: Doppelklick knapp neben eine Sammelschiene öffnete die Blatteigenschaften)
+            let top = self.doppelklick_ziel(m, tol);
             if self.verweis_doppelklick(top, m, tol) {
                 self.drag = Drag::None;
                 return;

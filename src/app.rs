@@ -1625,6 +1625,12 @@ impl App {
         s.objects.iter().rev().filter(|o| matches!(o.kind, Kind::Terminal { .. })).find(treffer).or_else(|| s.objects.iter().rev().find(treffer)).map(|o| o.id)
     }
 
+    /// Ziel eines Doppelklicks bei `m` (Treffertoleranz `tol`): getroffenes Objekt, sonst eines bis 12/5 · `tol`
+    /// daneben (B34: knapp neben eine Sammelschiene öffnete die Blatteigenschaften); `None` = freie Blattfläche.
+    pub fn doppelklick_ziel(&self, m: P, tol: f32) -> Option<u64> {
+        self.hit_top(m, tol).or_else(|| self.hit_top(m, tol * 12.0 / 5.0))
+    }
+
     /// Lässt sich das Objekt markieren? Im Editor nur sichtbare; mit „Fixierung aktivieren“ keine fixierten
     /// (wie im Original weder per Klick noch per Aufziehen).
     pub fn selectable(&self, o: &Obj) -> bool {

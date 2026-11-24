@@ -30,6 +30,9 @@ erhält der Abschnitt deren Nummer.
   Leitung zu laufen.
 - Nach der Auswahl im Rasterfang-Feld (oder einem Dialog) wirkten Strg+S, Strg+Z, Entf usw. nicht mehr, bis man
   woanders hinklickte; ein Klick auf die Zeichenfläche gibt die Tastatur jetzt zurück.
+- Lange Texte im Schriftfeld (z. B. Blattnamen) halten 0,5 mm Abstand zu den Feldlinien.
+- Doppelklick knapp neben ein Objekt (bis 12 Pixel, z. B. eine Sammelschiene) öffnet dessen Eigenschaften statt der
+  Blatteigenschaften.
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]

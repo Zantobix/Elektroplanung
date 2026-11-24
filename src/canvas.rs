@@ -601,16 +601,21 @@ fn draw_title_block(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, x0: f32, x1: f
                 let mut em = crate::schriftlage::feld_schrift(h_mm, lines as usize);
                 let font = |em: f32| times(em * z);
                 let mut galley = p.layout_no_wrap(text.clone(), font(em), Color32::BLACK);
-                let avail = (w_mm - 0.4) * z;
-                if galley.size().x > avail && avail > 1.0 {
-                    em *= avail / galley.size().x;
+                // je Seite 0,5 mm Luft; mehrmals nachmessen, weil die Schriftgröße gerundet wird (B30: lange Blattnamen
+                // lagen auf bzw. über den Feldlinien)
+                let avail = (w_mm - 1.0) * z;
+                for _ in 0..3 {
+                    if galley.size().x <= avail || avail <= 1.0 {
+                        break;
+                    }
+                    em *= avail / galley.size().x * 0.99;
                     galley = p.layout_no_wrap(text.clone(), font(em), Color32::BLACK);
                 }
                 let r = Rect::from_min_max(xf.s(ra), xf.s(rb));
                 let gx = match align {
-                    Align::Left => r.left() + 0.3 * z,
+                    Align::Left => r.left() + 0.5 * z,
                     Align::Center => r.center().x - galley.size().x / 2.0,
-                    Align::Right => r.right() - 0.3 * z - galley.size().x,
+                    Align::Right => r.right() - 0.5 * z - galley.size().x,
                 };
                 let gy = if lines > 1 { r.top() + 0.3 * z } else { r.center().y - galley.size().y / 2.0 };
                 p.galley(Pos2::new(gx, gy), galley, Color32::BLACK);

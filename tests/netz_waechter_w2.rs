@@ -149,3 +149,14 @@ fn freies_ende_darf_verbinden() {
     app.netz_verschieben(&[3], P::new(5.0, 0.0));
     assert_eq!(app.netz_abgewiesen, 1, "{}", app.info);
 }
+
+/// B34 (Nachzeichnen 24.11.2026): Doppelklick 2 mm neben eine Sammelschiene bei 3,6 px/mm (Toleranz 5 px = 1,4 mm)
+/// öffnete die Blatteigenschaften; jetzt gilt die Schiene als Ziel, 5 mm daneben die freie Fläche.
+#[test]
+fn doppelklick_knapp_neben_schiene_trifft_sie() {
+    let mut app = test_app();
+    app.with_sheet(|s, _| s.objects.push(schiene(1, 50.0, 20.0, 200.0, "L1")));
+    let tol = 5.0 / 3.6;
+    assert_eq!(app.doppelklick_ziel(P::new(100.0, 52.0), tol), Some(1));
+    assert_eq!(app.doppelklick_ziel(P::new(100.0, 56.0), tol), None);
+}
