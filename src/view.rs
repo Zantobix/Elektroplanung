@@ -247,8 +247,10 @@ impl App {
 
     fn left_toolbar(&mut self, ui: &mut egui::Ui) {
         let tools = [
-            (Tool::Select, Icon::Select, "Auswahl"),
-            (Tool::Klemmstelle, Icon::Klemme, "Neue Klemmstelle"),
+            // Hinweis auf das Ziehen von Leitungen (Nachzeichnen 24.11.2026, B39/S12: das Werkzeug darunter ist die
+            // Klemmstelle, ein eigenes Leitungswerkzeug gibt es wie im Original nicht)
+            (Tool::Select, Icon::Select, "Auswahl – Leitungen zieht man mit diesem Werkzeug von einem Anschluss aus"),
+            (Tool::Klemmstelle, Icon::Klemme, "Neue Klemmstelle (in eine Leitung klicken setzt sie ein)"),
             (Tool::Line, Icon::Line, "Neue Linie"),
             (Tool::Curve, Icon::Curve, "Neue Kurve"),
             (Tool::Rect, Icon::Rect, "Neues Rechteck"),
@@ -904,7 +906,10 @@ impl App {
         let full = ui.max_rect();
         let p = ui.painter();
         p.line_segment([full.left_top(), full.right_top()], Stroke::new(1.0, Color32::from_gray(225)));
-        let widths = [130.0, 350.0, 200.0];
+        // Infofeld so breit wie sein Text (mindestens wie im Original 350); vorher wurden lange Hinweise abgeschnitten
+        // (Nachzeichnen 24.11.2026: Symboleditor-Hinweis endete bei „Neue K…“)
+        let info_w = ui.fonts_mut(|f| f.layout_no_wrap(self.info.clone(), FontId::proportional(12.0), Color32::BLACK).size().x) + 12.0;
+        let widths = [130.0, info_w.clamp(350.0, (full.width() - 130.0 - 200.0 - 20.0).max(350.0)), 200.0];
         let mut x = full.left();
         let fmt = |v: f32| format!("{:.1}", v).replace('.', ",");
         let texts = [
