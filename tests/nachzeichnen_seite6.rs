@@ -169,3 +169,15 @@ fn bloecke_ohne_darstellung_entfernen() {
     let nachher: usize = q.anlagen.iter().flat_map(|a| &a.sheets).map(|s| s.objects.len()).sum();
     assert_eq!(objekte, nachher);
 }
+
+/// Der bereinigte Nachzeichen-Stand lädt ohne „Fehler in den Daten“.
+#[test]
+fn bereinigter_stand_ohne_meldung() {
+    let Some(dir) = std::env::var("EP_FIXTURES").ok() else { return };
+    let pfad = std::path::PathBuf::from(dir).join("nachzeichnen/nachgezeichnet_2026-11-24b.epr");
+    if !pfad.exists() {
+        return;
+    }
+    let p = elektroplanung::epr::import(&pfad).unwrap();
+    assert!(elektroplanung::epr::load_warnings(&p).is_empty(), "{:?}", elektroplanung::epr::load_warnings(&p));
+}
