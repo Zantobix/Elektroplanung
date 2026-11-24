@@ -13,8 +13,16 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
-Änderungen nach 0.5.1 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
+Änderungen nach 0.6.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `### Behoben` (leere weglassen).
+
+## [0.6.0]
+
+**Zusammenfassung:** Neu gezeichnete Leitungen verbinden nur noch dort, wo sie anfangen und enden – vorher konnte
+ihr Weg über fremde Anschlüsse oder Leitungsenden laufen und Netze ungewollt verbinden; findet keine der üblichen
+Formen einen freien Weg, sucht eine Rastersuche einen. Die automatische Verbindung beim Ablegen schließt keine
+Anschlüsse eines Symbols mehr kurz, und Symbole lassen sich nicht mehr aufeinander schieben. Dazu ein neues
+Programmsymbol, ein Startmenü-Eintrag mit Symbol unter Linux und eine Option für die Richtung der mittleren Maustaste.
 
 ### Neu
 
