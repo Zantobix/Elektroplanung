@@ -19,7 +19,7 @@ einer Arbeitsrunde, wenn **alle** Punkte erfüllt sind:
 
 1. Seit dem letzten Release gibt es mindestens eine neue sichtbare Funktion **oder** mindestens fünf behobene Fehler.
 2. Alle Tests sind lokal grün (`cargo test --release --no-fail-fast`), die Pipeline auf `main` war beim letzten
-   Push grün (macOS darf fehlen).
+   Push grün (Linux und Windows; macOS läuft nur bei neuer Version, nach dem Release).
 3. Kein bekannter, in dieser Runde neu entstandener Fehler, der Daten verliert, falsch speichert oder Netze falsch
    verbindet, ist offen.
 4. `## [Unveröffentlicht]` im CHANGELOG beschreibt alle Änderungen für Nutzer verständlich.
@@ -29,13 +29,36 @@ einer Arbeitsrunde, wenn **alle** Punkte erfüllt sind:
 Ausnahme **Fehlerbehebung**: Ist im letzten Release ein Fehler, der Daten verliert, das Programm abstürzen lässt oder
 Dateien für das Original unlesbar macht, wird nach der Behebung sofort ein PATCH-Release vorgeschlagen.
 
+## Aufbau des Release-Textes (Nutzer 24.11.2026)
+
+Der Text eines Releases ist sein Abschnitt in `CHANGELOG.md` (nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/)):
+
+```markdown
+## [0.6.0]
+
+**Zusammenfassung:** 2–4 Sätze für Nutzer: das Wichtigste dieser Version in Alltagssprache (bei einer
+Wartungsversion auch, was die letzte größere Version brachte).
+
+### Neu
+- neue Funktionen (für Nutzer sichtbar)
+
+### Geändert
+- geändertes Verhalten, Bedienung, Vorgaben, Pipeline
+
+### Behoben
+- Fehler, die vorher auftraten (was war falsch?)
+```
+
+Leere Abschnitte entfallen; wichtige Punkte (Datenfehler, neue Grundfunktionen) fett beginnen. Schon beim Sammeln
+unter `## [Unveröffentlicht]` gleich in diese drei Abschnitte einsortieren.
+
 ## Ablauf
 
 1. Prüfen: Punkte 1–5 oben; `git status` sauber.
 2. `Cargo.toml`: Version erhöhen; `cargo build --release` (aktualisiert `Cargo.lock`).
-3. `CHANGELOG.md`: Inhalt von `## [Unveröffentlicht]` unter `## [<Version>]` setzen, eine Zeile „Schwerpunkt: …“
-   davor; darüber einen neuen, leeren Abschnitt `## [Unveröffentlicht]` mit dem Hinweis auf den Entwicklungsstand.
+3. `CHANGELOG.md`: Inhalt von `## [Unveröffentlicht]` unter `## [<Version>]` setzen, die **Zusammenfassung**
+   davor (siehe „Aufbau des Release-Textes“); darüber einen neuen, leeren Abschnitt `## [Unveröffentlicht]` mit dem Hinweis auf den Entwicklungsstand.
 4. Tests erneut laufen lassen, dann **ein** Commit „Release <Version>“ (Versionsnummer, Lock-Datei, CHANGELOG).
-5. Push nach Zustimmung; danach Pipeline und Release prüfen (Assets für Linux und Windows, macOS optional,
+5. Push nach Zustimmung; danach Pipeline und Release prüfen (Assets für Linux und Windows sofort, die macOS-.dmg wird nachgereicht, sobald GitHub einen Mac frei hat,
    Text = CHANGELOG-Abschnitt).
 6. Im privaten Stand festhalten, welche Version veröffentlicht ist.

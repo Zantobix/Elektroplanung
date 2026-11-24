@@ -106,8 +106,10 @@ Protokoll 2025-06-18). Für Claude Code ist er in [.mcp.json](.mcp.json) eingetr
 
 ## Versionen und fertige Programme
 
-- Jeder Push auf `main` und jeder Pull Request wird auf Linux, macOS und Windows gebaut und getestet
+- Jeder Push auf `main` und jeder Pull Request wird auf Linux und Windows gebaut und getestet
   ([.github/workflows/build.yml](.github/workflows/build.yml)); die Programme hängen als Artefakte an der Ausführung.
+  macOS wird nur bei einer neuen Version (bzw. von Hand) gebaut und die .dmg dem Release nachgereicht, sobald GitHub
+  einen Mac-Rechner frei hat – das Release selbst wartet nicht darauf.
 - Die Versionsnummer steht **nur** in `Cargo.toml` (`version = "…"`); Info-Dialog, Paketnamen, Tag und Release
   werden daraus abgeleitet. Für eine neue Version: Nummer in `Cargo.toml` erhöhen, Abschnitt
   `## [<Version>]` in [CHANGELOG.md](CHANGELOG.md) schreiben, auf `main` bringen. Die Pipeline legt dann nach

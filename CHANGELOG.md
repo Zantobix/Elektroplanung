@@ -4,57 +4,81 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionen 
 [Semantic Versioning](https://semver.org/lang/de/): `MAJOR.MINOR.PATCH`; vor 1.0 können sich Bedienung und
 eigenes Dateiformat (`.epj`) noch ändern.
 
+Jede Version beginnt mit einer kurzen **Zusammenfassung** (2–4 Sätze) und gliedert sich dann in `### Neu` (neue
+Funktionen), `### Geändert` (geändertes Verhalten, Bedienung, Pipeline), `### Behoben` (Fehler) – leere Abschnitte
+entfallen. Regel in `RELEASING.md`.
+
 Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, erzeugt die Pipeline das Tag
 `v<Version>` und ein Release mit dem passenden Abschnitt dieser Datei als Text.
 
 ## [Unveröffentlicht]
 
-Änderungen nach 0.5.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
-erhält der Abschnitt deren Nummer.
+Änderungen nach 0.5.1 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
+erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `### Behoben` (leere weglassen).
+
+## [0.5.1]
+
+**Zusammenfassung:** Wartungsversion – am Programm ändert sich gegenüber 0.5.0 nichts; Releases erscheinen jetzt sofort
+für Linux und Windows, die Mac-Datei wird nachgereicht. Wer von 0.4.0 kommt, bekommt mit 0.5.x vor allem den
+Netz-Wächter (keine versehentlichen Kurzschlüsse beim Bearbeiten), die Mehrfachklick-Markierung von Leitungen und
+die Behebung eines Speicherfehlers, den das Original als „SYM fehlerhaft“ meldete (Einzelheiten unter 0.5.0).
+
+### Geändert
+
+- Pipeline: macOS wird nur noch für neue Versionen gebaut und die .dmg dem Release nachgereicht, sobald GitHub einen
+  Mac-Rechner frei hat; das Release erscheint sofort mit Linux und Windows (bei 0.5.0 wartete es auf einen freien
+  Mac). Entwicklungsstände gibt es für Linux und Windows.
+- Release-Texte gegliedert nach Neu / Geändert / Behoben.
 
 ## [0.5.0]
 
-Schwerpunkt: Netz-Wächter (Bearbeitungen schließen keine fremden Netze mehr kurz), Mehrfachklick-Markierung auf
-Leitungen, Datenfehler beim Speichern von Projektsymbolen ohne Texte behoben (Original meldete „SYM fehlerhaft“),
-Tastatur wieder bedienbar nach Auswahlfeldern.
+**Zusammenfassung:** Bearbeitungen schließen keine fremden Netze mehr kurz (Netz-Wächter), Leitungen lassen sich per
+Doppel-/Dreifachklick bis zum Knoten bzw. als ganzes Netz markieren, und Dateien mit Projektsymbolen ohne Texte
+öffnen im Original wieder ohne Fehlermeldung. Dazu viele Korrekturen beim Zeichnen und an der Tastaturbedienung.
+
+### Neu
+
+- **Netz-Wächter:** Bearbeitungen (Verschieben, Teilstück/Knick ziehen, Drehen/Spiegeln, Pfeiltasten, Einfügen), die
+  fremde elektrische Netze kurzschließen, eine Verbindung trennen oder Leitungen verschiedener Netze übereinanderlegen
+  würden, werden nicht ausgeführt; das Objekt bleibt an der letzten zulässigen Stelle, die Statuszeile nennt den
+  Grund. Ein freies Leitungsende darf gezielt verbinden. Optionen › Programmverhalten, Standard an. (Vorher verbanden
+  150 von 733 Zufallsbearbeitungen auf einem echten Plan fremde Netze.)
+- **Mehrfachklick auf Leitungen** (wie in PADS): Doppelklick markiert bis zum nächsten Knoten, Dreifachklick das ganze
+  Netz; die Eigenschaften einer Leitung öffnen dann mit Alt+Enter oder über das Kontextmenü (abschaltbar – dann wie
+  im Original).
+- Blattreiter: ein Blatt lässt sich in die freie Fläche hinter den letzten Reiter ziehen (ans Ende der Anlage); die
+  Ablagemarke zeigt, ob vor oder hinter dem Ziel eingefügt wird.
+- Verschieben fängt auch auf frühere Lagen des Objekts (auch neben dem Raster): Symbol hin und mit der Maus zurück
+  ergibt wieder genau den alten Plan.
+
+### Geändert
 
 - Neue Projekte bekommen das Schriftfeld der Vorlage (Von, Anlage/Ort, Blatt x / y …) statt des eingebauten
   Standards; das Logofeld bleibt ohne Logobild leer und verdeckt keine Texte mehr.
-- **Datei:** Projektsymbole ohne Texte (z. B. „Rauchwarnmelder“) wurden mit einem leeren Textblock gespeichert; das
-  Original meldete beim Öffnen „Datenstruktur ist fehlerhaft. Objekt: SYM“. Jetzt wie im Original; beim nächsten
-  Speichern werden auch ältere Dateien repariert (im Original unter Wine gegengeprüft).
-- Netz-Wächter: Bearbeitungen (Verschieben, Teilstück/Knick ziehen, Drehen/Spiegeln, Pfeiltasten), die fremde
-  elektrische Netze kurzschließen, eine Verbindung trennen oder Leitungen verschiedener Netze übereinanderlegen
-  würden, werden nicht ausgeführt; das Objekt bleibt an der letzten zulässigen Stelle, die Statuszeile nennt den
-  Grund (Optionen › Programmverhalten, Standard an). Vorher verbanden 150 von 733 Zufallsbearbeitungen auf W2 fremde
-  Netze.
-- Aufräumen nach dem Ziehen legt nur noch Leitungen desselben Netzes zusammen (immer, auch ohne Netz-Wächter);
-  Glätten und andere Aufräumschritte, die Netze ändern würden, unterbleiben (mit Netz-Wächter).
-- Teilstück ziehen: ein Leitungsende auf einer Leitung wandert nicht mehr über eine Ecke auf eine fremde Schiene;
-  am Anschluss entsteht bei Bedarf ein Stich vor dem Querstück (statt quer durch den Nachbaranschluss).
-- Zeichnen: eine neue Leitung läuft nicht mehr über fremde Anschlüsse, wenn die Vorschau ihre Form hält (vorher
-  konnte N auf Anschlusshöhe durch L- und N-Anschlüsse einer Steckdosenreihe laufen); Ersatzwege verlassen und
-  erreichen Anschlüsse bevorzugt in deren Richtung.
-- Automatische Verbindungen beim Ablegen enden an einem fremden Symbol statt durch es hindurch bis zur nächsten
-  Leitung zu laufen.
-- Nach der Auswahl im Rasterfang-Feld (oder einem Dialog) wirkten Strg+S, Strg+Z, Entf usw. nicht mehr, bis man
-  woanders hinklickte; ein Klick auf die Zeichenfläche gibt die Tastatur jetzt zurück.
-- Lange Texte im Schriftfeld (z. B. Blattnamen) halten 0,5 mm Abstand zu den Feldlinien.
+- Aufräumen nach dem Ziehen legt nur noch Leitungen desselben Netzes zusammen; Glätten und andere Aufräumschritte,
+  die Netze ändern würden, unterbleiben.
+- Einfügen: Würde die Kopie vorhandene Netze verbinden, sucht das Programm einen anderen Versatz; geht keiner, wird
+  nicht eingefügt (Meldung).
+- Teilstück ziehen: am Anschluss entsteht bei Bedarf ein Stich vor dem Querstück (statt quer durch den
+  Nachbaranschluss).
 - Doppelklick knapp neben ein Objekt (bis 12 Pixel, z. B. eine Sammelschiene) öffnet dessen Eigenschaften statt der
   Blatteigenschaften.
-- Ein Verschieben oder Pfeiltasten-Schritt, der nichts verändert hat (z. B. vom Netz-Wächter abgewiesen), hinterlässt
-  keinen leeren Rückgängig-Schritt mehr.
-- Einfügen: Würde die Kopie vorhandene Netze verbinden (z. B. Leitungsenden mit 10 mm Versatz auf einer anderen
-  Schiene), sucht das Programm einen anderen Versatz; geht keiner, wird nicht eingefügt (Meldung).
-- Verschieben fängt auch auf frühere Lagen des Objekts (auch neben dem Raster): Symbol hin und mit der Maus zurück
-  ergibt wieder genau den alten Plan.
-- Blattreiter: ein Blatt lässt sich in die freie Fläche hinter den letzten Reiter ziehen (ans Ende der Anlage); die
-  Ablagemarke zeigt, ob vor oder hinter dem Ziel eingefügt wird; nach Rückgängig/Wiederholen folgen die Reiter wieder
-  der Blattfolge.
-- Mehrfachklick auf Leitungen (wie in PADS): Doppelklick markiert bis zum nächsten Knoten, Dreifachklick das ganze
-  Netz; die Eigenschaften einer Leitung öffnen dann mit Alt+Enter oder über das Kontextmenü (Optionen ›
-  Programmverhalten, abschaltbar – dann wie im Original).
-- Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
+- Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig.
+
+### Behoben
+
+- **Datei:** Projektsymbole ohne Texte (z. B. „Rauchwarnmelder“) wurden mit einem leeren Textblock gespeichert; das
+  Original meldete beim Öffnen „Datenstruktur ist fehlerhaft. Objekt: SYM“. Jetzt wie im Original; beim nächsten
+  Speichern werden auch ältere Dateien repariert (im Original gegengeprüft).
+- Nach der Auswahl im Rasterfang-Feld (oder einem Dialog) wirkten Strg+S, Strg+Z, Entf usw. nicht mehr; ein Klick auf
+  die Zeichenfläche gibt die Tastatur jetzt zurück.
+- Zeichnen: eine neue Leitung konnte über fremde Anschlüsse laufen (z. B. N auf Anschlusshöhe durch die L- und
+  N-Anschlüsse einer Steckdosenreihe).
+- Automatische Verbindungen beim Ablegen liefen durch fremde Symbole bis zur nächsten Leitung.
+- Teilstück ziehen: ein Leitungsende auf einer Leitung wanderte über eine Ecke auf eine fremde Schiene.
+- Nach Rückgängig/Wiederholen einer Blattverschiebung blieben die Reiter vertauscht.
+- Ein Verschieben ohne Wirkung hinterließ einen leeren Rückgängig-Schritt.
+- Lange Texte im Schriftfeld (z. B. Blattnamen) lagen auf den Feldlinien.
 
 ## [0.4.0]
 
