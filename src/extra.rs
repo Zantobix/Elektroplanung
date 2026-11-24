@@ -1774,6 +1774,10 @@ impl App {
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 close = true;
             }
+            // Enter = OK in den einzeiligen Dialogen (Nachzeichnen 24.11.2026, S4; mehrzeilige Felder brauchen Enter)
+            if matches!(d, XDialog::Verweis { .. } | XDialog::SymName { .. }) && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                ok = true;
+            }
         });
         if new_pen_ltg {
             if let XDialog::Leitung { width, style, .. } = &d {
