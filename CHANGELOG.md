@@ -37,6 +37,8 @@ erhält der Abschnitt deren Nummer.
   keinen leeren Rückgängig-Schritt mehr.
 - Einfügen: Würde die Kopie vorhandene Netze verbinden (z. B. Leitungsenden mit 10 mm Versatz auf einer anderen
   Schiene), sucht das Programm einen anderen Versatz; geht keiner, wird nicht eingefügt (Meldung).
+- Verschieben fängt auch auf frühere Lagen des Objekts (auch neben dem Raster): Symbol hin und mit der Maus zurück
+  ergibt wieder genau den alten Plan.
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]

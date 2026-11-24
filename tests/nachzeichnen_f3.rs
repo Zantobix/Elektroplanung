@@ -15,7 +15,11 @@ fn p(x: f32, y: f32) -> P {
 }
 
 fn blatt() -> Option<App> {
-    let pfad = std::path::PathBuf::from(std::env::var("EP_FIXTURES").ok()?).join("nachzeichnen/f3_steckdosen.epr");
+    blatt_aus("f3_steckdosen.epr")
+}
+
+fn blatt_aus(datei: &str) -> Option<App> {
+    let pfad = std::path::PathBuf::from(std::env::var("EP_FIXTURES").ok()?).join("nachzeichnen").join(datei);
     if !pfad.exists() {
         return None;
     }
@@ -100,4 +104,35 @@ fn auto_verbindung_nicht_durch_fremde_symbole() {
             assert!(!quer, "automatische Leitung {a:?}–{b:?} durch Symbol {}", u.id);
         }
     }
+}
+
+/// MT2 (24.11.2026): -E3 liegt neben dem Raster (127,0 mm, Strompfadmitte). Hin um 20 mm (auf das Raster gefangen,
+/// 147,5), zurück um −20 mm: das Ziel 127,5 fängt auf die frühere Lage 127,0 – danach ist der Plan wie vorher.
+#[test]
+fn rueckweg_faengt_auf_fruehere_lage() {
+    let Some(mut app) = blatt_aus("f3_motor.epr") else { return };
+    app.path_align = false;
+    app.raster_idx = 1; // 2,5 mm wie beim Maustest
+    let s0 = app.sheet().unwrap().clone();
+    let e3 = s0.objects.iter().find(|o| matches!(&o.kind, Kind::Symbol { bmk, .. } if bmk.starts_with("-E3"))).map(|o| o.id);
+    let e3 = e3.expect("-E3 in f3_motor.epr");
+    let pos = |app: &App| match &app.sheet().unwrap().objects.iter().find(|o| o.id == e3).unwrap().kind {
+        Kind::Symbol { pos, .. } => *pos,
+        _ => unreachable!(),
+    };
+    let p0 = pos(&app);
+    let geste = |app: &mut App, d: P| {
+        app.selection = vec![e3];
+        app.checkpoint();
+        app.stoesse_an_markierung_zusammenfassen();
+        app.netz_merken();
+        let start = pos(app);
+        let d = app.rueckkehr_fang(e3, start, d);
+        app.netz_verschieben(&[e3], d);
+        app.aufraeumen();
+    };
+    geste(&mut app, P::new(20.5, 0.0));
+    geste(&mut app, P::new(-20.0, 0.0));
+    assert_eq!(pos(&app), p0, "zurück an die alte Lage");
+    assert_eq!(app.sheet().unwrap().objects, s0.objects, "Plan wie vorher");
 }

@@ -764,6 +764,28 @@ impl crate::app::App {
         }
     }
 
+    /// Verschieben des Objekts `id` (Lage vor dem Ziehen `p0`, gefangene Verschiebung `total`): liegt das Ziel nahe einer
+    /// früheren Lage des Objekts aus dem Rückkehr-Gedächtnis (auch neben dem Raster), dorthin. Zurück an den
+    /// Ausgangsort ergibt so wieder genau den alten Plan (MT2, 24.11.2026: Lampe bei 127,0 mm hin und zurück gezogen
+    /// landete auf dem Raster bei 127,5 mm, die Rückkehr griff nicht).
+    pub fn rueckkehr_fang(&self, id: u64, p0: P, total: P) -> P {
+        let Some(r) = self.cur() else { return total };
+        let ziel = p0.add(total);
+        let weite = self.fang().max(1.0) * 0.6;
+        self.rueckkehr
+            .iter()
+            .filter(|(r0, _)| *r0 == r)
+            .filter_map(|(_, v)| v.iter().find(|o| o.id == id))
+            .filter_map(|o| match &o.kind {
+                Kind::Symbol { pos, .. } | Kind::Terminal { pos, .. } => Some(*pos),
+                _ => None,
+            })
+            .filter(|q| q.dist(ziel) < weite && q.dist(p0) > 1e-3)
+            .min_by(|a, b| a.dist(ziel).total_cmp(&b.dist(ziel)))
+            .map(|q| q.sub(p0))
+            .unwrap_or(total)
+    }
+
     /// Stand des aktuellen Blattes vor einer Änderung merken (Beginn des Ziehens, vor Drehen/Pfeiltaste).
     pub fn netz_merken(&mut self) {
         self.rueckkehr_gilt = false;

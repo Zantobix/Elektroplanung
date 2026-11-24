@@ -41,4 +41,30 @@ fn netz_liste() {
     for z in zeilen {
         println!("  {z}");
     }
+    // Vergleich mit einer zweiten Datei (MT2 Rückkehrtest): abweichende Objekte des Blattes
+    if let Ok(f2) = std::env::var("NETZ_DATEI2") {
+        let mut b = test_app();
+        b.open_path(std::path::PathBuf::from(f2), false);
+        b.active = app.active;
+        let t = b.sheet().unwrap();
+        let mut n = 0;
+        for o in &s.objects {
+            match t.objects.iter().find(|x| x.id == o.id) {
+                Some(x) if x.kind == o.kind => {}
+                Some(x) => {
+                    n += 1;
+                    println!("  anders {}: {:?}\n        {:?}", o.id, o.kind, x.kind);
+                }
+                None => {
+                    n += 1;
+                    println!("  nur in Datei 1: {} {:?}", o.id, o.kind);
+                }
+            }
+        }
+        for x in t.objects.iter().filter(|x| !s.objects.iter().any(|o| o.id == x.id)) {
+            n += 1;
+            println!("  nur in Datei 2: {} {:?}", x.id, x.kind);
+        }
+        println!("  {n} abweichende Objekte");
+    }
 }

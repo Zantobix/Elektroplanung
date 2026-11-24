@@ -1723,11 +1723,11 @@ impl App {
             let movable: Vec<u64> = objs.iter().filter(|o| !(o.fixed && self.fix_active)).map(|o| o.id).collect();
             // Bezug: erster Anschluss des Symbols (wie beim Platzieren auf dem Raster) bzw. die Klemmstelle
             let reference = self.selection.iter().filter_map(|id| objs.iter().find(|o| o.id == *id && movable.contains(id))).find_map(|o| match &o.kind {
-                Kind::Symbol { pos, .. } => Some((*pos, canvas::obj_pins(o, &self.lib).first().copied().unwrap_or(*pos))),
-                Kind::Terminal { pos, .. } => Some((*pos, *pos)),
+                Kind::Symbol { pos, .. } => Some((o.id, *pos, canvas::obj_pins(o, &self.lib).first().copied().unwrap_or(*pos))),
+                Kind::Terminal { pos, .. } => Some((o.id, *pos, *pos)),
                 _ => None,
             });
-            if let Some((pos, pin)) = reference {
+            if let Some((ref_id, pos, pin)) = reference {
                 // Lage vor dem Ziehen = jetzige Lage − bisherige Verschiebung
                 let p0 = pos.sub(applied);
                 // Taste F gehalten wie im Original: Bezugspunkt springt auf den Rasterpunkt der Maus (blatt_tasten.rs)
@@ -1758,6 +1758,12 @@ impl App {
                 } else {
                     let np = self.align_to_path(p0.add(total));
                     total.x = np.x - p0.x;
+                }
+                // frühere Lagen des Objekts (Rückkehr-Gedächtnis, netz_folgen.rs) fangen, auch neben dem Raster: zurück
+                // an den Ausgangsort ergibt wieder genau den alten Plan (MT2, 24.11.2026: Lampe bei 127,0 mm hin und
+                // zurück gezogen landete auf dem Raster bei 127,5 mm)
+                if !still && !self.no_snap && fang.is_none() {
+                    total = self.rueckkehr_fang(ref_id, p0, total);
                 }
             }
             // auf dem Blatt bleiben (Nutzerfrage 23.11.2026: Lampe unter den Rahmen gezogen lag außerhalb des
