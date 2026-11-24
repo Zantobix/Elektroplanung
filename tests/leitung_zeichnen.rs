@@ -141,6 +141,9 @@ fn zufallsbahnen_ohne_spruenge() {
     // Stand Runde 13: 14 von 300 (vorher 72) – übrig ist der Seitenwechsel des Umwegs um das eigene Symbol, wenn die
     // Maus quer durch das Symbol auf die andere Seite fährt; er kommt erst, wenn der gehaltene Umweg mehr als
     // 2,5 Raster länger wäre (Formhalt)
-    assert!(faelle.len() <= 15, "{} Bahnen mit Sprüngen", faelle.len());
+    // 24.11.2026 (Nutzer, Frage F8): das Querstück liegt auf der Höhe, auf der die Maus abgebogen ist; fährt die Maus
+    // hinter dieses Knie zurück, wird es vergessen und die Form wechselt einmal (Linux 16 statt 15, Windows lag bisher
+    // eins höher) – daher Grenze 17
+    assert!(faelle.len() <= 17, "{} Bahnen mit Sprüngen", faelle.len());
 }
 

@@ -107,17 +107,20 @@ pub struct Fuehrung {
     pub bahn_spitze: Option<(f32, f32)>,
     /// Vorschau des letzten Bildes (Formhalt gegen Umspringen, leitung_bahn.rs `formhalt`)
     pub vorschau: Vec<P>,
+    /// Punkt, an dem die Maus vom ersten Teilstück abgebogen ist („Knie“): dort liegt das Querstück
+    /// (leitung_zug.rs `quer_merken`, Nutzer 24.11.2026 Frage F8)
+    pub quer: Option<P>,
 }
 
 impl Fuehrung {
     pub fn neu(start: P) -> Self {
-        Fuehrung { pts: vec![start], richtung: None, gekippt: false, zuletzt: None, klickbetrieb: false, schiene: None, bahn: vec![], bahn_achse: None, bahn_spitze: None, vorschau: vec![] }
+        Fuehrung { pts: vec![start], richtung: None, gekippt: false, zuletzt: None, klickbetrieb: false, schiene: None, bahn: vec![], bahn_achse: None, bahn_spitze: None, vorschau: vec![], quer: None }
     }
 
     /// Leitung, die auf einer Sammelschiene `schiene` (Höhe, x von, x bis) bei `m` beginnt.
     pub fn von_schiene(m: P, schiene: (f32, f32, f32)) -> Self {
         let (y, x1, x2) = schiene;
-        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), gekippt: false, zuletzt: None, klickbetrieb: false, schiene: Some(schiene), bahn: vec![], bahn_achse: None, bahn_spitze: None, vorschau: vec![] }
+        Fuehrung { pts: vec![P::new(m.x.clamp(x1, x2), y)], richtung: Some(Richtung::Senkrecht), gekippt: false, zuletzt: None, klickbetrieb: false, schiene: Some(schiene), bahn: vec![], bahn_achse: None, bahn_spitze: None, vorschau: vec![], quer: None }
     }
 
     /// Beginnt die Leitung auf einer Schiene und ist noch kein Eckpunkt gesetzt: Anfang in die Flucht von `ziel`

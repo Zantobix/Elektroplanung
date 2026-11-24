@@ -33,13 +33,18 @@ fn skalar(a: P, b: P) -> f32 {
 /// Weg beim Ziehen von `a` (Richtung nach außen `da`) nach `b` (Zielanschluss mit `db`), erstes Teilstück in
 /// Richtung `erst`, Stichlänge `s`.
 pub fn zugweg(a: P, da: Option<P>, b: P, db: Option<P>, erst: Richtung, s: f32) -> Vec<P> {
+    zugweg_quer(a, da, b, db, erst, s, None)
+}
+
+/// Wie `zugweg`; `quer` = Knie des Mauswegs, auf dessen Höhe das Querstück liegen soll (F8).
+pub fn zugweg_quer(a: P, da: Option<P>, b: P, db: Option<P>, erst: Richtung, s: f32, quer: Option<P>) -> Vec<P> {
     if a.dist(b) < 0.01 {
         return vec![a, b];
     }
     // Zielanschluss mit Richtung (Maus-Befund M28): bis vor den Stich des Ziels führen und von außen in
     // Anschlussrichtung eintreten, auch wenn das letzte Teilstück quer dazu liefe
     let ziel = db.map(|d| P::new(b.x + d.x * s, b.y + d.y * s)).unwrap_or(b);
-    let mut w = bis_ziel(a, da, ziel, erst, s);
+    let mut w = bis_ziel(a, da, ziel, erst, s, quer);
     if db.is_some() {
         w.push(b);
         w = bereinigen(w);
@@ -51,15 +56,20 @@ pub fn zugweg(a: P, da: Option<P>, b: P, db: Option<P>, erst: Richtung, s: f32) 
 }
 
 /// Weg von `a` (Richtung nach außen `da`) bis `b` mit erstem Teilstück in Richtung `erst` (Stich am Anfang).
-fn bis_ziel(a: P, da: Option<P>, b: P, erst: Richtung, s: f32) -> Vec<P> {
+fn bis_ziel(a: P, da: Option<P>, b: P, erst: Richtung, s: f32, quer: Option<P>) -> Vec<P> {
     let entlang = |d: P| match erst {
         Richtung::Waagerecht => d.x.abs() > 0.5,
         Richtung::Senkrecht => d.y.abs() > 0.5,
     };
     match da {
         Some(d) if entlang(d) => {
-            // mindestens einen Stich nach außen, dann quer bis in die Flucht des Ziels und zum Ziel
-            let t = skalar(b.sub(a), d).max(s);
+            // mindestens einen Stich nach außen, dann quer bis in die Flucht des Ziels und zum Ziel; ist die Maus
+            // vorher seitlich abgebogen, liegt das Querstück dort (wie ein Zeichner es zieht, F8), sonst vor dem Ziel
+            let bis = skalar(b.sub(a), d);
+            let t = match quer.map(|k| skalar(k.sub(a), d)) {
+                Some(q) if q >= s && q < bis - 0.01 => q,
+                _ => bis.max(s),
+            };
             let a1 = P::new(a.x + d.x * t, a.y + d.y * t);
             let c = P::new(b.x + d.x * skalar(a1.sub(b), d), b.y + d.y * skalar(a1.sub(b), d));
             bereinigen(vec![a, a1, c, b])
@@ -69,10 +79,22 @@ fn bis_ziel(a: P, da: Option<P>, b: P, erst: Richtung, s: f32) -> Vec<P> {
         Some(d) => {
             let a1 = P::new(a.x + d.x * s, a.y + d.y * s);
             let mut w = vec![a];
-            w.extend(knick(a1, b, Some(erst)));
+            w.extend(z_am_knie(a1, b, erst, quer).unwrap_or_else(|| knick(a1, b, Some(erst))));
             bereinigen(w)
         }
-        None => bereinigen(knick(a, b, Some(erst))),
+        None => bereinigen(z_am_knie(a, b, erst, quer).unwrap_or_else(|| knick(a, b, Some(erst)))),
+    }
+}
+
+/// Z-Weg von `a` nach `b`: erstes Teilstück in Richtung `erst` bis auf die Höhe des Knies `k`, dann quer bis in die
+/// Flucht von `b` und zu `b` (F8) – nur wenn das Knie zwischen `a` und `b` liegt.
+fn z_am_knie(a: P, b: P, erst: Richtung, k: Option<P>) -> Option<Vec<P>> {
+    let k = k?;
+    let zwischen = |v: f32, u: f32, w: f32| (v - u) * (w - v) > 0.01;
+    match erst {
+        Richtung::Senkrecht if zwischen(k.y, a.y, b.y) => Some(vec![a, P::new(a.x, k.y), P::new(b.x, k.y), b]),
+        Richtung::Waagerecht if zwischen(k.x, a.x, b.x) => Some(vec![a, P::new(k.x, a.y), P::new(k.x, b.y), b]),
+        _ => None,
     }
 }
 
@@ -89,7 +111,39 @@ impl Fuehrung {
             }
         }
         let erst = self.richtung.unwrap_or_else(|| crate::leitung_knick::entscheiden(ende.sub(a), da, self.gekippt));
-        zugweg(a, da, ende, db, erst, s)
+        zugweg_quer(a, da, ende, db, erst, s, self.quer)
+    }
+
+    /// Mausweg merken (Nutzer 24.11.2026, Frage F8: „wie ein Zeichner es erwartet“): Biegt die Maus erstmals mehr als
+    /// ein halbes Raster seitlich aus der Flucht des Anschlusses ab, gilt ihr Abstand vom Anschluss in
+    /// Anschlussrichtung als Lage des Querstücks; kehrt sie in die Flucht zurück, wird sie vergessen.
+    pub fn quer_merken(&mut self, ende: P, da: Option<P>, raster: f32) {
+        if self.klickbetrieb || self.schiene.is_some() {
+            return;
+        }
+        let Some(erst) = self.richtung else { return };
+        // Achse des ersten Teilstücks: durch den Anschluss bzw. – quer zur Anschlussrichtung – durch das Stichende
+        let a = self.start();
+        let basis = match da {
+            Some(d) if matches!(erst, Richtung::Senkrecht) == (d.x.abs() > 0.5) => P::new(a.x + d.x * raster * 0.5, a.y + d.y * raster * 0.5),
+            _ => a,
+        };
+        // seitlich: kleinster Abstand zur Flucht des Anschlusses bzw. des Stichendes (die Maus fährt oft genau über
+        // dem Anschluss los, nicht über dem Stichende)
+        let seitlich = match erst {
+            Richtung::Senkrecht => (ende.x - basis.x).abs().min((ende.x - a.x).abs()),
+            Richtung::Waagerecht => (ende.y - basis.y).abs().min((ende.y - a.y).abs()),
+        };
+        // Maus wieder hinter dem Knie (entlang des ersten Teilstücks näher am Anschluss): Knie vergessen
+        let zurueck = self.quer.is_some_and(|k| match erst {
+            Richtung::Senkrecht => (ende.y - a.y).abs() < (k.y - a.y).abs() - 0.01,
+            Richtung::Waagerecht => (ende.x - a.x).abs() < (k.x - a.x).abs() - 0.01,
+        });
+        if seitlich < raster * 0.5 || zurueck {
+            self.quer = None;
+        } else if self.quer.is_none() {
+            self.quer = Some(ende);
+        }
     }
 }
 
@@ -105,6 +159,37 @@ mod tests {
     /// Schwelle (6 px bei Zoom 2 px/mm) und Stich (halbes Raster 2,5 mm)
     const SCHWELLE: f32 = 3.0;
     const STICH: f32 = 2.5;
+
+    /// F8 (Nutzer 24.11.2026): Anschluss nach unten, Maus 20 mm hinunter, dann nach rechts, dann hinunter zum Ziel
+    /// (Anschluss nach oben, 60 mm tiefer) – das Querstück liegt auf der Höhe, auf der die Maus abgebogen ist.
+    #[test]
+    fn querstueck_auf_der_hoehe_des_mauswegs() {
+        let a = p(0.0, 0.0);
+        let mut f = Fuehrung::neu(a);
+        let mut weg = vec![];
+        for i in 1..=20 {
+            weg.push(p(0.0, i as f32));
+        }
+        for i in 1..=40 {
+            weg.push(p(i as f32, 20.0));
+        }
+        for i in 21..=60 {
+            weg.push(p(40.0, i as f32));
+        }
+        for m in &weg {
+            f.bewegen_mit(*m, UNTEN, SCHWELLE);
+            f.quer_merken(*m, UNTEN, 5.0);
+        }
+        let w = f.zugweg(p(40.0, 60.0), UNTEN, OBEN, STICH);
+        assert_eq!(w, vec![p(0.0, 0.0), p(0.0, 20.0), p(40.0, 20.0), p(40.0, 60.0)], "{w:?}");
+        // ohne Abbiegen (gerade hinunter, dann direkt zum Ziel): wie bisher vor dem Ziel
+        let mut g = Fuehrung::neu(a);
+        for m in [p(0.0, 2.0), p(1.0, 10.0), p(20.0, 40.0), p(40.0, 60.0)] {
+            g.bewegen_mit(m, UNTEN, SCHWELLE);
+            g.quer_merken(m, UNTEN, 5.0);
+        }
+        assert!(g.quer.is_some());
+    }
 
     /// Größter Abstand eines Punktes von `u` zum Linienzug `v` (in beide Richtungen): wie weit sich die Vorschau
     /// zwischen zwei Bildern sichtbar bewegt.

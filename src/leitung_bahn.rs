@@ -57,6 +57,7 @@ impl crate::app::App {
         if let crate::app::Drag::Wire { f } = &mut self.drag {
             let vorher = f.zuletzt;
             f.bewegen_mit(ende, da, 6.0 / z);
+            f.quer_merken(ende, da, raster.max(2.5));
             // Knicke entlang des Mauswegs; kleinste Strecke ein Raster
             if vorher.is_none_or(|v| v.dist(ende) >= 0.01) {
                 f.bahn_fortschreiben(vorher, ende, raster.max(2.5));
