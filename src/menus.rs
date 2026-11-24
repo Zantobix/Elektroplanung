@@ -336,6 +336,9 @@ impl App {
             .resizable(false)
             .fixed_size([164.0, 156.0])
             .order(egui::Order::Foreground)
+            // mittig öffnen (Nutzer 24.11.2026: „Fehler melden“ erschien am Rand)
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
             .show(ctx, |ui| {
                 ui.label("Referenzpunkt");
                 let cur = names.get(self.align_ref).cloned().unwrap_or_default();

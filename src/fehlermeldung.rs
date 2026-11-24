@@ -123,6 +123,10 @@ impl App {
         .collapsible(false)
         .resizable(false)
         .default_width(460.0)
+        // mittig öffnen (Nutzer 24.11.2026: „Fehler melden“ erschien am Rand); neue Kennung, damit eine früher gespeicherte Lage am Rand nicht mehr gilt
+        .id(egui::Id::unique("fehlermeldung_mitte"))
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.content_rect().center())
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(&mut m.art, Art::Fehler, "Fehler");

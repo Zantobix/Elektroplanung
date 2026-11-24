@@ -1153,7 +1153,12 @@ impl App {
         let mut group_act: Option<(u8, String, String)> = None;
         let mut sync_start = false;
         let mut backup = false;
-        egui::Window::new("Bibliotheksverwaltung").open(&mut open).default_size([620.0, 460.0]).show(ctx, |ui| {
+        egui::Window::new("Bibliotheksverwaltung").open(&mut open).default_size([620.0, 460.0])
+            // mittig öffnen (Nutzer 24.11.2026: „Fehler melden“ erschien am Rand); neue Kennung, damit eine früher gespeicherte Lage am Rand nicht mehr gilt
+            .id(egui::Id::unique("bibliotheksverwaltung_mitte"))
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
+            .show(ctx, |ui| {
             // Reiter wie im Original (TBiblio): Symbolgruppen, Bauteile, Synchronisierung, Backup – dazu die Symbolliste
             ui.horizontal(|ui| {
                 for (i, t) in ["Symbole", "Symbolgruppen", "Bauteile", "Synchronisierung", "Backup"].iter().enumerate() {

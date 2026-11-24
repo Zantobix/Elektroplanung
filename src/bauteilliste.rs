@@ -113,7 +113,12 @@ impl App {
         let mut done: Option<bool> = None;
         let mut neu = false;
         let namen: Vec<String> = self.project.bauteile.iter().map(|b| format!("{} {}", b.name, b.typ).trim().to_string()).collect();
-        egui::Window::new("Bauteilliste").collapsible(false).resizable(false).default_width(300.0).show(ctx, |ui| {
+        egui::Window::new("Bauteilliste").collapsible(false).resizable(false).default_width(300.0)
+            // mittig öffnen (Nutzer 24.11.2026: „Fehler melden“ erschien am Rand); neue Kennung, damit eine früher gespeicherte Lage am Rand nicht mehr gilt
+            .id(egui::Id::unique("bauteilliste_mitte"))
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
+            .show(ctx, |ui| {
             let rows = zeilen(&self.project, &d.teile);
             let (_, gezogen) = ui.dnd_drop_zone::<BauteilZug, _>(egui::Frame::default().inner_margin(4.0), |ui| {
                 ui.set_min_size(egui::Vec2::new(290.0, 120.0));

@@ -14,6 +14,7 @@ erhält der Abschnitt deren Nummer.
 
 - Neue Projekte bekommen das Schriftfeld der Vorlage (Von, Anlage/Ort, Blatt x / y …) statt des eingebauten
   Standards; das Logofeld bleibt ohne Logobild leer und verdeckt keine Texte mehr.
+- Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]
 

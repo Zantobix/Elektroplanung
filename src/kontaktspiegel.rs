@@ -553,7 +553,12 @@ impl App {
                 (i, format!("{} {name}", lage(&self.project, i).unwrap_or_default()))
             }))
             .collect();
-        egui::Window::new("Kontaktspiegel").collapsible(false).resizable(false).default_width(380.0).show(ctx, |ui| {
+        egui::Window::new("Kontaktspiegel").collapsible(false).resizable(false).default_width(380.0)
+            // mittig öffnen (Nutzer 24.11.2026: „Fehler melden“ erschien am Rand); neue Kennung, damit eine früher gespeicherte Lage am Rand nicht mehr gilt
+            .id(egui::Id::unique("kontaktspiegel_mitte"))
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
+            .show(ctx, |ui| {
             egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                 egui::Grid::new("spiegel_rows").striped(true).num_columns(6).show(ui, |ui| {
                     for h in ["Nr", "Art", "1", "2", "3", "Referenz"] {
