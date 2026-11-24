@@ -427,6 +427,15 @@ fn objekt_schluessel(z: &Ziel) -> Option<(u64, u8)> {
     }
 }
 
+/// Statuszeile ohne Objekt unter der Maus: „Kein Objekt“ wie im Original, bei einer Markierung deren Umfang.
+pub fn markierung_text(n: usize) -> String {
+    match n {
+        0 => ST_KEIN_OBJEKT.to_string(),
+        1 => "1 Objekt markiert".to_string(),
+        n => format!("{n} Objekte markiert"),
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 struct StatusMerker {
     /// zuletzt gemeldetes Objekt (None = keins)
@@ -471,7 +480,8 @@ impl crate::app::App {
                             self.info = t;
                         }
                     }
-                    None if m.zuletzt.is_some() => self.info = ST_KEIN_OBJEKT.to_string(),
+                    // mit Markierung deren Umfang statt „Kein Objekt“ (Nachzeichnen 24.11.2026, S5)
+                    None if m.zuletzt.is_some() => self.info = markierung_text(self.selection.len()),
                     None => {}
                 }
                 m.zuletzt = schluessel;

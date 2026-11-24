@@ -181,9 +181,29 @@ fn frg_default() -> (bool, bool) {
     (true, false)
 }
 
-/// Bezeichnung eines Alternativtext-Satzes wie im Original-Kontextmenü: 'a';'b';'c'
+/// Bezeichnung eines Alternativtext-Satzes: die belegten Texte, getrennt durch „ | “ (Nutzer 24.11.2026, Frage F4:
+/// lesbar statt wie im Original-Kontextmenü roh 'a';'b';'c' – leere Texte erschienen dort als `';';'3'`); ohne
+/// belegten Text „(leer)“.
 pub fn alt_label(set: &[(u32, String)]) -> String {
-    set.iter().map(|(_, t)| format!("'{t}'")).collect::<Vec<_>>().join(";")
+    let texte: Vec<&str> = set.iter().map(|(_, t)| t.trim()).filter(|t| !t.is_empty()).collect();
+    if texte.is_empty() {
+        "(leer)".into()
+    } else {
+        texte.join(" | ")
+    }
+}
+
+#[cfg(test)]
+mod alt_tests {
+    use super::alt_label;
+
+    #[test]
+    fn alternativtexte_lesbar() {
+        let s = |v: &[&str]| v.iter().enumerate().map(|(i, t)| (i as u32 + 1, t.to_string())).collect::<Vec<_>>();
+        assert_eq!(alt_label(&s(&["", "", "3"])), "3");
+        assert_eq!(alt_label(&s(&["L", "N", "PE"])), "L | N | PE");
+        assert_eq!(alt_label(&s(&["", " "])), "(leer)");
+    }
 }
 
 /// Ist ein Element mit Zusatzoption `f` bei den Instanz-Zusatzoptionen `flags` sichtbar?

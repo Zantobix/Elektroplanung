@@ -210,6 +210,15 @@ nicht. Gemessen werden stattdessen:
   - Fang: Leitungsenden und Klemmstellen fangen je Achse auf die Fluchten von Anschlüssen und Leitungsenden, ein
     kleines Kreuz zeigt die tatsächliche Lage (`src/fang.rs`); verschobene Objekte und gezogene Teilstücke rücken auf
     das Raster bzw. auf die Flucht anderer Leitungen.
+  - Schriftfeld „Geändert“: ein in dieser Sitzung geändertes Blatt zeigt gleich das heutige Datum (das Original
+    zeigt bis zum Speichern „Heute“); Alternativtext-Sätze erscheinen lesbar („L | N | PE“ statt `'L';'N';'PE'`).
+  - Ziehen am Rand der Zeichenfläche schiebt die Ansicht mit (nach kurzer Verweilzeit, `src/rand_schieben.rs`); ein
+    Leitungsende bleibt im Zeichnungsrahmen. Eine Leitung, die auf einer Schiene oder Leitung endet und sonst durch ein
+    Symbol liefe, rutscht mit ihrem Ende auf der Schiene in die günstigste freie Lage.
+  - Absturzschutz: bei ungespeicherten Änderungen regelmäßig eine Sicherung im Einstellungsordner
+    (`wiederherstellung`), Wiederherstellen beim nächsten Start (`src/wiederherstellung.rs`).
+  - Statuszeile ohne Objekt unter der Maus: bei einer Markierung deren Umfang („3 Objekte markiert“) statt „Kein
+    Objekt“; Speichern eines neuen Projekts schlägt den Projektnamen im Ordner des zuletzt geöffneten Projekts vor.
   - Suche nach neuer Version: Hilfe › Nach neuer Version suchen und (abschaltbar unter Optionen ›
     Programmverhalten) einmal beim Start; fragt mit dem `curl` des Systems das neueste Release auf GitHub ab und zeigt
     bei einer neueren Version einen Hinweis mit Link, lädt aber nichts herunter (`src/update_pruefung.rs`).

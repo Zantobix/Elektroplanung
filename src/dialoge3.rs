@@ -15,7 +15,9 @@ use std::path::PathBuf;
 
 pub enum Dlg3 {
     BusbarObj { id: u64, sliste: Vec<String>, sel: usize, einsp: bool, auto: bool, unten: bool, offset: String, tx: String, ty: String, px: String, py: String, laenge: String },
-    Schiene { anlage: usize, orig: String, name: String, set: SchieneSet, pots: Vec<String>, stifte: Vec<String> },
+    /// `folgt`: das Kürzel ist noch die Vorgabe und folgt dem Namen, bis es selbst geändert wird; `name0` = Name beim
+    /// Öffnen.
+    Schiene { anlage: usize, orig: String, name: String, set: SchieneSet, pots: Vec<String>, stifte: Vec<String>, folgt: bool, name0: String },
     Verbindung { id: u64, art: usize, leitung: usize, leitungen: Vec<String>, opts: u8, text: String },
     /// Tabelle (TSTab), Zustand und Bedienung in tabelle.rs
     Tab(crate::tabelle::TabDlg),
@@ -322,10 +324,15 @@ impl App {
     pub fn open_schiene_dialog(&mut self, anlage: usize, name: &str) {
         let Some(a) = self.project.anlagen.get(anlage) else { return };
         let set = a.schienen.get(name).cloned().unwrap_or_default();
+        // neue Schiene mit Vorgaben „Schiene n“/„Ln“: das Kürzel folgt dem Namen (Nachzeichnen B31: Name „N“ eingetragen,
+        // auf dem Blatt stand weiter das Kürzel „L4“)
+        let folgt = name.strip_prefix('L').is_some_and(|n| set.name == format!("Schiene {n}"));
         self.dlg3 = Some(Dlg3::Schiene {
             anlage,
             orig: name.into(),
             name: name.into(),
+            folgt,
+            name0: set.name.clone(),
             set,
             // erster Eintrag „Keine Zuordnung“ wie im Original (leeres Potential)
             pots: std::iter::once("Keine Zuordnung".to_string()).chain(self.project.potentiale.iter().cloned()).collect(),
@@ -514,10 +521,17 @@ impl App {
                     }
                     ui.add_enabled_ui(frei, |ui| field(ui, 96.0, "Länge", laenge, 70.0));
                 }
-                Dlg3::Schiene { name, set, pots, stifte, .. } => {
+                Dlg3::Schiene { name, set, pots, stifte, folgt, name0, .. } => {
                     // Name = freier Name (SMS Byte 0), Kürzel = Schlüssel der Schiene (TIT, steht auf dem Blatt)
                     field(ui, 70.0, "Name", &mut set.name, 180.0);
+                    if *folgt && set.name != *name0 && !set.name.trim().is_empty() {
+                        *name = set.name.trim().to_string();
+                    }
+                    let vor = name.clone();
                     field(ui, 70.0, "Kürzel", name, 180.0);
+                    if *name != vor {
+                        *folgt = false;
+                    }
                     ui.horizontal(|ui| {
                         lbl(ui, 86.0, "Potential");
                         let mut i = if set.potential.is_empty() { 0 } else { pots.iter().skip(1).position(|p| *p == set.potential).map(|i| i + 1).unwrap_or(0) };

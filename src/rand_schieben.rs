@@ -10,6 +10,20 @@ use eframe::egui::{Pos2, Rect, Vec2};
 
 /// Randzone innerhalb der Zeichenfläche (Punkte), ab der mitgeschoben wird
 pub const RAND: f32 = 24.0;
+/// Verweilzeit in der Randzone (s), bevor mitgeschoben wird: wer am Rand nur zielt, schiebt nichts (Nachzeichnen
+/// 24.11.2026, B49: das Leitungsende landete 30 mm unter dem Ziel, weil die Ansicht beim Zielen weiterwanderte)
+pub const VERWEILEN: f64 = 0.35;
+
+/// Darf jetzt (Zeit `jetzt`) mitgeschoben werden? `seit` merkt den Eintritt in die Randzone; `in_zone` = Maus in der
+/// Randzone bzw. außerhalb der Zeichenfläche.
+pub fn verweilt(seit: &mut Option<f64>, in_zone: bool, jetzt: f64) -> bool {
+    if !in_zone {
+        *seit = None;
+        return false;
+    }
+    let t0 = *seit.get_or_insert(jetzt);
+    jetzt - t0 >= VERWEILEN
+}
 /// Verschiebung je Bild am Beginn der Randzone bzw. höchstens (Punkte)
 pub const MIN_SCHRITT: f32 = 2.0;
 pub const MAX_SCHRITT: f32 = 30.0;
@@ -61,6 +75,17 @@ mod tests {
         // links oben: Inhalt nach rechts unten
         let lo = schritt(a, Pos2::new(-10.0, 5.0));
         assert!(lo.x > 0.0 && lo.y > 0.0);
+    }
+
+    #[test]
+    fn erst_nach_verweilen() {
+        let mut seit = None;
+        assert!(!verweilt(&mut seit, true, 10.0));
+        assert!(!verweilt(&mut seit, true, 10.2));
+        assert!(verweilt(&mut seit, true, 10.4));
+        // Randzone verlassen: neu zählen
+        assert!(!verweilt(&mut seit, false, 10.5));
+        assert!(!verweilt(&mut seit, true, 10.6));
     }
 
     #[test]

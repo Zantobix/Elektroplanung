@@ -285,6 +285,14 @@ impl crate::app::App {
     /// Ende der gerade gezeichneten Leitung bei der Maus `m`: Anschluss in Reichweite, sonst senkrecht auf eine
     /// Sammelschiene unter der Maus, sonst der Rasterpunkt.
     pub fn leitungsende(&self, f: &crate::leitung_fuehrung::Fuehrung, m: P, z: f32) -> P {
+        // nicht außerhalb des Zeichnungsrahmens (B49: Ende bei y = 300 auf einem 297 mm hohen Blatt)
+        let m = match self.sheet() {
+            Some(s) if self.sym_edit.is_none() => {
+                let (x0, y0, x1, y1) = s.frame();
+                P::new(m.x.clamp(x0, x1), m.y.clamp(y0, y1))
+            }
+            _ => m,
+        };
         let tol = 6.0 / z;
         if let Some(p) = self.pin_near(m, tol, &[]) {
             return p;

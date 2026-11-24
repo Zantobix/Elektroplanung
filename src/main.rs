@@ -35,6 +35,10 @@ fn main() -> eframe::Result {
         if shot.is_none() && a.opt.update_pruefen {
             a.update.starten(&cc.egui_ctx, false);
         }
+        // Absturzschutz: Sicherung eines abgestürzten Programms anbieten (wiederherstellung.rs)
+        if shot.is_none() {
+            a.wiederherstellen_anbieten();
+        }
         Ok(Box::new(a))
     }))
 }

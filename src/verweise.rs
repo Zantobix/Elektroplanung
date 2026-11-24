@@ -42,20 +42,20 @@ fn busbar_text_rects(a: P, x2: f32, xin: &str, xout: &str) -> [Option<(P, P)>; 2
 /// auf einem anderen Blatt der Anlage – dieselbe Reihenfolge wie `crate::epr::update_busbar_xrefs`.
 pub fn busbar_ziel(project: &Project, r: SheetRef, id: u64, ende: bool) -> Option<Sprung> {
     let a = project.anlagen.get(r.anlage)?;
-    let mut occ: Vec<(usize, u64, u64, P, P)> = vec![];
+    let mut occ: Vec<(usize, u64, String, P, P)> = vec![];
     for (si, sh) in a.sheets.iter().enumerate() {
         for o in &sh.objects {
-            if let Kind::Busbar { a: s, x2, sms, .. } = &o.kind {
-                occ.push((si, o.id, *sms, *s, P::new(*x2, s.y)));
+            if let Kind::Busbar { a: s, x2, name, .. } = &o.kind {
+                occ.push((si, o.id, name.clone(), *s, P::new(*x2, s.y)));
             }
         }
     }
     let i = occ.iter().position(|o| o.0 == r.sheet && o.1 == id)?;
-    let sms = occ[i].2;
-    if sms == 0 {
+    let name = occ[i].2.clone();
+    if name.is_empty() {
         return None;
     }
-    let hit = if ende { occ[i + 1..].iter().find(|o| o.2 == sms && o.0 != r.sheet) } else { occ[..i].iter().rev().find(|o| o.2 == sms && o.0 != r.sheet) };
+    let hit = if ende { occ[i + 1..].iter().find(|o| o.2 == name && o.0 != r.sheet) } else { occ[..i].iter().rev().find(|o| o.2 == name && o.0 != r.sheet) };
     hit.map(|o| Sprung { blatt: SheetRef { anlage: r.anlage, sheet: o.0 }, obj: Some(o.1), at: Some(if ende { o.3 } else { o.4 }) })
 }
 
@@ -339,5 +339,25 @@ mod tests {
             assert_eq!((*pos, *text_pos), (P::new(50.0, 50.0), P::new(55.0, 49.0)));
         }
         assert_eq!(k, verweis("=A", None));
+    }
+
+    /// Im Nachbau neu abgelegte Schienen (SMS-Kennung 0) mit demselben Namen auf zwei Blättern: Querverweise und
+    /// Sprungziel wie bei Schienen aus der Datei (Nachzeichnen 24.11.2026, Frage F7 – Pfeile fehlten).
+    #[test]
+    fn neue_schienen_bekommen_querverweise() {
+        let mut p = Project::new_default();
+        p.anlagen[0].sheets.push(Sheet::new(2));
+        p.anlagen[0].sheets[0].objects.push(obj(20, bus(20.0, 0, "", "")));
+        p.anlagen[0].sheets[1].objects.push(obj(21, bus(20.0, 0, "", "")));
+        crate::epr::update_busbar_xrefs(&mut p);
+        let quer = |si: usize| match &p.anlagen[0].sheets[si].objects[0].kind {
+            Kind::Busbar { xin, xout, .. } => (xin.clone(), xout.clone()),
+            _ => unreachable!(),
+        };
+        assert_eq!(quer(0).0, "");
+        assert!(quer(0).1.starts_with("2/"), "{:?}", quer(0));
+        assert!(quer(1).0.starts_with("1/"), "{:?}", quer(1));
+        let z = busbar_ziel(&p, SheetRef { anlage: 0, sheet: 0 }, 20, true).unwrap();
+        assert_eq!((z.blatt.sheet, z.obj), (1, Some(21)));
     }
 }

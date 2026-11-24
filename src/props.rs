@@ -714,18 +714,22 @@ impl App {
                         (n, sub) = alt;
                     }
                 }
+                // Strompfade der Anlage (wie beim Laden: 1–40, sonst 8)
+                let pf_anlage = self.project.anlagen.get(s.r.anlage).map(|a| a.set.pfade).filter(|c| (1..=40).contains(c)).map(|c| c as u32).unwrap_or(8);
                 if let Some(sh) = self.project.sheet_mut(s.r) {
                     sh.name = s.name;
                     sh.ort = s.ort;
                     sh.number = n;
                     sh.subindex = sub;
-                    // -1 = Strompfade der Anlage übernehmen (wie im Original)
+                    // -1 = Strompfade der Anlage übernehmen (wie im Original) – sofort, nicht erst nach dem Neuladen
+                    // (Nachzeichnen 24.11.2026: neues Blatt zeigte 8 statt 20 Strompfade bis zum Laden)
                     let c: i32 = s.strompfade.trim().parse().unwrap_or(-1);
                     if c > 0 {
                         sh.columns = c.clamp(1, 40) as u32;
                         sh.col_auto = false;
                     } else {
                         sh.col_auto = true;
+                        sh.columns = pf_anlage;
                     }
                     sh.portrait = s.portrait;
                     sh.auto_plus = s.auto_plus && crate::blatt_neu::auto_plus_frei(s.art);

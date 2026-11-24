@@ -377,6 +377,7 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
   „---“, „---------“, „Projekt ist abgeschlossen“, „Projekt wird bearbeitet“, „Heute“. Kennzeichen „Bildschirm“
   = Zeichenkontext +8, gesetzt von 0x4910ac nur, wenn die Zeichenfläche die der PaintBox bzw. des Bildpuffers
   (Form +0x7cc) ist; der Druck (0x45d26c) übergibt Fläche 0 → +8 = 0 → Druck/PDF zeigen das Datum, nie „Heute“.
+  Nachbau (Nutzerwunsch 24.11.2026): statt „Heute“ das heutige Datum.
 - Symbolbeschriftung: Titel/Wert in der Schriftgröße der Anlage (ANL +0xb8/+0xbc), Textroutine 0x491eec:
   lfHeight = −Größe, Umrechnung Größe × 254/96 in 0,1 mm → Bildpunkte bei 96 dpi (10 → 2,646 mm).
 

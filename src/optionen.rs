@@ -37,6 +37,9 @@ pub struct Optionen {
     pub brueckenboegen: bool,
     /// beim Programmstart bei GitHub nach einer neueren Version suchen (Nachbau-Erweiterung, `update_pruefung.rs`)
     pub update_pruefen: bool,
+    /// Absturzschutz: bei ungespeicherten Änderungen alle n Minuten zwischenspeichern, 0 = aus (Nachbau-Erweiterung,
+    /// `wiederherstellung.rs`)
+    pub sicherung_min: u32,
     /// Hilfslinien an den Anschlüssen beim Verschieben von Symbolen (Nachbau-Erweiterung, `hilfslinien.rs`)
     pub hilfslinien: bool,
     /// ein verschobenes Symbol ohne Leitungen, das auf eine Leitung abgelegt wird, in sie einbinden (Nachbau-
@@ -104,6 +107,7 @@ impl Default for Optionen {
             variantenrad: true,
             brueckenboegen: true,
             update_pruefen: true,
+            sicherung_min: 2,
             hilfslinien: true,
             einbinden_beim_verschieben: true,
             sym_breite: 100.0,
@@ -328,6 +332,11 @@ impl App {
                                     mark(ui, &mut o.hilfslinien, "Hilfslinien beim Verschieben");
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new("Zwischenspeichern alle").font(bold(13.0)));
+                                        ui.add(egui::DragValue::new(&mut o.sicherung_min).range(0..=60));
+                                        ui.label("min (0 = aus)");
+                                    });
                                 });
                                 egui::Frame::group(ui.style()).show(ui, |ui| {
                                     ui.set_width(330.0);
@@ -371,10 +380,14 @@ impl App {
                                     let cur = FORMATE.iter().find(|f| f.1 == o.format).map(|f| f.0).unwrap_or("Benutzerdefiniert");
                                     egui::ComboBox::from_id_salt("optfmt").width(140.0).selected_text(cur).show_ui(ui, |ui| {
                                         for (n, f) in FORMATE {
-                                            if ui.selectable_label(cur == *n, *n).clicked() && f.0 > 0 {
+                                            if ui.selectable_label(cur == *n, *n).clicked() {
+                                                // „Benutzerdefiniert“ gibt Breite und Höhe frei (vorher ohne Wirkung);
+                                                // die Maße kommen beim OK aus den beiden Feldern
                                                 o.format = *f;
-                                                t[2] = f1(f.0 as f32 / 10.0);
-                                                t[3] = f1(f.1 as f32 / 10.0);
+                                                if f.0 > 0 {
+                                                    t[2] = f1(f.0 as f32 / 10.0);
+                                                    t[3] = f1(f.1 as f32 / 10.0);
+                                                }
                                             }
                                         }
                                     });

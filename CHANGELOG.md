@@ -25,6 +25,17 @@ erhält der Abschnitt deren Nummer.
   ein verschobenes freies Symbol, das auf eine Leitung abgelegt wird, wird eingebunden (abschaltbar).
 - Leitungen: Eine gerade Leitung bleibt gerade, wenn ein Symbol entlang ihr verschoben wird (vorher U-Umweg bzw.
   Haken nach hin und zurück); die Strompfadausrichtung rundet auf 0,1 mm wie die Datei.
+- Absturzschutz: bei ungespeicherten Änderungen alle 2 Minuten eine Sicherung im Einstellungsordner (Optionen ›
+  Programmverhalten, 0 = aus); nach einem Absturz bietet der nächste Start die Wiederherstellung an.
+- Nachzeichnen von W2 (Fortsetzung): ein Klick auf eine Leitung neben dem Raster verschiebt sie nicht mehr; eine Leitung
+  zur Schiene läuft nicht mehr durch die eigene Steckdose (das Ende rutscht auf der Schiene in die günstigste freie
+  Lage); im Nachbau abgelegte Sammelschienen bekommen Querverweise und Pfeile zum nächsten Blatt; das Kürzel einer
+  neuen Schiene folgt ihrem Namen; die Ansicht schiebt am Rand erst nach kurzem Verweilen mit, Leitungsenden bleiben
+  im Rahmen; ein neues Blatt übernimmt sofort die Strompfade der Anlage und schlägt die Ausrichtung des vorigen
+  Blattes vor.
+- Schriftfeld „Geändert“ zeigt gleich das Datum statt „Heute“; Alternativtexte lesbar; „Benutzerdefiniert“ im
+  Blattformat der Optionen gibt Breite und Höhe frei; Statuszeile zeigt die Zahl der markierten Objekte; Speichern
+  eines neuen Projekts schlägt den Projektnamen im Ordner des zuletzt geöffneten Projekts vor.
 
 ## [0.3.0]
 

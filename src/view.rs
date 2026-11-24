@@ -983,10 +983,16 @@ impl App {
         // beim Ziehen über den Rand der Zeichenfläche die Ansicht mitschieben (rand_schieben.rs)
         let geste = !matches!(self.drag, Drag::None | Drag::Pan { .. } | Drag::Kurve(_));
         let taste = ui.input(|i| (i.pointer.primary_down() || i.pointer.secondary_down()) && i.pointer.is_decidedly_dragging());
+        let jetzt = ui.input(|i| i.time);
         if geste && taste && !ui.ctx().any_popup_open() {
             if let Some(m) = ui.input(|i| i.pointer.latest_pos()) {
                 let v = crate::rand_schieben::schritt(area, m);
-                if v != Vec2::ZERO {
+                // erst nach kurzer Verweilzeit am Rand (wer dort nur zielt, schiebt nichts)
+                let los = crate::rand_schieben::verweilt(&mut self.view.rand_seit, v != Vec2::ZERO, jetzt);
+                if v != Vec2::ZERO && !los {
+                    ui.ctx().request_repaint();
+                }
+                if los {
                     let (sw, sh) = self.sheet().map(|s| s.dims()).unwrap_or((SHEET_W, SHEET_H));
                     let blatt = Vec2::new(sw * self.view.zoom, sh * self.view.zoom);
                     self.view.offset = crate::rand_schieben::begrenzt(self.view.offset, v, area.size(), blatt);
@@ -994,6 +1000,8 @@ impl App {
                     ui.ctx().request_repaint();
                 }
             }
+        } else {
+            self.view.rand_seit = None;
         }
         let xf0 = Xf { origin: area.min + self.view.offset, z: self.view.zoom };
         self.handle_canvas_input(ui, &resp, area, xf0);
@@ -2261,9 +2269,11 @@ impl App {
         self.hold_a = self.hold_press[1].is_some();
         if toggle[0] {
             self.path_align = !self.path_align;
+            self.info = an_aus("Strompfadausrichtung", self.path_align);
         }
         if toggle[1] {
             self.auto_conn = !self.auto_conn;
+            self.info = an_aus("Automatische Verbindungen", self.auto_conn);
         }
         // Befehle mit einstellbarer Belegung (Optionen › Tastenkürzel); S/A ohne Modifikatoren siehe oben
         let fired: Vec<&'static str> = ctx.input(|i| {
@@ -2566,6 +2576,11 @@ struct TreeEvents {
 }
 
 impl eframe::App for App {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        // normales Beenden: keine Wiederherstellung nötig
+        self.sicherung_beenden();
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         if let Some(d) = &self.lib_dir {
             storage.set_string("lib_dir", d.to_string_lossy().to_string());
@@ -2583,6 +2598,13 @@ impl eframe::App for App {
         crate::bruecken::setzen(self.opt.brueckenboegen);
         // Ränder der Anlagen in die Blätter: geänderte Anlagen-Eigenschaften ändern den Rahmen sofort
         crate::rahmen::abgleichen(&mut self.project);
+        // Querverweise der Sammelschienen (Blatt/Pfad des vorigen und nächsten Vorkommens, Pfeile) nach Ablegen,
+        // Verschieben, Löschen, Rückgängig sofort nachführen
+        crate::epr::update_busbar_xrefs(&mut self.project);
+        // Absturzschutz: bei ungespeicherten Änderungen zwischenspeichern (wiederherstellung.rs)
+        if self.shot.is_none() {
+            self.zwischenspeichern();
+        }
         self.handle_shot(&ctx);
         self.shortcuts(&ctx);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.title()));
@@ -2861,9 +2883,20 @@ impl App {
                     self.edit_props(id);
                 }
             }
-            "drehen" if has_sel => self.transform_selection(1),
-            "spiegel_v" if has_sel => self.transform_selection(2),
-            "spiegel_h" if has_sel => self.transform_selection(4),
+            // Rückmeldung in der Statuszeile für jedes Kürzel, das still einen Zustand ändert (Nachzeichnen
+            // 24.11.2026, S2: getippte Buchstaben drehten, wechselten das Werkzeug … ohne Hinweis)
+            "drehen" if has_sel => {
+                self.transform_selection(1);
+                self.info = format!("{} gedreht", markiert(self.selection.len()));
+            }
+            "spiegel_v" if has_sel => {
+                self.transform_selection(2);
+                self.info = format!("{} vertikal gespiegelt", markiert(self.selection.len()));
+            }
+            "spiegel_h" if has_sel => {
+                self.transform_selection(4);
+                self.info = format!("{} horizontal gespiegelt", markiert(self.selection.len()));
+            }
             "gruppieren" if self.selection.len() > 1 => self.group_selection(true),
             "aufloesen" if has_sel => self.group_selection(false),
             "symbol_bearbeiten" => {
@@ -2887,9 +2920,18 @@ impl App {
                 self.active = (self.active + self.tabs.len() - 1) % self.tabs.len();
                 self.selection.clear();
             }
-            "pfadfang" => self.path_align = !self.path_align,
-            "autoverb" => self.auto_conn = !self.auto_conn,
-            "gitter" => self.grid = !self.grid,
+            "pfadfang" => {
+                self.path_align = !self.path_align;
+                self.info = an_aus("Strompfadausrichtung", self.path_align);
+            }
+            "autoverb" => {
+                self.auto_conn = !self.auto_conn;
+                self.info = an_aus("Automatische Verbindungen", self.auto_conn);
+            }
+            "gitter" => {
+                self.grid = !self.grid;
+                self.info = an_aus("Rasterfang", self.grid);
+            }
             "w_auswahl" => {
                 if self.owner_pick.take().is_some() {
                     self.info = "Eigentümer setzen abgebrochen".into();
@@ -2899,15 +2941,36 @@ impl App {
                 self.drag = Drag::None;
                 self.zoom_tool = false;
             }
-            "w_linie" => self.tool = Tool::Line,
-            "w_rechteck" => self.tool = Tool::Rect,
-            "w_kreis" => self.tool = Tool::Circle,
-            "w_text" => self.tool = Tool::Text,
-            "w_klemme" => self.tool = Tool::Klemmstelle,
+            "w_linie" => self.werkzeug_melden(Tool::Line, "Linie"),
+            "w_rechteck" => self.werkzeug_melden(Tool::Rect, "Rechteck"),
+            "w_kreis" => self.werkzeug_melden(Tool::Circle, "Kreis"),
+            "w_text" => self.werkzeug_melden(Tool::Text, "Text"),
+            "w_klemme" => self.werkzeug_melden(Tool::Klemmstelle, "Klemmstelle (Esc = Auswahl)"),
             _ => {}
         }
     }
 }
+/// Statuszeile für einen umgeschalteten Zustand: „<was> ein“ bzw. „<was> aus“.
+fn an_aus(was: &str, an: bool) -> String {
+    format!("{was} {}", if an { "ein" } else { "aus" })
+}
+
+/// „1 Objekt“ bzw. „n Objekte“.
+fn markiert(n: usize) -> String {
+    if n == 1 {
+        "1 Objekt".into()
+    } else {
+        format!("{n} Objekte")
+    }
+}
+
+impl App {
+    fn werkzeug_melden(&mut self, t: Tool, name: &str) {
+        self.tool = t;
+        self.info = format!("Werkzeug: {name}");
+    }
+}
+
 fn dbg_log(t: &str) {
     if let Ok(p) = std::env::var("EP_LOG") {
         use std::io::Write;

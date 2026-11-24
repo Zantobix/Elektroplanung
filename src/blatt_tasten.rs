@@ -102,10 +102,12 @@ pub fn geaendert_datum(sheet: &Sheet) -> String {
     }
 }
 
-/// Wert für %Geändert: „Heute“ beim Bildschirm-Zeichnen eines in dieser Sitzung geänderten Blattes, sonst das Datum.
+/// Wert für %Geändert: beim Bildschirm-Zeichnen eines in dieser Sitzung geänderten Blattes das heutige Datum, sonst
+/// das gespeicherte. Das Original zeigt dort „Heute“ bis zum Speichern; Nutzer 24.11.2026 (Frage F9): gleich das
+/// Datum (bewusste Abweichung, README).
 pub fn geaendert_text(datum: String) -> String {
     if HEUTE.with(|h| h.get()) {
-        "Heute".into()
+        crate::model::today()
     } else {
         datum
     }
@@ -242,7 +244,7 @@ mod tests {
         s.geaendert = "03.04.2025".into();
         assert_eq!(geaendert_datum(&s), "03.04.2025");
         assert_eq!(geaendert_text("01.02.2026".into()), "01.02.2026");
-        assert_eq!(mit_heute(true, || geaendert_text("01.02.2026".into())), "Heute");
+        assert_eq!(mit_heute(true, || geaendert_text("01.02.2026".into())), crate::model::today());
         assert_eq!(geaendert_text("01.02.2026".into()), "01.02.2026");
     }
 

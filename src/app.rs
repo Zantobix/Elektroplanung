@@ -113,6 +113,8 @@ pub struct View {
     pub user: bool,
     pub last_size: Vec2,
     pub last_portrait: bool,
+    /// Seit wann (egui-Zeit, s) die Maus beim Ziehen in der Randzone liegt (Rand-Mitschieben erst nach `VERWEILEN`)
+    pub rand_seit: Option<f64>,
 }
 
 #[derive(Clone)]
@@ -240,6 +242,8 @@ pub struct App {
     pub show_library: bool,
     /// Suche nach einer neueren Version (update_pruefung.rs)
     pub update: crate::update_pruefung::Pruefung,
+    /// Absturzschutz: Zwischenspeichern (wiederherstellung.rs)
+    pub sicherung: crate::wiederherstellung::Stand,
     /// weitere Dialoge (dialoge3.rs)
     pub dlg3: Option<crate::dialoge3::Dlg3>,
     /// Bibliotheksverwaltung: Reiter und Synchronisierung
@@ -332,7 +336,7 @@ impl App {
             quit_ok: false,
             sheet_views: Default::default(),
             view_sheet: None,
-            view: View { zoom: 4.0, offset: Vec2::ZERO, user: false, last_size: Vec2::ZERO, last_portrait: false },
+            view: View { zoom: 4.0, offset: Vec2::ZERO, user: false, last_size: Vec2::ZERO, last_portrait: false, rand_seit: None },
             drag: Drag::None,
             placing: None,
             ring: None,
@@ -378,6 +382,7 @@ impl App {
             recent: vec![],
             show_library: false,
             update: Default::default(),
+            sicherung: Default::default(),
             dlg3: None,
             lib_tab: 0,
             lib_sync: (String::new(), true, true, 0, String::new()),
@@ -1139,7 +1144,11 @@ impl App {
         let n = anl.sheets.iter().map(|s| s.number).max().unwrap_or(0) + 1;
         // Ausrichtung nach den Projektvorgaben (Original 0x403ce4: Blatt +0x80 = Option „Hochformat“)
         let mut sh = Sheet::new(n);
+        // Ausrichtung nach den Projektvorgaben; Strompfade „wie Anlage“ (Nachzeichnen 24.11.2026, S8: neues Blatt mit
+        // 8 statt 20 Strompfaden bis zum Neuladen)
         sh.portrait = self.opt.hochformat;
+        sh.col_auto = true;
+        sh.columns = Some(anl.set.pfade).filter(|c| (1..=40).contains(c)).map(|c| c as u32).unwrap_or(8);
         anl.sheets.push(sh);
         crate::rahmen::abgleichen_anlage(anl);
         let r = SheetRef { anlage: a, sheet: anl.sheets.len() - 1 };
@@ -1160,7 +1169,9 @@ impl App {
                 s.neu = true;
                 // Vorgaben des Dialogs wie Blatteinfgen1Click 0x461960 (blatt_neu.rs): Strompfade „-1“, Querformat
                 s.strompfade = "-1".into();
-                s.portrait = false;
+                // Ausrichtung: das Original schlägt Querformat vor; der Nachbau die des vorigen Blattes der Anlage
+                // (Nachzeichnen 24.11.2026, B4/S8: neues Blatt zwischen lauter Hochformat-Blättern kam quer)
+                s.portrait = r.sheet.checked_sub(1).and_then(|i| self.project.anlagen.get(r.anlage)?.sheets.get(i)).map(|v| v.portrait).unwrap_or(false);
                 s.vorgabe = [s.name.clone(), s.nummer.clone(), s.subindex.clone()];
                 s.vorher = (s.art, s.anlage_wahl);
             }
@@ -1354,8 +1365,15 @@ impl App {
     }
 
     pub fn save_as(&mut self) {
-        let stem = self.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Projekt".into());
-        let dlg = rfd::FileDialog::new()
+        // Vorschlag: Dateiname bzw. Projektname, Ordner der Datei bzw. des zuletzt geöffneten Projekts (Nachzeichnen
+        // 24.11.2026, S9: „Projekt.epr“ im zuletzt benutzten Systemordner – beim Nutzer der Ordner der Originalpläne)
+        let stem = self.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| dateiname_aus(&self.project.name));
+        let ordner = self.path.as_ref().and_then(|p| p.parent().map(|d| d.to_path_buf())).or_else(|| self.recent.first().and_then(|r| std::path::Path::new(r).parent().map(|d| d.to_path_buf()))).filter(|d| d.is_dir());
+        let mut dlg = rfd::FileDialog::new();
+        if let Some(d) = ordner {
+            dlg = dlg.set_directory(d);
+        }
+        let dlg = dlg
             // Filtertext wie im Original (0x416cfc: „Elektroplanungs Projekt|*.epr“), JSON als Erweiterung
             .add_filter("Elektroplanungs Projekt", &["epr"])
             .add_filter("Elektroplanung Projekt (JSON)", &["epj"])
@@ -2184,5 +2202,25 @@ mod blatt_dialog_tests {
         app.redo.pop();
         assert_eq!(app.project.anlagen[0].sheets.len(), vorher);
         assert_eq!(app.redo.len(), redo);
+    }
+}
+
+/// Dateiname aus dem Projektnamen (ohne Zeichen, die Dateisysteme nicht erlauben); leer → „Projekt“.
+pub fn dateiname_aus(name: &str) -> String {
+    let s: String = name.trim().chars().map(|c| if "\\/:*?\"<>|".contains(c) || c.is_control() { '_' } else { c }).collect();
+    if s.trim().is_empty() {
+        "Projekt".into()
+    } else {
+        s
+    }
+}
+
+#[cfg(test)]
+mod dateiname_tests {
+    #[test]
+    fn dateiname_aus_projektname() {
+        assert_eq!(super::dateiname_aus("Wohnung 2"), "Wohnung 2");
+        assert_eq!(super::dateiname_aus("A/B: C?"), "A_B_ C_");
+        assert_eq!(super::dateiname_aus("  "), "Projekt");
     }
 }

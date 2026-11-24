@@ -181,6 +181,7 @@ impl App {
             user: true,
             last_size: area.size(),
             last_portrait: portrait,
+            rand_seit: None,
         };
         if self.view_sheet == Some(r) {
             self.view = v;

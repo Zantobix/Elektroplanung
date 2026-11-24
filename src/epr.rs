@@ -466,21 +466,23 @@ pub fn column_at(sh: &Sheet, x: f32) -> u32 {
 /// (wie im Original-Ausdruck "4/10►" am Anfang und "►6/1" am Ende).
 pub fn update_busbar_xrefs(p: &mut Project) {
     for a in &mut p.anlagen {
-        let mut occ: Vec<(usize, usize, u64, String, String)> = vec![];
+        // dieselbe Schiene = derselbe Name (Schlüssel in `anlage.schienen`); auch im Nachbau neu abgelegte Schienen
+        // (noch ohne SMS-Kennung aus der Datei) bekommen so Querverweise und Pfeile (Nachzeichnen 24.11.2026, Frage F7)
+        let mut occ: Vec<(usize, usize, String, String, String)> = vec![];
         for (si, sh) in a.sheets.iter().enumerate() {
             for (oi, o) in sh.objects.iter().enumerate() {
-                if let Kind::Busbar { a: s, x2, sms, .. } = &o.kind {
-                    occ.push((si, oi, *sms, format!("{}/{}", sh.number, column_at(sh, s.x + 0.1)), format!("{}/{}", sh.number, column_at(sh, x2 - 0.1))));
+                if let Kind::Busbar { a: s, x2, name, .. } = &o.kind {
+                    occ.push((si, oi, name.clone(), format!("{}/{}", sh.number, column_at(sh, s.x + 0.1)), format!("{}/{}", sh.number, column_at(sh, x2 - 0.1))));
                 }
             }
         }
-        for (i, (si, oi, sms, ..)) in occ.iter().enumerate() {
-            let prev = occ[..i].iter().rev().find(|o| o.2 == *sms && o.0 != *si).map(|o| o.4.clone()).unwrap_or_default();
-            let next = occ[i + 1..].iter().find(|o| o.2 == *sms && o.0 != *si).map(|o| o.3.clone()).unwrap_or_default();
+        for (i, (si, oi, name, ..)) in occ.iter().enumerate() {
+            let prev = occ[..i].iter().rev().find(|o| o.2 == *name && !name.is_empty() && o.0 != *si).map(|o| o.4.clone()).unwrap_or_default();
+            let next = occ[i + 1..].iter().find(|o| o.2 == *name && !name.is_empty() && o.0 != *si).map(|o| o.3.clone()).unwrap_or_default();
             let o = &mut a.sheets[*si].objects[*oi];
             let set = |k: &mut Kind| {
-                if let Kind::Busbar { xin, xout, sms, .. } = k {
-                    if *sms != 0 {
+                if let Kind::Busbar { xin, xout, .. } = k {
+                    if *xin != prev || *xout != next {
                         *xin = prev.clone();
                         *xout = next.clone();
                     }
