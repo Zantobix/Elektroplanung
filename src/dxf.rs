@@ -380,6 +380,15 @@ pub fn lesen(bytes: &[u8]) -> Result<Zeichnung, String> {
     Ok(Zeichnung { elemente, ebenen, einheit })
 }
 
+/// Gruppieren beim Import: keine Gruppe, alles als eine Gruppe (wie das Original) oder je Ebene eine Gruppe
+/// (Nutzer 24.11.2026).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Gruppen {
+    Keine,
+    Alles,
+    JeEbene,
+}
+
 /// Einstellungen des Imports.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Einstellungen {
@@ -389,7 +398,7 @@ pub struct Einstellungen {
     pub massstab: f32,
     /// in den Rahmen einpassen (nur verkleinern)
     pub einpassen: bool,
-    pub gruppieren: bool,
+    pub gruppen: Gruppen,
     /// Ebenen-/Elementfarben als Stifte übernehmen
     pub farben: bool,
 }
@@ -397,7 +406,7 @@ pub struct Einstellungen {
 impl Einstellungen {
     /// Vorgaben wie das Original: alle eingeschalteten Ebenen, Einheit der Datei, einpassen, gruppieren, ohne Farben.
     pub fn vorgabe(z: &Zeichnung) -> Self {
-        Einstellungen { ebenen: z.ebenen.iter().filter(|e| !e.aus).map(|e| e.name.clone()).collect(), massstab: mm_je_einheit(z.einheit), einpassen: true, gruppieren: true, farben: false }
+        Einstellungen { ebenen: z.ebenen.iter().filter(|e| !e.aus).map(|e| e.name.clone()).collect(), massstab: mm_je_einheit(z.einheit), einpassen: true, gruppen: Gruppen::Alles, farben: false }
     }
 }
 
@@ -541,12 +550,12 @@ pub fn import(path: &std::path::Path, frame: (f32, f32, f32, f32)) -> Result<Vec
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Kleine DXF-Datei: zwei Ebenen (Wand rot, Moebel aus), ein Block „TUER“ (Bogen + Linie) zweimal eingefügt,
     /// MTEXT mit Formatierung, ELLIPSE, Einheit cm.
-    pub fn beispiel() -> String {
+    pub(crate) fn beispiel() -> String {
         let z = |v: &[(&str, &str)]| v.iter().map(|(c, w)| format!("{c}\n{w}\n")).collect::<String>();
         let mut s = String::new();
         s += &z(&[("0", "SECTION"), ("2", "HEADER"), ("9", "$INSUNITS"), ("70", "5"), ("0", "ENDSEC")]);

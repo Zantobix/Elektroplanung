@@ -82,9 +82,21 @@ impl App {
             p.stifte.push(Stift { name, style: 0, color: c, width: 0.25 });
             p.stifte.len() - 1
         };
-        let gid = e.gruppieren.then(|| self.project.alloc_id() + 1_000_000);
+        let alle = (e.gruppen == dxf::Gruppen::Alles).then(|| self.project.alloc_id() + 1_000_000);
+        let mut je_ebene: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
         let mut ids = vec![];
         for (k, c, ebene) in teile {
+            let gid = match e.gruppen {
+                dxf::Gruppen::Keine => None,
+                dxf::Gruppen::Alles => alle,
+                dxf::Gruppen::JeEbene => {
+                    if !je_ebene.contains_key(&ebene) {
+                        let g = self.project.alloc_id() + 1_000_000;
+                        je_ebene.insert(ebene.clone(), g);
+                    }
+                    je_ebene.get(&ebene).copied()
+                }
+            };
             let pen = match c {
                 Some(c) => stift_fuer(&mut self.project, &ebene, c),
                 None => self.pen,
@@ -151,7 +163,12 @@ impl App {
                     });
                     ui.add_space(6.0);
                     ui.checkbox(&mut d.e.einpassen, "zu große Zeichnung in den Rahmen einpassen");
-                    ui.checkbox(&mut d.e.gruppieren, "als Gruppe einfügen");
+                    ui.horizontal(|ui| {
+                        ui.label("Gruppieren:");
+                        ui.radio_value(&mut d.e.gruppen, dxf::Gruppen::Alles, "alles");
+                        ui.radio_value(&mut d.e.gruppen, dxf::Gruppen::JeEbene, "je Ebene");
+                        ui.radio_value(&mut d.e.gruppen, dxf::Gruppen::Keine, "nicht");
+                    });
                     ui.checkbox(&mut d.e.farben, "Ebenenfarben als Stifte übernehmen");
                 });
                 // Vorschau: übernommene Elemente in den Rahmen des Blattes gezeichnet
@@ -209,5 +226,31 @@ impl App {
         } else if !weg {
             self.dxf_dlg = Some(d);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn importieren(g: dxf::Gruppen) -> Vec<Option<u64>> {
+        let mut app = crate::blatt_tasten::test_app();
+        app.project = Project::new_default();
+        app.tabs = vec![SheetRef { anlage: 0, sheet: 0 }];
+        app.active = 0;
+        let z = dxf::lesen(dxf::tests::beispiel().as_bytes()).unwrap();
+        let mut d = DxfDialog::neu("x.dxf".into(), z);
+        d.e.ebenen = vec!["Wand".into(), "Moebel".into()];
+        d.e.gruppen = g;
+        app.dxf_uebernehmen(&d);
+        app.sheet().unwrap().objects.iter().map(|o| o.group).collect()
+    }
+
+    #[test]
+    fn gruppen_alles_je_ebene_keine() {
+        let anzahl = |v: &[Option<u64>]| v.iter().flatten().collect::<std::collections::HashSet<_>>().len();
+        assert_eq!(anzahl(&importieren(dxf::Gruppen::Alles)), 1);
+        assert_eq!(anzahl(&importieren(dxf::Gruppen::JeEbene)), 2);
+        assert!(importieren(dxf::Gruppen::Keine).iter().all(|g| g.is_none()));
     }
 }
