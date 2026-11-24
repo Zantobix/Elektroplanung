@@ -140,8 +140,25 @@ pub fn build(project: &Project) -> Result<EprFile, String> {
     crate::epr_projekt::write(project, &mut prj);
     crate::epr_neu::nachbereiten(&mut prj);
     crate::epr_zusatz::nachbereiten(project, &mut prj);
+    leere_sym_texte_reparieren(&mut prj);
     *out.root_mut("PRJ").unwrap() = prj;
     Ok(out)
+}
+
+/// Frühere Fassungen des Nachbaus schrieben in Projektsymbolen ohne Texte einen STR-Block der Länge 0 (SYM › GRD ›
+/// STR); das Original meldet beim Öffnen „Datenstruktur ist fehlerhaft. Objekt: SYM“. Beim Speichern bekommt ein
+/// solcher Block das Nullbyte der leeren Zeichenkette (wie das Original es schreibt).
+fn leere_sym_texte_reparieren(b: &mut Block) {
+    for k in &mut b.kids {
+        if k.is("SYM") {
+            for g in k.kids.iter_mut().filter(|g| g.is("GRD")) {
+                for st in g.kids.iter_mut().filter(|st| st.is("STR") && st.data.is_empty()) {
+                    st.data.push(0);
+                }
+            }
+        }
+        leere_sym_texte_reparieren(k);
+    }
 }
 
 /// Neuer SYM-Block, falls das Projektsymbol zu `k` gegenüber der Datei geändert wurde.
@@ -912,6 +929,11 @@ fn sym_block(def: &crate::symbols::SymDef, tpl: &Block, id: u64) -> Block {
     let mut strs = vec![];
     for t in &texts {
         strs.extend(crate::eprfile::cstr_bytes(t));
+    }
+    // ohne Texte schreibt das Original eine leere Zeichenkette (ein Nullbyte); ein STR der Länge 0 meldet es als
+    // „Datenstruktur ist fehlerhaft. Objekt: SYM“ (MT4, 24.11.2026: Projektsymbol „Rauchwarnmelder“)
+    if strs.is_empty() {
+        strs.push(0);
     }
     grd.kids.push(Block::new("STR", strs));
     if !opts.is_empty() {

@@ -14,6 +14,9 @@ erhält der Abschnitt deren Nummer.
 
 - Neue Projekte bekommen das Schriftfeld der Vorlage (Von, Anlage/Ort, Blatt x / y …) statt des eingebauten
   Standards; das Logofeld bleibt ohne Logobild leer und verdeckt keine Texte mehr.
+- **Datei:** Projektsymbole ohne Texte (z. B. „Rauchwarnmelder“) wurden mit einem leeren Textblock gespeichert; das
+  Original meldete beim Öffnen „Datenstruktur ist fehlerhaft. Objekt: SYM“. Jetzt wie im Original; beim nächsten
+  Speichern werden auch ältere Dateien repariert (im Original unter Wine gegengeprüft).
 - Netz-Wächter: Bearbeitungen (Verschieben, Teilstück/Knick ziehen, Drehen/Spiegeln, Pfeiltasten), die fremde
   elektrische Netze kurzschließen, eine Verbindung trennen oder Leitungen verschiedener Netze übereinanderlegen
   würden, werden nicht ausgeführt; das Objekt bleibt an der letzten zulässigen Stelle, die Statuszeile nennt den

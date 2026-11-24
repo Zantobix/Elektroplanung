@@ -329,3 +329,38 @@ fn sheets_carry_their_anlage_id() {
     let (_, f) = reload(&p);
     assert!(blatt_anlage_ok(&f));
 }
+
+/// MT4 (24.11.2026): eine vom Nachbau gespeicherte Datei mit dem Projektsymbol „Rauchwarnmelder“ (ohne Texte) meldete
+/// im Original „Datenstruktur ist fehlerhaft. Objekt: SYM“ – SYM › GRD › STR hatte die Länge 0, das Original schreibt
+/// ein Nullbyte. Nach dem Speichern hat kein SYM einen leeren STR mehr (auch bei Dateien aus älteren Fassungen).
+#[test]
+fn sym_ohne_texte_hat_nullbyte_im_str() {
+    let Some(dir) = std::env::var_os("EP_FIXTURES") else { return };
+    let f = std::path::PathBuf::from(dir).join("nachzeichnen/nachgezeichnet_2026-11-24.epr");
+    if !f.exists() {
+        return;
+    }
+    let mut app = elektroplanung::blatt_tasten::test_app();
+    app.open_path(f, false);
+    let bytes = elektroplanung::epr_write::to_bytes(&app.project).expect("schreiben");
+    // für die Gegenprobe im Original (Wine): EP_SPEICHERN=<Pfad>
+    if let Some(z) = std::env::var_os("EP_SPEICHERN") {
+        std::fs::write(z, &bytes).unwrap();
+    }
+    let file = elektroplanung::eprfile::EprFile::parse(&bytes).expect("lesen");
+    let mut leer = 0;
+    fn zaehlen(b: &elektroplanung::eprfile::Block, leer: &mut usize) {
+        for k in &b.kids {
+            if k.is("SYM") {
+                for g in k.kids.iter().filter(|g| g.is("GRD")) {
+                    *leer += g.kids.iter().filter(|s| s.is("STR") && s.data.is_empty()).count();
+                }
+            }
+            zaehlen(k, leer);
+        }
+    }
+    for r in &file.roots {
+        zaehlen(r, &mut leer);
+    }
+    assert_eq!(leer, 0, "leere STR in SYM");
+}
