@@ -9,8 +9,14 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
-Änderungen nach 0.4.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
+Änderungen nach 0.5.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer.
+
+## [0.5.0]
+
+Schwerpunkt: Netz-Wächter (Bearbeitungen schließen keine fremden Netze mehr kurz), Mehrfachklick-Markierung auf
+Leitungen, Datenfehler beim Speichern von Projektsymbolen ohne Texte behoben (Original meldete „SYM fehlerhaft“),
+Tastatur wieder bedienbar nach Auswahlfeldern.
 
 - Neue Projekte bekommen das Schriftfeld der Vorlage (Von, Anlage/Ort, Blatt x / y …) statt des eingebauten
   Standards; das Logofeld bleibt ohne Logobild leer und verdeckt keine Texte mehr.
