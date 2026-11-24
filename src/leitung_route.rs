@@ -340,8 +340,11 @@ impl crate::app::App {
             // längere Stiche: endet der Stich auf einer fremden Leitung (Nachzeichnen 24.11.2026: PE-Pin nach oben,
             // Stich genau auf der L-Leitung über der Anschlussreihe – PE und L wurden verbunden)
             kand.extend((2..=4).map(|k| self.leitungsweg_roh_mit(f, ende, self.stich() * k as f32)));
+            // Wege, die die Anschlüsse in ihrer Richtung verlassen bzw. erreichen, zuerst (Nachzeichnen 24.11.2026,
+            // Blatt -F3: der Winkelweg lief seitwärts aus dem LS-Anschluss, obwohl ein Z-Weg frei war)
+            let mut kand: Vec<Vec<P>> = kand.into_iter().map(crate::leitung_fuehrung::bereinigen).collect();
+            kand.sort_by_key(|c| !in_anschlussrichtung(c, da, db));
             kand.into_iter()
-                .map(crate::leitung_fuehrung::bereinigen)
                 .find(|c| {
                     !ueberlappt(s, c)
                         && crate::leitung_hindernis::kreuzungen(c, &hind) == 0
@@ -614,6 +617,21 @@ pub fn ueber_fremdem_anschluss(sheet: &Sheet, lib: &[SymDef], w: &[P]) -> bool {
 /// Z-Wege von `a` nach `e` mit Stichen in Anschlussrichtung und dem Querstück auf verschiedenen Höhen (bei
 /// senkrechten Anschlüssen) bzw. Fluchten (bei waagerechten) zwischen den Stichen, im Abstand max(Raster, Stich);
 /// die dem längsten Querstück von `bisher` nächstgelegenen zuerst.
+/// Verlässt der Weg `c` den Anfang in Richtung `da` und erreicht er das Ende gegen die Richtung `db` (Anschluss
+/// zeigt nach außen)? Ohne Richtung gilt die Seite als erfüllt.
+fn in_anschlussrichtung(c: &[P], da: Option<P>, db: Option<P>) -> bool {
+    if c.len() < 2 {
+        return true;
+    }
+    let n = c.len();
+    let gleich = |u: P, v: P, d: P| {
+        let r = v.sub(u);
+        let l = (r.x * r.x + r.y * r.y).sqrt();
+        l > 1e-3 && (r.x / l * d.x + r.y / l * d.y) > 0.99
+    };
+    da.is_none_or(|d| gleich(c[0], c[1], d)) && db.is_none_or(|d| gleich(c[n - 1], c[n - 2], d))
+}
+
 fn z_wege(a: P, da: Option<P>, e: P, db: Option<P>, stich: f32, raster: f32, bisher: &[P]) -> Vec<Vec<P>> {
     let senk = |d: Option<P>| d.map(|d| d.y.abs() > 0.5).unwrap_or(true);
     let waag = |d: Option<P>| d.map(|d| d.x.abs() > 0.5).unwrap_or(true);

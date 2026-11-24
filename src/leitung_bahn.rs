@@ -106,6 +106,9 @@ impl crate::app::App {
             && crate::leitung_hindernis::kreuzungen(&c, &hind) == 0
             && !crate::leitung_route::laeuft_hinein(&c, da, db)
             && !crate::leitung_route::ueberlappt(sheet, &c)
+            // nie über einen fremden Anschluss (Nachzeichnen 24.11.2026, Blatt -F3: die gehaltene Form lief auf
+            // Anschlusshöhe durch die L- und N-Anschlüsse zweier Steckdosen – L und N verbunden)
+            && !crate::leitung_route::ueber_fremdem_anschluss(sheet, &self.lib, &c)
             && laenge(&c) <= laenge(&w) + 2.5 * raster + 0.01;
         if gut {
             c
