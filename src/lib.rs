@@ -72,6 +72,7 @@ pub mod menus;
 pub mod leitung_profil;
 pub mod mitziehen;
 pub mod netz_folgen;
+pub mod netz_waechter;
 pub mod update_pruefung;
 pub mod wiederherstellung;
 pub mod fehlerbericht;

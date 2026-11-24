@@ -225,6 +225,13 @@ fn weichen(sheet: &mut Sheet, y: u64, c: u64, iv: &[(f32, f32)], anker: &[P], ne
 /// Übereinanderliegende Leitungen vereinigen: die Leitungen `ids` (gerade bearbeitet) gegen alle anderen Leitungen
 /// und Sammelschienen des Blattes. `anker` = Symbolanschlüsse, `next` = nächste freie Objekt-Id.
 pub fn vereinigen(sheet: &mut Sheet, ids: &[u64], anker: &[P], next: &mut u64) -> Ergebnis {
+    vereinigen_netze(sheet, ids, anker, next, None)
+}
+
+/// Wie `vereinigen`; mit `lib` nur Leitungen bzw. Schienen **desselben Netzes** (netz.rs): Überdecken sich Leitungen
+/// verschiedener Netze, entstünde beim Vereinigen ein Abzweig und damit ein Kurzschluss (todo N00) – sie bleiben, der
+/// Netz-Wächter weist solche Bearbeitungen ab (netz_waechter.rs).
+pub fn vereinigen_netze(sheet: &mut Sheet, ids: &[u64], anker: &[P], next: &mut u64, lib: Option<&[crate::symbols::SymDef]>) -> Ergebnis {
     let mut erg = Ergebnis::default();
     let mut offen: Vec<u64> = ids.to_vec();
     let mut betroffen: Vec<u64> = ids.to_vec();
@@ -240,8 +247,10 @@ pub fn vereinigen(sheet: &mut Sheet, ids: &[u64], anker: &[P], next: &mut u64) -
                 break;
             }
             let astk: Vec<(P, P)> = ap.windows(2).map(|w| (w[0], w[1])).collect();
+            let netze = lib.map(|l| crate::netz::netze(sheet, l));
+            let gleiches_netz = |b: u64| netze.as_ref().is_none_or(|n| n.iter().any(|v| v.contains(&a) && v.contains(&b)));
             // erstes Objekt, das sich mit A überdeckt: wer weicht wem auf welchen Strecken
-            let fund = sheet.objects.iter().filter(|o| o.id != a).find_map(|o| {
+            let fund = sheet.objects.iter().filter(|o| o.id != a && gleiches_netz(o.id)).find_map(|o| {
                 let iva = ueberdeckung(&ap, &stuecke(&o.kind));
                 if iva.is_empty() {
                     return None;
@@ -294,7 +303,9 @@ impl crate::app::App {
         let Some(anker) = self.sheet().map(|s| s.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).flat_map(|o| crate::canvas::obj_pins(o, &self.lib)).collect::<Vec<P>>()) else {
             return Ergebnis::default();
         };
-        let erg = self.with_sheet(|s, next| vereinigen(s, ids, &anker, next)).unwrap_or_default();
+        let lib = self.lib.clone();
+        let nur_netz = self.opt.netz_waechter;
+        let erg = self.with_sheet(|s, next| vereinigen_netze(s, ids, &anker, next, nur_netz.then_some(&lib[..]))).unwrap_or_default();
         if !erg.leer() {
             self.selection.retain(|id| !erg.entfernt.contains(id));
             for (von, neu) in &erg.neu {
@@ -345,13 +356,36 @@ impl crate::app::App {
         if ids.is_empty() {
             return;
         }
-        self.leitungen_vereinigen(&ids);
-        self.ueberstaende_kuerzen();
-        let ids = self.geaenderte_leitungen();
-        self.leitungen_glaetten(&ids);
-        let ids = self.geaenderte_leitungen();
-        self.leitungen_zusammenfassen(&ids);
-        self.rechtwinklig_halten();
+        self.aufraeum_schritt(|a| {
+            a.leitungen_vereinigen(&ids);
+        });
+        self.aufraeum_schritt(|a| a.ueberstaende_kuerzen());
+        self.aufraeum_schritt(|a| {
+            let ids = a.geaenderte_leitungen();
+            a.leitungen_glaetten(&ids);
+        });
+        self.aufraeum_schritt(|a| {
+            let ids = a.geaenderte_leitungen();
+            a.leitungen_zusammenfassen(&ids);
+        });
+        self.aufraeum_schritt(|a| a.rechtwinklig_halten());
+    }
+
+    /// Ein Schritt des Aufräumens; verbindet er fremde Netze (Netz-Wächter, z. B. Glätten einer Leitung durch den
+    /// Anschluss der Nachbarklemme, W2 Blatt 10), wird er zurückgenommen.
+    fn aufraeum_schritt(&mut self, f: impl FnOnce(&mut Self)) {
+        if !self.opt.netz_waechter {
+            f(self);
+            return;
+        }
+        let Some(vorher) = self.sheet().map(|s| s.objects.clone()) else { return };
+        let sel = self.selection.clone();
+        f(self);
+        let schlecht = self.sheet().is_some_and(|s| crate::netz_waechter::pruefen(&vorher, s, &self.lib, &[]).is_some());
+        if schlecht {
+            self.with_sheet(|s, _| s.objects = vorher);
+            self.selection = sel;
+        }
     }
 
     /// Absicherung nach dem Aufräumen (Nutzerbild Runde 13: schräge Leitung nach dem Verschieben einer Lampe):
@@ -654,5 +688,20 @@ mod tests {
         alle.sort_by(|a, b| a[0].x.total_cmp(&b[0].x).then(a[0].y.total_cmp(&b[0].y)));
         assert_eq!(alle, vec![vec![p(0.0, -20.0), p(0.0, 0.0)], vec![p(30.0, 0.0), p(30.0, 20.0)], vec![p(60.0, 20.0), p(60.0, 40.0)]]);
         sauber(&s);
+    }
+
+    #[test]
+    fn verschiedene_netze_werden_nicht_vereinigt() {
+        // N00: zwei Leitungen ohne Verbindung (verschiedene Netze), die bearbeitete liegt ein Stück auf der anderen.
+        // Vereinigen machte daraus einen Abzweig (Kurzschluss); mit Netzprüfung bleiben beide.
+        let s0 = blatt(vec![vec![p(0.0, 0.0), p(0.0, 10.0), p(30.0, 10.0), p(30.0, 20.0)], vec![p(10.0, 30.0), p(10.0, 10.0), p(20.0, 10.0), p(20.0, -10.0)]]);
+        let mut s = s0.clone();
+        let mut next = 100;
+        let erg = vereinigen_netze(&mut s, &[1], &[], &mut next, Some(&[]));
+        assert!(erg.leer());
+        assert_eq!(s.objects, s0.objects);
+        // ohne Netzprüfung (bisher) wird vereinigt
+        let mut s = s0.clone();
+        assert!(!vereinigen(&mut s, &[1], &[], &mut next).leer());
     }
 }

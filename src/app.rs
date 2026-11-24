@@ -272,6 +272,10 @@ pub struct App {
     pub owner_pick: Option<(SheetRef, Vec<u64>)>,
     /// Objekte des Blattes vor der laufenden Änderung (netz_folgen.rs: Leitungsnetz wird von hier aus nachgeführt)
     pub netz_vorher: Vec<Obj>,
+    /// letzter vom Netz-Wächter zugelassener Stand der laufenden Bearbeitung (netz_waechter.rs)
+    pub netz_gueltig: Option<Vec<Obj>>,
+    /// Zahl der vom Netz-Wächter abgewiesenen Bearbeitungsschritte (für Tests und Messung)
+    pub netz_abgewiesen: usize,
     /// Leitungsformen je Quadrant (leitung_gedaechtnis.rs, nach QElectroTech)
     pub formen: crate::leitung_gedaechtnis::Gedaechtnis,
     /// Blattstände zu Gestenbeginn (neueste zuletzt): kehren alle Objekte außer Leitungen in einen davon zurück, gelten
@@ -404,6 +408,8 @@ impl App {
             bt: Default::default(),
             owner_pick: None,
             netz_vorher: vec![],
+            netz_gueltig: None,
+            netz_abgewiesen: 0,
             formen: Default::default(),
             rueckkehr: vec![],
             rueckkehr_gilt: false,
@@ -1099,6 +1105,16 @@ impl App {
         });
         self.netz_nachfuehren(&sel, false);
         self.aufraeumen();
+        // Netz-Wächter: Drehen/Spiegeln, das fremde Netze kurzschließen würde, zurücknehmen (netz_waechter.rs)
+        let ok = !self.opt.netz_waechter || self.sheet().is_none_or(|s| crate::netz_waechter::pruefen(&self.netz_vorher, s, &self.lib, &sel).is_none());
+        if !ok {
+            let grund = self.sheet().and_then(|s| crate::netz_waechter::pruefen(&self.netz_vorher, s, &self.lib, &sel)).unwrap_or_default();
+            self.do_undo();
+            self.redo.pop();
+            self.selection = sel;
+            self.info = format!("Nicht gedreht/gespiegelt: {grund}");
+            self.netz_abgewiesen += 1;
+        }
     }
 
     pub fn group_selection(&mut self, on: bool) {

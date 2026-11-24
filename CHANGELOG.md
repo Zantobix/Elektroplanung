@@ -14,6 +14,15 @@ erhält der Abschnitt deren Nummer.
 
 - Neue Projekte bekommen das Schriftfeld der Vorlage (Von, Anlage/Ort, Blatt x / y …) statt des eingebauten
   Standards; das Logofeld bleibt ohne Logobild leer und verdeckt keine Texte mehr.
+- Netz-Wächter: Bearbeitungen (Verschieben, Teilstück/Knick ziehen, Drehen/Spiegeln, Pfeiltasten), die fremde
+  elektrische Netze kurzschließen, eine Verbindung trennen oder Leitungen verschiedener Netze übereinanderlegen
+  würden, werden nicht ausgeführt; das Objekt bleibt an der letzten zulässigen Stelle, die Statuszeile nennt den
+  Grund (Optionen › Programmverhalten, Standard an). Vorher verbanden 150 von 733 Zufallsbearbeitungen auf W2 fremde
+  Netze.
+- Aufräumen nach dem Ziehen legt nur noch Leitungen desselben Netzes zusammen; Glätten und andere Aufräumschritte,
+  die Netze ändern würden, unterbleiben.
+- Teilstück ziehen: ein Leitungsende auf einer Leitung wandert nicht mehr über eine Ecke auf eine fremde Schiene;
+  am Anschluss entsteht bei Bedarf ein Stich vor dem Querstück (statt quer durch den Nachbaranschluss).
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]

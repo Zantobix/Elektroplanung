@@ -61,6 +61,46 @@ fn netz_aenderungen(vorher: &std::collections::HashMap<(u64, u32), usize>, nachh
     (v2n.values().filter(|s| s.len() > 1).count(), n2v.values().filter(|s| s.len() > 1).count())
 }
 
+
+/// Diagnose (N00): direkte Berührungen im Blatt `n` zwischen Objekten, die in `s` zu verschiedenen Netzen gehörten
+/// (Leitungsende an Leitung/Schiene/Klemme/Verweis bzw. zwei Leitungsenden am selben Symbolanschluss).
+fn neue_bruecken(s: &Sheet, n: &Sheet, lib: &[elektroplanung::symbols::SymDef]) -> Vec<String> {
+    use elektroplanung::netz::netze;
+    let alt: std::collections::HashMap<u64, usize> = netze(s, lib).iter().enumerate().flat_map(|(i, v)| v.iter().map(move |id| (*id, i))).collect();
+    let pins: Vec<(u64, P)> = n.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).flat_map(|o| elektroplanung::canvas::obj_pins(o, lib).into_iter().map(move |q| (o.id, q))).collect();
+    let mut out = vec![];
+    let enden: Vec<(u64, P)> = n.objects.iter().filter_map(|o| match &o.kind { Kind::Wire { pts, .. } if pts.len() >= 2 => Some([(o.id, pts[0]), (o.id, pts[pts.len() - 1])]), _ => None }).flatten().collect();
+    for &(i, e) in &enden {
+        let Some(ai) = alt.get(&i) else { continue };
+        for o in &n.objects {
+            if o.id == i { continue; }
+            let Some(aj) = alt.get(&o.id) else { continue };
+            if ai == aj { continue; }
+            let grund = match &o.kind {
+                Kind::Wire { pts, .. } => {
+                    if pts[0].dist(e) < 0.05 || pts[pts.len() - 1].dist(e) < 0.05 { Some("Ende an Ende") }
+                    else if pts.windows(2).any(|w| seg_dist(e, w[0], w[1]) < 0.05) { Some("Ende im Innern (T)") } else { None }
+                }
+                Kind::Busbar { a, x2, .. } => ((e.y - a.y).abs() < 0.05 && e.x >= a.x.min(*x2) - 0.05 && e.x <= a.x.max(*x2) + 0.05).then_some("Ende auf Schiene"),
+                Kind::Terminal { pos, .. } => (pos.dist(e) <= 0.85).then_some("Ende an Klemmstelle"),
+                Kind::Verweis { pos, .. } => (pos.dist(e) < 0.05).then_some("Ende an Verweis"),
+                _ => None,
+            };
+            if let Some(g) = grund {
+                out.push(format!("    {g}: Leitung {i} bei {e:?} ↔ {} {}", o.id, match &o.kind { Kind::Wire { pts, .. } => format!("{pts:?}"), _ => String::new() }));
+            }
+        }
+        for (sym, q) in pins.iter().filter(|(_, q)| q.dist(e) <= 0.05) {
+            for &(j, f) in &enden {
+                if j != i && f.dist(*q) <= 0.05 && alt.get(&j).is_some_and(|aj| aj != ai) && i < j {
+                    out.push(format!("    zwei Enden am Anschluss von Symbol {sym} bei {q:?}: Leitung {i} ↔ {j}"));
+                }
+            }
+        }
+    }
+    out
+}
+
 #[test]
 fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     let Some(f) = std::env::var_os("EP_SAMPLE") else { return };
@@ -70,6 +110,7 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     let (mut versuche, mut fehler) = (0, vec![]);
     let mut ueber_anschluss: Vec<String> = vec![];
     let mut netzfehler: Vec<String> = vec![];
+    let mut abgewiesen: std::collections::BTreeMap<String, usize> = Default::default();
     let blaetter = app.tabs.len();
     for b in 0..blaetter {
         app.active = b;
@@ -87,6 +128,7 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
                 continue;
             }
             let netz_vorher = netz_knoten(&s, &lib);
+            let abgew_vorher = app.netz_abgewiesen;
             let vorher_ange: Vec<(u64, usize)> = enden(&s).into_iter().filter(|(id, _, p)| !freies_ende(&s, &lib, *id, *p)).map(|(id, k, _)| (id, k)).collect();
             let was;
             let art = z.next();
@@ -126,11 +168,24 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
             }
             if std::env::var("OHNE_AUFR").is_err() { app.aufraeumen(); }
             versuche += 1;
+            if app.netz_abgewiesen > abgew_vorher {
+                *abgewiesen.entry(format!("{} – {}", was.split(' ').next().unwrap_or(""), app.info)).or_insert(0) += 1;
+                if std::env::var("NETZ_DETAIL").is_ok() {
+                    println!("(abgewiesen-einzeln) Blatt {b}: {was}: {}", app.info);
+                }
+            }
             let n = app.sheet().unwrap().clone();
             // T2 Netz-Invariante: außerhalb des bearbeiteten Objekts dieselben elektrischen Netze
             let (getrennt, verbunden) = netz_aenderungen(&netz_vorher, &netz_knoten(&n, &lib), o.id);
             if getrennt + verbunden > 0 {
-                netzfehler.push(format!("Blatt {b}: {was}: {getrennt} Netze getrennt, {verbunden} Netze verbunden"));
+                let mut t = format!("Blatt {b}: {was}: {getrennt} Netze getrennt, {verbunden} Netze verbunden");
+                if std::env::var("NETZ_DETAIL").is_ok() {
+                    for z in neue_bruecken(&s, &n, &lib) {
+                        t.push('\n');
+                        t.push_str(&z);
+                    }
+                }
+                netzfehler.push(t);
             }
             // keine neuen freien Enden: Lagen freier Leitungsenden nachher, die vorher keine freien Enden waren und
             // nicht zu einer bewegten Leitung gehören (Leitungen können zusammengelegt werden, deshalb nach Lage)
@@ -179,17 +234,22 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
         println!("(Kennzahl) {f}");
     }
     println!("{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
-    for f in netzfehler.iter().take(20) {
+    for f in netzfehler.iter().take(if std::env::var("NETZ_DETAIL").is_ok() { 1000 } else { 20 }) {
         println!("(Netz) {f}");
     }
-    println!("{} Bearbeitungen mit geänderten Netzen", netzfehler.len());
-    // Kennzahl T2 (24.11.2026, erste Messung 150 von 733, fast nur „verbunden“ = Kurzschluss fremder Netze durch
-    // mitgeführte Leitungen; todo L-C): darf nur sinken
-    assert!(netzfehler.len() <= 150, "{} Bearbeitungen mit geänderten Netzen", netzfehler.len());
+    println!("{} Bearbeitungen mit geänderten Netzen, {} Schritte vom Netz-Wächter abgewiesen", netzfehler.len(), app.netz_abgewiesen);
+    for (k, v) in &abgewiesen {
+        println!("(abgewiesen) {v} × {k}");
+    }
+    // T2 Netz-Invariante, hart seit 24.11.2026 (erste Messung 150 von 733 verbanden fremde Netze; Netz-Wächter
+    // netz_waechter.rs, Vereinigen nur im selben Netz, Gleis-Wandern nur auf dem eigenen Gleis, Querstück mit Stich)
+    assert!(netzfehler.is_empty(), "{} Bearbeitungen mit geänderten Netzen", netzfehler.len());
+    // Kennzahl: vom Netz-Wächter abgewiesene Schritte (meist Zufallsziel auf einer fremden Leitung) – darf nur sinken
+    assert!(app.netz_abgewiesen <= 123, "{} Schritte abgewiesen", app.netz_abgewiesen);
     assert!(fehler.is_empty());
     // Kennzahl (Runde 13): übrig sind Fälle, in denen die Zufallsverschiebung ein Objekt auf fremde Leitungen bzw.
     // Anschlüsse setzt und es keinen sauberen Weg mehr gibt
-    assert!(ueber_anschluss.len() <= 12, "{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
+    assert!(ueber_anschluss.len() <= 1, "{} mitgeführte Leitungen über fremden Anschlüssen", ueber_anschluss.len());
 }
 
 
@@ -259,7 +319,13 @@ fn w2_hin_und_zurueck_ergibt_denselben_plan() {
             app.selection = vec![id];
             app.stoesse_an_markierung_zusammenfassen();
             let vorher = form(app.sheet().unwrap());
+            let abgew = app.netz_abgewiesen;
             geste(&mut app, id, d);
+            if app.netz_abgewiesen > abgew {
+                // Hinweg vom Netz-Wächter abgewiesen (netz_waechter.rs): das Objekt steht noch, kein Rückweg
+                app.do_undo();
+                continue;
+            }
             geste(&mut app, id, P::new(-d.x, -d.y));
             versuche += 1;
             let nachher = form(app.sheet().unwrap());

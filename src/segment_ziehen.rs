@@ -83,6 +83,40 @@ pub fn verschieben_frei(orig: &[P], idx: usize, d: P, frei: [bool; 2]) -> Vec<P>
     crate::leitung_fuehrung::bereinigen(out)
 }
 
+/// Wie `verschieben_frei` für das erste bzw. letzte Teilstück mit festem Ende: das Teilstück behält am festen Ende
+/// einen Stich der Länge `l` in seiner Richtung, erst danach folgt das Querstück (die Leitung verlässt den Anschluss
+/// in seiner Richtung). `None`, wenn kein festes Ende betroffen oder das Teilstück zu kurz ist.
+pub fn mit_stich(orig: &[P], idx: usize, d: P, frei: [bool; 2], l: f32) -> Option<Vec<P>> {
+    let n = orig.len();
+    if n < 2 || idx + 1 >= n {
+        return None;
+    }
+    let (a, b) = (orig[idx], orig[idx + 1]);
+    let len = a.dist(b);
+    if len <= l + EPS || !achsengerade(a, b) {
+        return None;
+    }
+    let u = P::new((b.x - a.x) / len, (b.y - a.y) / len);
+    let mut v = orig.to_vec();
+    let mut i = idx;
+    let mut geaendert = false;
+    if idx == 0 && !frei[0] {
+        v.insert(1, P::new(a.x + u.x * l, a.y + u.y * l));
+        i += 1;
+        geaendert = true;
+    }
+    if idx + 1 == n - 1 && !frei[1] && v[i].dist(b) > l + EPS {
+        let k = v.len() - 1;
+        v.insert(k, P::new(b.x - u.x * l, b.y - u.y * l));
+        geaendert = true;
+    }
+    if !geaendert {
+        return None;
+    }
+    let f = [frei[0], frei[1]];
+    Some(verschieben_frei(&v, i, d, f))
+}
+
 /// Fluchten, an die ein waagerechtes (`waagerecht`) bzw. senkrechtes Teilstück beim Ziehen gefangen wird: Höhen bzw.
 /// x-Lagen gleichgerichteter Teilstücke anderer Leitungen, Sammelschienen und Anschlüsse (ohne Leitung `ohne`).
 pub fn fluchten(sheet: &crate::model::Sheet, lib: &[crate::symbols::SymDef], ohne: u64, waagerecht: bool) -> Vec<f32> {
@@ -125,9 +159,19 @@ impl App {
         let soll = alt + if waagerecht { d.y } else { d.x };
         let raster = if waagerecht { self.snap(P::new(a.x, soll)).y } else { self.snap(P::new(soll, a.y)).x };
         let fang = self.raster() / 2.0;
+        // mit Netz-Wächter nur Fluchten des eigenen Netzes (und Anschlüsse): auf eine fremde Leitung gefangen, würde das
+        // Teilstück zwei Netze übereinanderlegen und abgewiesen (netz_waechter.rs)
         let flucht = self
             .sheet()
-            .map(|s| fluchten(s, &self.lib, id, waagerecht))
+            .map(|s| {
+                if !self.opt.netz_waechter {
+                    return fluchten(s, &self.lib, id, waagerecht);
+                }
+                let netz = crate::netz::netz_von(s, &self.lib, id);
+                let mut t = s.clone();
+                t.objects.retain(|o| !matches!(o.kind, Kind::Wire { .. } | Kind::Busbar { .. }) || netz.contains(&o.id));
+                fluchten(&t, &self.lib, id, waagerecht)
+            })
             .unwrap_or_default()
             .into_iter()
             .filter(|f| (f - soll).abs() <= fang && (f - alt).abs() > EPS)
@@ -182,18 +226,37 @@ impl App {
         // freie Enden (vor dem Ziehen an nichts angeschlossen) wandern mit dem Teilstück
         let n = orig.len();
         let frei = [0, n - 1].map(|i| !self.netz_vorher.is_empty() && crate::leitung_anschluss::freies_ende_in(&self.netz_vorher, &self.lib, id, orig[i]));
-        let neu_pts = if knick { crate::knick_ziehen::knick_verschieben_frei(&orig, idx, d, frei) } else { verschieben_frei(&orig, idx, d, frei) };
-        let neu = crate::schiene_halten::abgreifen(&neu_pts, &sch);
-        // ebenso auf anderen Leitungen (Anfang auf N: wandert auf N mit, kein Querstück auf N)
-        let gl = crate::schiene_halten::gleise_aus(&self.netz_vorher);
-        let neu = crate::schiene_halten::abgreifen_gleise(&neu, &gl, id);
-        self.with_sheet(|s, _| {
-            if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
-                *pts = neu;
+        let normal = if knick { crate::knick_ziehen::knick_verschieben_frei(&orig, idx, d, frei) } else { verschieben_frei(&orig, idx, d, frei) };
+        // Varianten für den Netz-Wächter (netz_waechter.rs): verbindet das Querstück am festen Ende fremde Netze
+        // (z. B. waagerecht aus dem Anschluss durch den Anschluss der Nachbarklemme, W2 Blatt 15), erst einen Stich in
+        // Richtung des Endstücks, dann das Querstück
+        let mut varianten = vec![normal];
+        if !knick && self.opt.netz_waechter {
+            let st = self.stich();
+            for l in [st, 2.0 * st] {
+                if let Some(v) = mit_stich(&orig, idx, d, frei, l) {
+                    varianten.push(v);
+                }
             }
-        });
-        // Abzweige auf der gezogenen Leitung folgen (netz_folgen.rs)
-        self.netz_nachfuehren(&[id], false);
+        }
+        let gl = crate::schiene_halten::gleise_aus(&self.netz_vorher);
+        let zahl = varianten.len();
+        for (k, neu_pts) in varianten.into_iter().enumerate() {
+            let neu = crate::schiene_halten::abgreifen(&neu_pts, &sch);
+            // ebenso auf anderen Leitungen (Anfang auf N: wandert auf N mit, kein Querstück auf N)
+            let neu = crate::schiene_halten::abgreifen_gleise(&neu, &gl, id);
+            self.with_sheet(|s, _| {
+                if let Some(Kind::Wire { pts, .. }) = s.objects.iter_mut().find(|o| o.id == id).map(|o| &mut o.kind) {
+                    *pts = neu;
+                }
+            });
+            // Abzweige auf der gezogenen Leitung folgen (netz_folgen.rs)
+            self.netz_nachfuehren(&[id], false);
+            if k + 1 == zahl || self.sheet().is_none_or(|s| crate::netz_waechter::pruefen(&self.netz_vorher, s, &self.lib, &[id]).is_none()) {
+                break;
+            }
+        }
+        self.netz_waechter(&[id]);
         self.drag = Drag::Teilstueck { id, idx, orig, start, moved: true, knick };
     }
 }

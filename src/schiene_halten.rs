@@ -48,9 +48,11 @@ pub fn abgreifen(pts: &[P], sch: &[Schiene]) -> Vec<P> {
 pub fn abgreifen_ausser(pts: &[P], sch: &[Schiene], fest: [bool; 2]) -> Vec<P> {
     let mut v = crate::leitung_fuehrung::bereinigen(pts.to_vec());
     for k in 0..2 {
+        // nur auf der Schiene, an der das Ende hängt (sonst wanderte es über eine Ecke auf eine fremde Schiene: N00)
+        let eigene = schiene_bei(v[0], sch);
         while v.len() > 2 && !fest[k] {
-            let Some(s) = schiene_bei(v[0], sch) else { break };
-            if !auf(v[1], &s) {
+            let Some(s) = eigene else { break };
+            if !auf(v[0], &s) || !auf(v[1], &s) {
                 break;
             }
             v.remove(0);
@@ -121,8 +123,13 @@ pub fn abgreifen_gleise(pts: &[P], gl: &[Gleis], ohne: u64) -> Vec<P> {
     let auf = |p: P, g: &Gleis| crate::model::seg_dist(p, g.a, g.b) < EPS;
     let mut v = crate::leitung_fuehrung::bereinigen(pts.to_vec());
     for _ in 0..2 {
+        // nur auf Gleisen, an denen das Ende hängt: Lief das Endstück erst auf dem Gleis A und dann um die Ecke auf
+        // einem fremden Gleis B entlang, wanderte das Ende auf B – Verbindung zu A getrennt, Kurzschluss mit B
+        // (N00, W2 Blatt 5: Teilstück auf eine Sammelschiene gezogen)
+        let e0 = v[0];
+        let eigene: Vec<&Gleis> = gl.iter().filter(|g| g.id != ohne && auf(e0, g)).collect();
         while v.len() > 2 {
-            if !gl.iter().any(|g| g.id != ohne && auf(v[0], g) && auf(v[1], g)) {
+            if !eigene.iter().any(|g| auf(v[0], g) && auf(v[1], g)) {
                 break;
             }
             v.remove(0);
@@ -271,5 +278,16 @@ mod tests {
         // gerade Strecke läge auf einer anderen Leitung → nichts
         let senk = Gleis { id: 5, a: p(127.0, 90.0), b: p(127.0, 110.0), schiene: false };
         assert_eq!(gerade_zum_gleis(1, &pts, [true, false], p(29.5, 0.0), dirs, &[schiene, senk]), None);
+    }
+
+    #[test]
+    fn ende_wandert_nur_auf_dem_eigenen_gleis() {
+        // N00 (W2 Blatt 5): Ende auf der senkrechten Leitung A (x = 82,5); das gezogene Stück läuft erst auf A nach
+        // oben und dann um die Ecke auf der Schiene B (y = 69,5) entlang. Das Ende wandert auf A bis zur Ecke, nicht
+        // weiter auf B (sonst getrennt von A und kurzgeschlossen mit B).
+        let a = Gleis { id: 7, a: p(82.5, 57.5), b: p(82.5, 79.5), schiene: false };
+        let b = Gleis { id: 8, a: p(77.5, 69.5), b: p(206.5, 69.5), schiene: true };
+        let v = [p(77.5, 57.5), p(77.5, 69.5), p(82.5, 69.5), p(82.5, 74.5)];
+        assert_eq!(abgreifen_gleise(&v, &[a, b], 1), vec![p(77.5, 57.5), p(77.5, 69.5), p(82.5, 69.5)]);
     }
 }

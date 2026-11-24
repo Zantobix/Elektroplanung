@@ -767,6 +767,7 @@ impl crate::app::App {
     /// Stand des aktuellen Blattes vor einer Änderung merken (Beginn des Ziehens, vor Drehen/Pfeiltaste).
     pub fn netz_merken(&mut self) {
         self.rueckkehr_gilt = false;
+        self.netz_gueltig = None;
         self.netz_vorher = self.sheet().map(|s| s.objects.clone()).unwrap_or_default();
         if let Some(r) = self.cur() {
             if self.rueckkehr.last().is_none_or(|(r0, o0)| *r0 != r || *o0 != self.netz_vorher) {
@@ -827,5 +828,6 @@ impl crate::app::App {
         });
         self.netz_vorher = vorher;
         self.netz_nachfuehren(primaer, true);
+        self.netz_waechter(primaer);
     }
 }

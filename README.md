@@ -242,6 +242,9 @@ nicht. Gemessen werden stattdessen:
     `netz_folgen.rs` Rückkehr). Zielanschluss beim Zeichnen farbig (grün frei, orange belegt, rot eigener Anfang).
   - Verschobenes Symbol in Leitung einbinden (nach QElectroTech `autoBreakConductors`; das Original bindet nur beim
     Neusetzen ein): ein freies Symbol, auf eine Leitung abgelegt, teilt sie (abschaltbar, `src/symbol_in_leitung.rs`).
+  - Netz-Wächter: Verschieben, Teilstück ziehen, Drehen und Pfeiltasten verbinden nie ungewollt fremde Netze –
+    was nur mit Kurzschluss, Trennung oder zwei Potentialen übereinander ginge, wird nicht ausgeführt (Meldung in der
+    Statuszeile); ein freies Leitungsende darf gezielt verbinden (`src/netz_waechter.rs`, abschaltbar).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).

@@ -64,15 +64,23 @@ fn beruehrt(k: &Kind, e: P) -> bool {
 /// Alle Netze des Blattes: je Netz die Kennungen seiner Leitungen und Verbindungsobjekte (aufsteigend sortiert).
 /// Jede Leitung gehört zu genau einem Netz; ein Verbindungsobjekt ohne Leitung bildet ein eigenes Netz.
 pub fn netze(sheet: &Sheet, lib: &[SymDef]) -> Vec<Vec<u64>> {
+    netze_ohne(sheet, lib, &[])
+}
+
+/// Wie `netze`; die Leitungsenden `ohne` (Leitung, 0 = Anfang bzw. 1 = Ende) verbinden nichts (Netz-Wächter: ein
+/// freies Ende, das der Nutzer gezielt auf etwas zieht).
+pub fn netze_ohne(sheet: &Sheet, lib: &[SymDef], ohne: &[(u64, usize)]) -> Vec<Vec<u64>> {
     let objs: Vec<usize> = (0..sheet.objects.len()).filter(|&i| netzobjekt(&sheet.objects[i].kind)).collect();
     let mut m = Mengen((0..sheet.objects.len()).collect());
     let enden: Vec<(usize, P)> = objs
         .iter()
         .filter_map(|&i| match &sheet.objects[i].kind {
-            Kind::Wire { pts, .. } if !pts.is_empty() => Some([(i, pts[0]), (i, pts[pts.len() - 1])]),
+            Kind::Wire { pts, .. } if !pts.is_empty() => Some([(i, 0usize, pts[0]), (i, 1, pts[pts.len() - 1])]),
             _ => None,
         })
         .flatten()
+        .filter(|(i, k, _)| !ohne.contains(&(sheet.objects[*i].id, *k)))
+        .map(|(i, _, p)| (i, p))
         .collect();
     // Symbolanschlüsse: Enden am selben Anschluss hängen zusammen, auch wenn sie nicht genau aufeinander liegen
     let pins: Vec<P> = sheet.objects.iter().filter(|o| matches!(o.kind, Kind::Symbol { .. })).flat_map(|o| obj_pins(o, lib)).collect();

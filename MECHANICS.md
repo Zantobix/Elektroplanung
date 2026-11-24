@@ -461,5 +461,16 @@ Ein Verfahren für jede Bearbeitung (Verschieben, Teilstück/Knick ziehen, Skali
 5. Beim Loslassen räumt `App::aufraeumen` auf: Überdeckungen vereinigen, Überstände kürzen, stoßende Leitungen
    ohne Abzweig zusammenfassen (`leitung_zusammen.rs`).
 
+6. **Netz-Wächter** (`netz_waechter.rs`, Option, Standard an): Nach jedem Schritt werden die Netze (`netz.rs`,
+   Knoten = Symbolanschlüsse, Klemmstellen, Schienen, Verweise; ohne die bearbeiteten Objekte) mit dem gemerkten
+   Stand verglichen. Werden fremde Netze verbunden, Netze getrennt oder Leitungen verschiedener Netze neu
+   übereinandergelegt, gilt der letzte zulässige Stand (Ziehen bleibt stehen, Drehen/Pfeiltaste wird
+   zurückgenommen, Meldung in der Statuszeile). Ein vorher freies Ende einer bearbeiteten Leitung darf verbinden
+   (gewollt). Teilstück ziehen probiert vorher Varianten mit Stich aus dem Anschluss (`segment_ziehen::mit_stich`);
+   Fluchtfang nur auf Leitungen des eigenen Netzes. Jeder Aufräumschritt, der Netze ändert, wird zurückgenommen;
+   Vereinigen nur innerhalb eines Netzes (`vereinigen_netze`); ein Leitungsende wandert nur auf dem Gleis, an dem
+   es hängt (`abgreifen_gleise`).
+
 Prüfung: `tests/netz_zufall.rs` (zufällige Bearbeitungen auf allen W2-Blättern, kein angeschlossenes Ende wird
-frei), `tests/leitung_zeichnen.rs` (300 Zufallsbahnen beim Zeichnen, Sprünge der Vorschau gezählt).
+frei, Netze unverändert – hart; Zahl der abgewiesenen Schritte als Kennzahl), `tests/netz_waechter_w2.rs` (feste
+Fälle), `tests/leitung_zeichnen.rs` (300 Zufallsbahnen beim Zeichnen, Sprünge der Vorschau gezählt).
