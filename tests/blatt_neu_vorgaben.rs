@@ -26,3 +26,22 @@ fn neues_blatt_wie_anlage() {
         panic!("Blattdialog offen");
     }
 }
+
+/// Nutzer 24.11.2026: Blatt hinter das letzte gezogen, dann Strg+Z – die Blattfolge kam zurück, die Reiter blieben
+/// vertauscht. Nach Rückgängig/Wiederholen folgen die Reiter der Blattfolge.
+#[test]
+fn reiter_folgen_der_blattfolge_nach_rueckgaengig() {
+    let mut app = elektroplanung::blatt_tasten::test_app();
+    app.project = elektroplanung::model::Project::new_default();
+    app.project.anlagen[0].sheets.push(elektroplanung::model::Sheet::new(2));
+    app.project.anlagen[0].sheets.push(elektroplanung::model::Sheet::new(3));
+    app.tabs = (0..3).map(|i| elektroplanung::model::SheetRef { anlage: 0, sheet: i }).collect();
+    app.active = 1;
+    app.move_sheet(0, 1, 2);
+    let nr = |app: &elektroplanung::app::App| app.tabs.iter().map(|t| app.project.sheet(*t).unwrap().number).collect::<Vec<_>>();
+    assert_eq!(nr(&app), vec![1, 3, 2]);
+    app.do_undo();
+    assert_eq!(nr(&app), vec![1, 2, 3]);
+    app.do_redo();
+    assert_eq!(nr(&app), vec![1, 3, 2]);
+}

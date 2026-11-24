@@ -725,7 +725,9 @@ impl App {
             }
             if let Some(src) = self.tab_drag {
                 if src != i && ui.input(|inp| inp.pointer.interact_pos()).is_some_and(|q| rr.contains(q)) {
-                    p.rect_filled(Rect::from_min_size(rr.left_top(), Vec2::new(3.0, rr.height())), 0.0, Color32::from_rgb(0, 120, 215));
+                    // nach rechts gezogen landet das Blatt hinter dem Ziel, nach links davor – die Marke zeigt die Stelle
+                    let mx = if src < i { rr.right() - 3.0 } else { rr.left() };
+                    p.rect_filled(Rect::from_min_size(Pos2::new(mx, rr.top()), Vec2::new(3.0, rr.height())), 0.0, Color32::from_rgb(0, 120, 215));
                     if ui.input(|inp| inp.pointer.any_released()) {
                         drop_tab = Some((src, i));
                         dbg_log(&format!("tab drop {src} -> {i}"));
@@ -744,6 +746,22 @@ impl App {
                 }
             });
             x += w + 1.0;
+        }
+        // hinter den letzten Reiter gezogen (freie Fläche rechts): ans Ende der Anlage (Nutzer 24.11.2026: die
+        // vorletzte Seite ließ sich nicht hinter die letzte ziehen)
+        if let Some(src) = self.tab_drag {
+            let rechts = if overflow { limit - arrows_w } else { full.right() };
+            let rest = Rect::from_min_max(Pos2::new(x, full.top()), Pos2::new(rechts.max(x + 1.0), full.top() + 20.0));
+            let anl = self.tabs.get(src).map(|t| t.anlage);
+            let ziel = (0..=last_visible.min(self.tabs.len().saturating_sub(1))).rev().find(|&j| Some(self.tabs[j].anlage) == anl);
+            if let Some(j) = ziel.filter(|&j| j != src) {
+                if ui.input(|inp| inp.pointer.interact_pos()).is_some_and(|q| rest.contains(q)) {
+                    ui.painter().rect_filled(Rect::from_min_size(Pos2::new(x - 2.0, full.top() + 1.0), Vec2::new(3.0, 18.0)), 0.0, Color32::from_rgb(0, 120, 215));
+                    if ui.input(|inp| inp.pointer.any_released()) {
+                        drop_tab = Some((src, j));
+                    }
+                }
+            }
         }
         if overflow {
             for k in 0..2usize {

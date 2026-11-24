@@ -42,6 +42,9 @@ erhält der Abschnitt deren Nummer.
   Schiene), sucht das Programm einen anderen Versatz; geht keiner, wird nicht eingefügt (Meldung).
 - Verschieben fängt auch auf frühere Lagen des Objekts (auch neben dem Raster): Symbol hin und mit der Maus zurück
   ergibt wieder genau den alten Plan.
+- Blattreiter: ein Blatt lässt sich in die freie Fläche hinter den letzten Reiter ziehen (ans Ende der Anlage); die
+  Ablagemarke zeigt, ob vor oder hinter dem Ziel eingefügt wird; nach Rückgängig/Wiederholen folgen die Reiter wieder
+  der Blattfolge.
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]

@@ -687,6 +687,7 @@ impl App {
             self.redo.push(std::mem::replace(&mut self.project, p));
             self.selection.clear();
             self.fix_tabs();
+            self.reiter_nach_blattfolge();
         }
     }
 
@@ -695,6 +696,27 @@ impl App {
             self.undo.push(std::mem::replace(&mut self.project, p));
             self.selection.clear();
             self.fix_tabs();
+            self.reiter_nach_blattfolge();
+        }
+    }
+
+    /// Reiter einer Anlage in der Blattfolge des Projekts (ihre Plätze in der Reiterleiste bleiben); das aktive Blatt
+    /// bleibt aktiv. Nach Rückgängig/Wiederholen, sonst blieben die Reiter nach dem Zurücknehmen einer Blattverschiebung
+    /// vertauscht (Nutzer 24.11.2026).
+    pub fn reiter_nach_blattfolge(&mut self) {
+        let aktiv = self.tabs.get(self.active).copied();
+        for a in 0..self.project.anlagen.len() {
+            let plaetze: Vec<usize> = (0..self.tabs.len()).filter(|&i| self.tabs[i].anlage == a).collect();
+            let mut blaetter: Vec<SheetRef> = plaetze.iter().map(|&i| self.tabs[i]).collect();
+            blaetter.sort_by_key(|r| r.sheet);
+            for (i, r) in plaetze.into_iter().zip(blaetter) {
+                self.tabs[i] = r;
+            }
+        }
+        if let Some(r) = aktiv {
+            if let Some(i) = self.tabs.iter().position(|t| *t == r) {
+                self.active = i;
+            }
         }
     }
 
