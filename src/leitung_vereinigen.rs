@@ -304,8 +304,9 @@ impl crate::app::App {
             return Ergebnis::default();
         };
         let lib = self.lib.clone();
-        let nur_netz = self.opt.netz_waechter;
-        let erg = self.with_sheet(|s, next| vereinigen_netze(s, ids, &anker, next, nur_netz.then_some(&lib[..]))).unwrap_or_default();
+        // immer nur im selben Netz – unabhängig von der Option Netz-Wächter (Vereinigen verschiedener Netze ergäbe einen
+        // Kurzschluss)
+        let erg = self.with_sheet(|s, next| vereinigen_netze(s, ids, &anker, next, Some(&lib[..]))).unwrap_or_default();
         if !erg.leer() {
             self.selection.retain(|id| !erg.entfernt.contains(id));
             for (von, neu) in &erg.neu {

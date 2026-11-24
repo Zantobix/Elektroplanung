@@ -22,8 +22,8 @@ erhält der Abschnitt deren Nummer.
   würden, werden nicht ausgeführt; das Objekt bleibt an der letzten zulässigen Stelle, die Statuszeile nennt den
   Grund (Optionen › Programmverhalten, Standard an). Vorher verbanden 150 von 733 Zufallsbearbeitungen auf W2 fremde
   Netze.
-- Aufräumen nach dem Ziehen legt nur noch Leitungen desselben Netzes zusammen; Glätten und andere Aufräumschritte,
-  die Netze ändern würden, unterbleiben.
+- Aufräumen nach dem Ziehen legt nur noch Leitungen desselben Netzes zusammen (immer, auch ohne Netz-Wächter);
+  Glätten und andere Aufräumschritte, die Netze ändern würden, unterbleiben (mit Netz-Wächter).
 - Teilstück ziehen: ein Leitungsende auf einer Leitung wandert nicht mehr über eine Ecke auf eine fremde Schiene;
   am Anschluss entsteht bei Bedarf ein Stich vor dem Querstück (statt quer durch den Nachbaranschluss).
 - Zeichnen: eine neue Leitung läuft nicht mehr über fremde Anschlüsse, wenn die Vorschau ihre Form hält (vorher
