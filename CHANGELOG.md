@@ -16,6 +16,13 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 Änderungen nach 0.5.1 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `### Behoben` (leere weglassen).
 
+### Geändert
+
+- Ein vorhandenes Symbol lässt sich nicht mehr auf ein anderes schieben oder drehen (Körper übereinander): es bleibt
+  an der letzten zulässigen Stelle stehen, mit Hinweis in der Statuszeile. Eingefügte Kopien sind ausgenommen.
+- Hinweise, dass eine Bearbeitung nicht ausgeführt wurde, bleiben jetzt einige Sekunden in der Statuszeile stehen
+  statt sofort vom Text des Objekts unter der Maus überschrieben zu werden.
+
 ### Behoben
 
 - Leitungen zeichnen: eine neu gezogene Leitung verbindet nur noch, wo sie anfängt und endet. Vorher konnte ihr Weg

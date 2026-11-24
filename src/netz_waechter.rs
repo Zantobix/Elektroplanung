@@ -97,6 +97,26 @@ fn stuecke(k: &Kind) -> Vec<(P, P)> {
     }
 }
 
+/// Liegt ein bearbeitetes Symbol (`primaer`) nachher mit seinem Körper auf einem anderen Symbol, auf dem es vorher
+/// nicht lag (Überlappung in beiden Richtungen mehr als 0,5 mm)? Nutzer 24.11.2026 (S02): Ablegen verhindern,
+/// zurückspringen – MT1: eine Steckdose ließ sich halb auf die Nachbarsteckdose schieben.
+pub fn symbol_auf_symbol(vorher: &Sheet, nachher: &Sheet, lib: &[SymDef], primaer: &[u64]) -> bool {
+    const M: f32 = 0.5;
+    let ueber = |a: (P, P), b: (P, P)| {
+        let dx = a.1.x.max(a.0.x).min(b.1.x.max(b.0.x)) - a.0.x.min(a.1.x).max(b.0.x.min(b.1.x));
+        let dy = a.1.y.max(a.0.y).min(b.1.y.max(b.0.y)) - a.0.y.min(a.1.y).max(b.0.y.min(b.1.y));
+        dx > M && dy > M
+    };
+    let un = crate::leitung_hindernis::umrisse(nachher, lib);
+    let uv = crate::leitung_hindernis::umrisse(vorher, lib);
+    let alt = |a: u64, b: u64| {
+        let (Some(x), Some(y)) = (uv.iter().find(|u| u.id == a), uv.iter().find(|u| u.id == b)) else { return false };
+        ueber(x.r, y.r)
+    };
+    // nur vorhandene, verschobene Symbole: eingefügte Kopien liegen bewusst versetzt über dem Original
+    un.iter().filter(|u| primaer.contains(&u.id) && uv.iter().any(|v| v.id == u.id)).any(|u| un.iter().any(|v| v.id != u.id && !primaer.contains(&v.id) && ueber(u.r, v.r) && !alt(u.id, v.id)))
+}
+
 /// Prüft den Stand `nachher` gegen `vorher` (bearbeitete Objekte `primaer`). `None` = zulässig, sonst der Grund.
 pub fn pruefen(vorher: &[Obj], nachher: &Sheet, lib: &[SymDef], primaer: &[u64]) -> Option<&'static str> {
     let vs = Sheet { objects: vorher.to_vec(), ..Sheet::new(nachher.number) };
@@ -109,6 +129,9 @@ pub fn pruefen(vorher: &[Obj], nachher: &Sheet, lib: &[SymDef], primaer: &[u64])
     }
     if verbunden(&kn, &kv, primaer) > 0 {
         return Some("würde eine Verbindung trennen");
+    }
+    if symbol_auf_symbol(&vs, nachher, lib, primaer) {
+        return Some("würde ein Symbol auf ein anderes legen");
     }
     // neue Überdeckung einer geänderten Leitung mit einem anderen Netz
     let geaendert: Vec<&Obj> = nachher
@@ -168,5 +191,34 @@ impl crate::app::App {
                 false
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Obj;
+
+    fn sym(id: u64, pos: P) -> Obj {
+        Obj { id, kind: Kind::Symbol { key: "builtin:schliesser".into(), pos, rot: 0, mirror_h: false, mirror_v: false, bmk: String::new(), value: String::new(), scale: 1.0, option: 0, title: None, flags: 0, ext: Default::default() }, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    #[test]
+    fn symbol_nicht_auf_symbol_ablegen() {
+        // S02 (Nutzer 24.11.2026, MT1): ein verschobenes Symbol darf nicht neu auf einem anderen liegen
+        let lib = crate::symbols::builtin();
+        let mut vorher = Sheet::new(1);
+        vorher.objects = vec![sym(1, P::new(50.0, 100.0)), sym(2, P::new(100.0, 100.0))];
+        let mut nachher = vorher.clone();
+        nachher.objects[1] = sym(2, P::new(50.5, 102.0));
+        assert_eq!(pruefen(&vorher.objects, &nachher, &lib, &[2]), Some("würde ein Symbol auf ein anderes legen"));
+        // daneben: zulässig
+        nachher.objects[1] = sym(2, P::new(70.0, 100.0));
+        assert_eq!(pruefen(&vorher.objects, &nachher, &lib, &[2]), None);
+        // lagen sie schon vorher übereinander, ist das keine Folge dieser Bearbeitung
+        let mut v2 = vorher.clone();
+        v2.objects[1] = sym(2, P::new(50.5, 101.0));
+        nachher.objects[1] = sym(2, P::new(50.5, 102.0));
+        assert_eq!(pruefen(&v2.objects, &nachher, &lib, &[2]), None);
     }
 }

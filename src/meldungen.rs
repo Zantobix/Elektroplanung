@@ -436,12 +436,23 @@ pub fn markierung_text(n: usize) -> String {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 struct StatusMerker {
     /// zuletzt gemeldetes Objekt (None = keins)
     zuletzt: Option<(u64, u8)>,
     /// Mauslage beim Beginn des Ziehens
     start: Option<P>,
+    /// gehaltene Meldung und Zeitpunkt, seit dem sie steht
+    halten: Option<(String, f64)>,
+}
+
+/// So lange (s) bleibt eine Meldung des Netz-Wächters stehen, bevor Überfahr- bzw. Zieh-Texte sie ersetzen
+/// (Nachzeichnen 24.11.2026, NR4: die Meldung war im nächsten Bild schon überschrieben).
+pub const MELDUNG_HALTEN: f64 = 4.0;
+
+/// Meldungen, die gehalten werden (Abweisungen des Netz-Wächters und ähnliche).
+pub fn wird_gehalten(t: &str) -> bool {
+    t.starts_with("Nicht ausgeführt") || t.starts_with("Nicht gedreht") || t.starts_with("Nicht eingefügt")
 }
 
 impl crate::app::App {
@@ -450,6 +461,21 @@ impl crate::app::App {
         use crate::app::Drag;
         let id = eframe::egui::Id::unique("ep_statuszeile");
         let mut m: StatusMerker = ctx.data(|d| d.get_temp(id)).unwrap_or_default();
+        let jetzt = ctx.input(|i| i.time);
+        if wird_gehalten(&self.info) && m.halten.as_ref().is_none_or(|(t, _)| *t != self.info) {
+            m.halten = Some((self.info.clone(), jetzt));
+        }
+        if let Some((t, seit)) = m.halten.clone() {
+            if jetzt - seit < MELDUNG_HALTEN {
+                self.info = t;
+                ctx.request_repaint_after(std::time::Duration::from_millis(500));
+                ctx.data_mut(|d| d.insert_temp(id, m));
+                return;
+            }
+            m.halten = None;
+            // danach wieder normal: Objekt unter der Maus neu melden
+            m.zuletzt = Some((u64::MAX, 0));
+        }
         match &self.drag {
             Drag::None | Drag::Pan { .. } | Drag::Rubber { .. } => m.start = None,
             Drag::Move { applied, .. } => {

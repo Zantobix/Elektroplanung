@@ -248,7 +248,10 @@ fn zufall_lauf(f: std::ffi::OsString, seed: u64) -> Lauf {
     for (k, v) in &abgewiesen {
         println!("(abgewiesen) {v} × {k}");
     }
-    Lauf { fehler: fehler.len(), netz: netzfehler.len(), abgewiesen: app.netz_abgewiesen, ueber: ueber_anschluss.len() }
+    // Symbole übereinander (S02, gewollte Abweisung) getrennt zählen: die Kennzahl betrifft nur Netze
+    let auf_symbol: usize = abgewiesen.iter().filter(|(k, _)| k.contains("Symbol auf ein anderes")).map(|(_, v)| *v).sum();
+    println!("davon {auf_symbol} wegen Symbol auf Symbol (S02)");
+    Lauf { fehler: fehler.len(), netz: netzfehler.len(), abgewiesen: app.netz_abgewiesen - auf_symbol, ueber: ueber_anschluss.len() }
 }
 
 #[test]
@@ -258,7 +261,8 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     // T2 Netz-Invariante, hart seit 24.11.2026 (erste Messung 150 von 733 verbanden fremde Netze; Netz-Wächter
     // netz_waechter.rs, Vereinigen nur im selben Netz, Gleis-Wandern nur auf dem eigenen Gleis, Querstück mit Stich)
     assert_eq!(l.netz, 0, "Bearbeitungen mit geänderten Netzen");
-    // Kennzahl: vom Netz-Wächter abgewiesene Schritte (meist Zufallsziel auf einer fremden Leitung) – darf nur sinken
+    // Kennzahl: vom Netz-Wächter abgewiesene Schritte (meist Zufallsziel auf einer fremden Leitung) – darf nur sinken;
+    // ohne die Abweisungen „Symbol auf Symbol“ (S02, seit 24.11.2026 abends, gewollt)
     assert!(l.abgewiesen <= 123, "{} Schritte abgewiesen", l.abgewiesen);
     assert_eq!(l.fehler, 0);
     // Kennzahl (Runde 13): übrig sind Fälle, in denen die Zufallsverschiebung ein Objekt auf fremde Leitungen bzw.
