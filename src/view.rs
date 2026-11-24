@@ -962,6 +962,14 @@ impl App {
         let area = Rect::from_min_max(full.min, full.max - Vec2::splat(SCROLLBAR));
         let (resp, painter) = ui.allocate_painter(full.size(), Sense::click_and_drag());
         let resp = resp.with_new_rect(area);
+        // Druck auf die Zeichenfläche nimmt den Tastaturfokus anderer Bedienelemente zurück (Nachzeichnen 24.11.2026,
+        // B44: nach der Auswahl im Rasterfang-Feld bzw. dem Verweisdialog behielt das Feld den Fokus, die Kürzel-Sperre
+        // für Eingabefelder ließ Strg+S/Strg+Z ins Leere laufen)
+        if resp.hovered() && ui.input(|i| i.pointer.any_pressed()) {
+            if let Some(id) = ui.ctx().memory(|m| m.focused()) {
+                ui.ctx().memory_mut(|m| m.surrender_focus(id));
+            }
+        }
         self.canvas_area = area;
         painter.rect_filled(area, 0.0, VIEW_BG);
         self.scrollbars(ui, &painter, full, area);
