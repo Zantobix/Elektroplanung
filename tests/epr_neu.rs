@@ -55,8 +55,15 @@ fn kinds() -> Vec<(&'static str, Kind, usize, bool)> {
     ]
 }
 
-fn reload(p: &Project) -> (Project, EprFile) {
+/// Schreiben und wieder lesen. Mit `EP_RUNDREISE_AUS=<ordner>` wird jede geschriebene Datei als `<name>.epr` dort
+/// abgelegt – für die Gegenprobe im Original (`werkzeuge/linux/original_pruefen.sh`, NR2/T4).
+fn reload(name: &str, p: &Project) -> (Project, EprFile) {
     let bytes = epr_write::to_bytes(p).unwrap();
+    if let Ok(dir) = std::env::var("EP_RUNDREISE_AUS") {
+        let datei: String = name.chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' }).collect();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(PathBuf::from(dir).join(format!("{datei}.epr")), &bytes).unwrap();
+    }
     let f = EprFile::parse(&bytes).unwrap();
     assert_eq!(f.bad_checksums, 0);
     (epr::import_file(&f).unwrap(), f)
@@ -128,7 +135,7 @@ fn new_objects_roundtrip_in_new_project() {
         let o = obj(&mut p, kind.clone(), pen, fixed);
         p.anlagen[0].sheets[0].objects.push(o);
         assert!(epr_write::unsupported(&p).is_empty(), "{name}: {:?}", epr_write::unsupported(&p));
-        let (back, _) = reload(&p);
+        let (back, _) = reload(&format!("neu_{name}"), &p);
         let objs = &back.anlagen[0].sheets[0].objects;
         assert_eq!(objs.len(), 1, "{name}: {objs:?}");
         assert_same(name, &kind, &objs[0].kind);
@@ -152,7 +159,7 @@ fn new_symbol_with_all_properties() {
     let kind = Kind::Symbol { key, pos: P::new(100.0, 100.0), rot: 1, mirror_h: true, mirror_v: false, bmk: "-F%C".into(), value: "16A".into(), scale: 1.5, option: 0, title: Some((P::new(5.0, -3.0), false)), flags: 2, ext };
     let o = obj(&mut p, kind.clone(), 0, false);
     p.anlagen[0].sheets[0].objects.push(o);
-    let (back, _) = reload(&p);
+    let (back, _) = reload("neu_symbol_alle_eigenschaften", &p);
     let got = &back.anlagen[0].sheets[0].objects[0].kind;
     let (Kind::Symbol { pos, rot, mirror_h, bmk, value, scale, flags, ext, title, .. }, Kind::Symbol { ext: want, .. }) = (got, &kind) else { panic!("{got:?}") };
     assert_eq!((*pos, *rot, *mirror_h, bmk.as_str(), value.as_str(), *scale, *flags), (P::new(100.0, 100.0), 1, true, "-F%C", "16A", 1.5, 2));
@@ -177,7 +184,7 @@ fn new_images_with_project_pictures() {
         let o = obj(&mut p, k, 0, false);
         p.anlagen[0].sheets[0].objects.push(o);
     }
-    let (back, f) = reload(&p);
+    let (back, f) = reload("neu_bilder", &p);
     let objs = &back.anlagen[0].sheets[0].objects;
     assert_same("Bild bld", &a, &objs[0].kind);
     let Kind::Image { path, mode, frame, .. } = &objs[1].kind else { panic!() };
@@ -201,7 +208,7 @@ fn new_cross_references_link_each_other() {
     let v = |pos: P, text: &str, blatt: u32, obj: u64| Kind::Verweis { pos, text_pos: P::new(pos.x + 7.0, pos.y - 1.0), text: text.into(), dir: 0, vertical: false, spitze: false, ziel: Some(VerweisZiel { anlage: anl.clone(), blatt, obj }) };
     p.anlagen[0].sheets[0].objects.push(Obj { id: ida, kind: v(P::new(250.0, 50.0), "nach 2", 2, idb), pen: 0, fixed: false, group: None, raw: None });
     p.anlagen[0].sheets[1].objects.push(Obj { id: idb, kind: v(P::new(30.0, 50.0), "von 1", 1, ida), pen: 0, fixed: false, group: None, raw: None });
-    let (back, _) = reload(&p);
+    let (back, _) = reload("neu_verweis_gegenverweis", &p);
     let a = &back.anlagen[0].sheets[0].objects[0];
     let b = &back.anlagen[0].sheets[1].objects[0];
     let ziel = |o: &Obj| if let Kind::Verweis { ziel, .. } = &o.kind { ziel.clone() } else { None };
@@ -228,7 +235,7 @@ fn new_objects_in_w2_copy_match_original_blocks() {
         let mut p = base.clone();
         let o = obj(&mut p, kind.clone(), pen, fixed);
         p.anlagen[0].sheets[0].objects.push(o);
-        let (back, f) = reload(&p);
+        let (back, f) = reload(&format!("w2_{name}"), &p);
         let got = back.anlagen[0].sheets[0].objects.last().unwrap();
         if let (Kind::Symbol { bmk, ext, pos, .. }, Kind::Symbol { key, .. }) = (&got.kind, &kind) {
             assert_eq!((bmk.as_str(), ext.funktion.as_str(), *pos), ("-Q9", "Neu", P::new(200.0, 60.0)));
@@ -267,7 +274,7 @@ fn changed_new_objects_are_patched() {
         let o = obj(&mut p, k, pen, fixed);
         p.anlagen[0].sheets[0].objects.push(o);
     }
-    let (mut back, _) = reload(&p);
+    let (mut back, _) = reload("geaendert_1", &p);
     for o in &mut back.anlagen[0].sheets[0].objects {
         o.kind.translate(P::new(10.0, 5.0));
         match &mut o.kind {
@@ -281,7 +288,7 @@ fn changed_new_objects_are_patched() {
         }
     }
     let want: Vec<Kind> = back.anlagen[0].sheets[0].objects.iter().map(|o| o.kind.clone()).collect();
-    let (again, _) = reload(&back);
+    let (again, _) = reload("geaendert_2", &back);
     for (w, g) in want.iter().zip(&again.anlagen[0].sheets[0].objects) {
         assert_same("geändert", w, &g.kind);
     }
@@ -296,7 +303,7 @@ fn table_cells_are_separated_like_original() {
     let k = Kind::Table { a: P::new(20.0, 20.0), b: P::new(80.0, 50.0), rows: 3, cols: 2, cells, header: true, fixed_w: false, art: 0, ab: 0 };
     let o = obj(&mut p, k, 0, false);
     p.anlagen[0].sheets[0].objects.push(o);
-    let (back, f) = reload(&p);
+    let (back, f) = reload("tabelle_zellen", &p);
     let blt = f.root("PRJ").unwrap().kids_of("ANL").next().unwrap().kids_of("BLT").next().unwrap();
     let s = &blt.kids.last().unwrap().kid("STR").unwrap().data;
     assert_eq!(s.as_slice(), b"Nr\0\x001\0a");
@@ -316,7 +323,7 @@ fn sheets_carry_their_anlage_id() {
     let mut a2 = p.anlagen[0].clone();
     a2.name = "Anlage 2".into();
     p.anlagen.push(a2);
-    let (_, f) = reload(&p);
+    let (_, f) = reload("blatt_anlage_1", &p);
     assert!(blatt_anlage_ok(&f));
     let ids: Vec<_> = f.root("PRJ").unwrap().kids_of("ANL").map(|a| a.data[0x88..0x90].to_vec()).collect();
     assert_ne!(ids[0], ids[1], "neue Anlagen brauchen eigene Kennungen");
@@ -326,7 +333,7 @@ fn sheets_carry_their_anlage_id() {
     let mut p = epr::import(&path).unwrap();
     let n = p.anlagen[3].sheets.len() as u32 + 1;
     p.anlagen[3].sheets.push(Sheet::new(n));
-    let (_, f) = reload(&p);
+    let (_, f) = reload("blatt_anlage_2", &p);
     assert!(blatt_anlage_ok(&f));
 }
 

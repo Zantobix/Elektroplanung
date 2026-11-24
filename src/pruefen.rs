@@ -1,5 +1,5 @@
-//! Projekt prüfen (Tools › Projekt prüfen): Symbolanschlüsse ohne Verbindung und doppelt vergebene
-//! Betriebsmittelkennzeichnungen. Reine Funktionen auf dem Datenmodell; Anzeige und Sprung in `suche.rs`.
+//! Projekt prüfen (Tools › Projekt prüfen): Symbolanschlüsse ohne Verbindung, doppelt vergebene
+//! Betriebsmittelkennzeichnungen und gleich benannte Potentiale, die auf einem Blatt nicht verbunden sind. Reine Funktionen auf dem Datenmodell; Anzeige und Sprung in `suche.rs`.
 
 use crate::canvas;
 use crate::model::*;
@@ -13,6 +13,7 @@ pub const TOL: f32 = 0.05;
 pub enum HinweisArt {
     OffenerAnschluss,
     DoppelteBmk,
+    GleichesPotential,
 }
 
 impl HinweisArt {
@@ -20,6 +21,7 @@ impl HinweisArt {
         match self {
             HinweisArt::OffenerAnschluss => "Offener Anschluss",
             HinweisArt::DoppelteBmk => "Doppelte BMK",
+            HinweisArt::GleichesPotential => "Gleiches Potential getrennt",
         }
     }
 }
@@ -41,6 +43,7 @@ pub fn pruefen(project: &Project, lib: &[SymDef]) -> Vec<Hinweis> {
     for (ai, a) in project.anlagen.iter().enumerate() {
         for (si, s) in a.sheets.iter().enumerate() {
             offene_anschluesse(&project.anlagen, SheetRef { anlage: ai, sheet: si }, a, s, lib, &mut out);
+            gleiches_potential(SheetRef { anlage: ai, sheet: si }, s, lib, &mut out);
         }
         doppelte_bmk(ai, a, lib, &mut out);
     }
@@ -142,6 +145,58 @@ pub fn doppelte_bmk(ai: usize, a: &Anlage, lib: &[SymDef], out: &mut Vec<Hinweis
     }
 }
 
+/// Leitungsbezeichnungen, die ein Potential benennen, auch ohne gleichnamige Schiene (nicht Aderfarben wie „sw“
+/// oder „bl“, die in vielen getrennten Stromkreisen gleich sind). „N“ hinter verschiedenen FI-Schutzschaltern ist gewollt getrennt – daher
+/// nur ein Hinweis, keine Automatik.
+const POTENTIAL_BEZ: [&str; 3] = ["PE", "PEN", "N"];
+
+/// Netz (Index in `netz::netze`) → erstes Objekt darin: Id, Lage, Sammelschiene?
+type NetzTeile = BTreeMap<Option<usize>, (u64, P, bool)>;
+
+/// Gleiches Potential, nicht verbunden (todo NR11): auf einem Blatt Leitungen mit einer Potential-Bezeichnung
+/// (PE, PEN, N oder der Name einer Sammelschiene des Blattes), die in getrennten Netzen liegen – untereinander oder
+/// getrennt von der gleichnamigen Schiene. Gleichnamige Schienen eines Blattes bilden schon ein Netz
+/// (`netz::netze`, wie im Original). Je getrenntem Netz ein Hinweis am ersten Objekt dieses Netzes; nichts wird
+/// verbunden.
+pub fn gleiches_potential(r: SheetRef, s: &Sheet, lib: &[SymDef], out: &mut Vec<Hinweis>) {
+    let netze = crate::netz::netze(s, lib);
+    let netz = |id: u64| netze.iter().position(|n| n.contains(&id));
+    let schienen: Vec<String> = s.objects.iter().filter_map(|o| if let Kind::Busbar { name, .. } = &o.kind { Some(name.trim().to_uppercase()) } else { None }).filter(|n| !n.is_empty()).collect();
+    // Name → Netz → erstes Objekt (Id, Lage, Schiene?)
+    let mut gruppen: BTreeMap<String, NetzTeile> = BTreeMap::new();
+    for o in &s.objects {
+        match &o.kind {
+            Kind::Busbar { a, name, .. } if !name.trim().is_empty() => {
+                gruppen.entry(name.trim().to_uppercase()).or_default().entry(netz(o.id)).or_insert((o.id, *a, true));
+            }
+            Kind::Wire { bez, .. } => {
+                for (pos, t) in bez {
+                    let t = t.trim().to_uppercase();
+                    if POTENTIAL_BEZ.contains(&t.as_str()) || schienen.contains(&t) {
+                        gruppen.entry(t).or_default().entry(netz(o.id)).or_insert((o.id, *pos, false));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    for (name, teile) in gruppen {
+        if teile.len() < 2 {
+            continue;
+        }
+        for (id, pos, schiene) in teile.values() {
+            let art = if *schiene { "Sammelschiene" } else { "Leitung" };
+            out.push(Hinweis {
+                sheet: r,
+                id: *id,
+                art: HinweisArt::GleichesPotential,
+                text: format!("{art} „{name}“: dasselbe Potential liegt auf diesem Blatt in {} getrennten Netzen", teile.len()),
+                pos: *pos,
+            });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,6 +267,47 @@ mod tests {
         doppelt.sort();
         // K1 (Spule + zwei Kontakte) ist kein Fehler, K2 zweimal als Spule schon
         assert_eq!(doppelt, vec![3, 6], "{h:#?}");
+    }
+
+    fn schiene(id: u64, y: f32, x1: f32, x2: f32, name: &str) -> Obj {
+        let kind = Kind::Busbar { a: P::new(x1, y), x2, name: name.into(), label: P::new(0.0, -4.0), style: 0, sms: 0, xin: String::new(), xout: String::new(), lage: 1, versatz: 2.5 };
+        Obj { id, kind, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    fn wire_bez(id: u64, pts: Vec<P>, bez: &str) -> Obj {
+        let pos = pts[0];
+        Obj { id, kind: Kind::Wire { pts, leitung: 0, bez: vec![(pos, bez.into())], opts: 0 }, pen: 0, fixed: false, group: None, raw: None }
+    }
+
+    #[test]
+    fn gleiches_potential_getrennt() {
+        let lib = vec![def("spule")];
+        let mut p = Project::new_default();
+        let s = &mut p.anlagen[0].sheets[0];
+        // zwei PE-Schienen ohne Leitung dazwischen: gleicher Name = ein Netz → kein Hinweis
+        s.objects.push(schiene(1, 50.0, 20.0, 80.0, "PE"));
+        s.objects.push(schiene(2, 90.0, 20.0, 80.0, "PE"));
+        // Leitung „pe“ an der PE-Schiene: verbunden → kein Hinweis; Leitung „PE“ frei daneben → Hinweis (+ Schiene)
+        s.objects.push(wire_bez(3, vec![P::new(30.0, 50.0), P::new(30.0, 70.0)], "pe"));
+        s.objects.push(wire_bez(4, vec![P::new(100.0, 40.0), P::new(140.0, 40.0)], "PE"));
+        // zwei „N“-Leitungen ohne Schiene in zwei Netzen → zwei Hinweise
+        s.objects.push(wire_bez(5, vec![P::new(100.0, 120.0), P::new(140.0, 120.0)], "N"));
+        s.objects.push(wire_bez(6, vec![P::new(100.0, 140.0), P::new(140.0, 140.0)], "n"));
+        // Aderfarbe „sw“ in zwei Netzen zählt nicht; Bezeichnung gleich einer Schiene („L1“) schon
+        s.objects.push(wire_bez(7, vec![P::new(100.0, 60.0), P::new(140.0, 60.0)], "sw"));
+        s.objects.push(wire_bez(8, vec![P::new(100.0, 80.0), P::new(140.0, 80.0)], "sw"));
+        s.objects.push(schiene(9, 180.0, 20.0, 80.0, "L1"));
+        s.objects.push(wire_bez(10, vec![P::new(100.0, 160.0), P::new(140.0, 160.0)], "L1"));
+        // anderes Blatt: PE-Leitung allein, keine Schiene → kein Hinweis (nur je Blatt geprüft)
+        let mut s2 = Sheet::new(2);
+        s2.objects.push(wire_bez(11, vec![P::new(100.0, 40.0), P::new(140.0, 40.0)], "PE"));
+        p.anlagen[0].sheets.push(s2);
+        let h: Vec<_> = pruefen(&p, &lib).into_iter().filter(|x| x.art == HinweisArt::GleichesPotential).collect();
+        let mut ids: Vec<u64> = h.iter().map(|x| x.id).collect();
+        ids.sort();
+        assert_eq!(ids, vec![1, 4, 5, 6, 9, 10], "{h:#?}");
+        assert!(h.iter().any(|x| x.id == 4 && x.text == "Leitung „PE“: dasselbe Potential liegt auf diesem Blatt in 2 getrennten Netzen"), "{h:#?}");
+        assert!(h.iter().any(|x| x.id == 1 && x.text.starts_with("Sammelschiene „PE“")), "{h:#?}");
     }
 
     #[test]

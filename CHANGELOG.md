@@ -16,6 +16,12 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 Änderungen nach 0.6.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `### Behoben` (leere weglassen).
 
+### Neu
+
+- Tools › Projekt prüfen meldet „Gleiches Potential getrennt“: eine Leitung mit der Bezeichnung PE, PEN, N oder dem
+  Namen einer Sammelschiene des Blattes liegt in einem anderen Netz als die gleichnamige Schiene bzw. die anderen
+  so bezeichneten Leitungen. Nur ein Hinweis – N hinter verschiedenen FI-Schutzschaltern ist gewollt getrennt.
+
 ## [0.6.0]
 
 **Zusammenfassung:** Neu gezeichnete Leitungen verbinden nur noch dort, wo sie anfangen und enden – vorher konnte
