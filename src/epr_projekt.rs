@@ -76,6 +76,12 @@ fn vorlage() -> &'static EprFile {
     T.get_or_init(|| EprFile::parse(include_bytes!("../resources/template.epr")).expect("Vorlage template.epr ist gültig"))
 }
 
+/// Schriftfeld der Vorlage `template.epr` (Aufbau wie W2: Erstellt/Geändert/Datum, Von, Anlage/Ort, Projekt und
+/// Blattname, ZNr., Blatt x / y, Status) – Vorgabe für neue Projekte (Nutzer 24.11.2026, Frage F1).
+pub fn vorlage_schriftfeld() -> Vec<TbOwned> {
+    vorlage_prj().kid("FUS").map(schriftfeld_aus).unwrap_or_default()
+}
+
 fn vorlage_prj() -> &'static Block {
     vorlage().root("PRJ").expect("PRJ in der Vorlage")
 }

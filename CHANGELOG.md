@@ -12,6 +12,9 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 Änderungen nach 0.4.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer.
 
+- Neue Projekte bekommen das Schriftfeld der Vorlage (Von, Anlage/Ort, Blatt x / y …) statt des eingebauten
+  Standards; das Logofeld bleibt ohne Logobild leer und verdeckt keine Texte mehr.
+
 ## [0.4.0]
 
 Schwerpunkt: Befunde aus dem Nachzeichnen eines echten Plans mit der Maus, Absturzschutz mit Wiederherstellen,

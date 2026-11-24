@@ -228,6 +228,9 @@ nicht. Gemessen werden stattdessen:
     Einpassen und Gruppieren wählbar, Ebenenfarben als Stifte, Vorschau; zusätzlich Blöcke (INSERT), MTEXT und
     ELLIPSE (`src/dxf.rs`, `src/dxf_dialog.rs`).
   - Meldung „Fehler in den Daten“: Blöcke ohne Darstellung lassen sich dort entfernen.
+  - Neue Projekte bekommen das Schriftfeld der Vorlage (Aufbau eines echten Projekts: Erstellt/Geändert/Datum, Von,
+    Anlage/Ort, Projekt und Blattname, ZNr., Blatt x / y, Status) statt des eingebauten Standards; ein Logofeld
+    bleibt ohne Logobild leer wie im Original-Ausdruck.
   - Suche nach neuer Version: Hilfe › Nach neuer Version suchen und (abschaltbar unter Optionen ›
     Programmverhalten) einmal beim Start; fragt mit dem `curl` des Systems das neueste Release auf GitHub ab und zeigt
     bei einer neueren Version einen Hinweis mit Link, lädt aber nichts herunter (`src/update_pruefung.rs`).

@@ -750,5 +750,7 @@ pub fn schriftfeld_neues_projekt(o: &Optionen) -> Option<Vec<crate::titleblock::
             return Some(tb);
         }
     }
-    crate::extra::load_default_titleblock()
+    // eigenes Standardschriftfeld (Schriftfeld › als Standard speichern), sonst das der Vorlage (Aufbau wie W2;
+    // Nutzer 24.11.2026, F1 – vorher das eingebaute des Originals mit „Gepr.“, „vor/nach“, Logofeld)
+    crate::extra::load_default_titleblock().or_else(|| Some(crate::epr_projekt::vorlage_schriftfeld()).filter(|t| !t.is_empty()))
 }

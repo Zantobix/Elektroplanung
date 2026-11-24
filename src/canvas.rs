@@ -570,6 +570,11 @@ fn draw_title_block(dc: &DrawCtx, sheet: &Sheet, anlage: &Anlage, x0: f32, x1: f
                 p.line_segment([xf.s(tp(a, b)), xf.s(tp(c, d))], black);
             }
             TbOwned::Logo(a, b, c, d) => {
+                // ohne Logobild bleibt das Feld leer wie im Original-Ausdruck (W2: das Logofeld überdeckt die Felder
+                // %Anlage/%Ort – der schraffierte Platzhalter verdeckte „UV1“, Nachzeichnen 24.11.2026, B1/F1)
+                if !dc.project.bilder.iter().any(|b| b.name.eq_ignore_ascii_case("logo")) {
+                    continue;
+                }
                 let r = Rect::from_min_max(xf.s(tp(a, b)), xf.s(tp(c, d)));
                 let hs = Stroke::new(1.0, Color32::from_rgb(90, 80, 80));
                 let step = (1.3 * z).max(3.0);

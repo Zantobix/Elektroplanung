@@ -1216,6 +1216,8 @@ impl App {
 
     pub fn new_project(&mut self) {
         self.sym_edit = None;
+        // Statuszeile des vorigen Projekts nicht stehen lassen („Ladestatus: 39 Blätter geladen“)
+        self.info = "Neues Projekt".into();
         self.project = Project::new_default();
         // Anlage 1 bekommt wie im Original die Projektvorgaben (Ränder, Strompfade, Schriftgrößen)
         self.project.anlagen[0].set = self.opt.anlage();
