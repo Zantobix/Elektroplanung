@@ -127,6 +127,10 @@ pub fn pruefen(vorher: &[Obj], nachher: &Sheet, lib: &[SymDef], primaer: &[u64])
             if netz_von(x.id) == netz_von(o.id) {
                 continue;
             }
+            // beide neu (eingefügte Kopie): ihre Lage zueinander stammt aus dem Original
+            if !vorher.iter().any(|y| y.id == x.id) && !vorher.iter().any(|y| y.id == o.id) {
+                continue;
+            }
             if crate::leitung_vereinigen::ueberdeckung(pts, &stuecke(&x.kind)).is_empty() {
                 continue;
             }

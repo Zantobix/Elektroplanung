@@ -35,6 +35,8 @@ erhält der Abschnitt deren Nummer.
   Blatteigenschaften.
 - Ein Verschieben oder Pfeiltasten-Schritt, der nichts verändert hat (z. B. vom Netz-Wächter abgewiesen), hinterlässt
   keinen leeren Rückgängig-Schritt mehr.
+- Einfügen: Würde die Kopie vorhandene Netze verbinden (z. B. Leitungsenden mit 10 mm Versatz auf einer anderen
+  Schiene), sucht das Programm einen anderen Versatz; geht keiner, wird nicht eingefügt (Meldung).
 - Fehler melden, Bibliotheksverwaltung, Bauteilliste, Kontaktspiegel und Ausrichtung öffnen mittig (vorher am Rand).
 
 ## [0.4.0]

@@ -1002,6 +1002,22 @@ impl App {
                 P::default()
             }
         };
+        // Netz-Wächter (netz_waechter.rs): die Kopie darf vorhandene Netze des Blattes nicht verbinden bzw. auf fremde
+        // Leitungen legen (MT5, 24.11.2026: auf W2 mit 10 mm Versatz eingefügt landeten Leitungsenden auf der
+        // übernächsten Schiene). Sonst weitere Versätze (Vielfache, acht Richtungen) probieren; geht keiner, nicht
+        // einfügen.
+        let d = if self.opt.netz_waechter {
+            match self.einfuege_versatz(&clip, d) {
+                Some(v) => v,
+                None => {
+                    self.undo.pop();
+                    self.info = "Nicht eingefügt: die Kopie würde vorhandene Netze verbinden (an anderer Stelle einfügen)".into();
+                    return;
+                }
+            }
+        } else {
+            d
+        };
         let mut new_sel = vec![];
         let mut gmap: HashMap<u64, u64> = HashMap::new();
         for mut o in clip {
@@ -1038,6 +1054,36 @@ impl App {
         for o in &mut self.clipboard {
             o.kind.translate(d);
         }
+    }
+
+    /// Versatz für das Einfügen von `clip`: zuerst `d0`, dann Vielfache des Grundversatzes in acht Richtungen (auf dem
+    /// Blatt begrenzt), der erste, bei dem der Netz-Wächter nichts einzuwenden hat. `None`: keiner.
+    fn einfuege_versatz(&self, clip: &[Obj], d0: P) -> Option<P> {
+        let s = self.sheet()?;
+        let schritt = if self.fang() > 0.0 { self.fang() * (10.0 / self.fang()).ceil().max(1.0) } else { 10.0 };
+        let ids: Vec<u64> = clip.iter().map(|o| o.id).collect();
+        let mut kand = vec![d0];
+        for k in 1..=4 {
+            let l = k as f32 * schritt;
+            for (x, y) in [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0), (0.0, 1.0), (0.0, -1.0), (1.0, 0.0), (-1.0, 0.0)] {
+                let v = crate::blatt_grenze::begrenzen(s, &self.lib, clip, &ids, P::default(), P::new(d0.x + x * l, d0.y + y * l));
+                if !kand.iter().any(|q: &P| q.dist(v) < 1e-3) {
+                    kand.push(v);
+                }
+            }
+        }
+        // vorläufige Kennungen oberhalb aller vorhandenen, damit sich Kopie und Bestand nicht mischen
+        let basis = s.objects.iter().map(|o| o.id).max().unwrap_or(0) + 1;
+        let neu: Vec<u64> = (0..clip.len() as u64).map(|i| basis + i).collect();
+        kand.into_iter().find(|v| {
+            let mut t = s.clone();
+            for (o, id) in clip.iter().zip(&neu) {
+                let mut k = o.kind.clone();
+                k.translate(*v);
+                t.objects.push(Obj { id: *id, kind: k, ..o.clone() });
+            }
+            crate::netz_waechter::pruefen(&s.objects, &t, &self.lib, &neu).is_none()
+        })
     }
 
     /// op: 1 drehen, 2 vertikal spiegeln, 4 horizontal spiegeln
