@@ -261,24 +261,36 @@ fn entlang(m: f32, bezug: f32, q: f32, halb: f32, lo: f32, hi: f32) -> f32 {
 /// Bezugspunkts `l`, wenn die Maus weniger als `halb` daneben liegt. (Vorher: immer in der Flucht von `l`, auch
 /// wenn die Maus weit weg war – das Ende sprang bis zu 60 mm.)
 pub fn ende_auf_leitung_fang(sheet: &Sheet, l: P, m: P, q: P, tol: f32, halb: f32) -> Option<P> {
+    ende_auf_leitung_fang_achse(sheet, l, m, q, tol, halb).map(|(p, _)| p)
+}
+
+/// Wie `ende_auf_leitung_fang` mit der Richtung des getroffenen Teilstücks.
+pub fn ende_auf_leitung_fang_achse(sheet: &Sheet, l: P, m: P, q: P, tol: f32, halb: f32) -> Option<(P, P)> {
+    // das der Maus nächste Teilstück (NR1, 24.11.2026: W2 Blatt 8 – die Maus lag auf der senkrechten Leitung, die
+    // erste gefundene war eine waagerechte 1,5 mm daneben, das Ende landete auf ihr und verband fremde Netze)
+    let mut best: Option<(f32, (P, P))> = None;
     for o in &sheet.objects {
         let Kind::Wire { pts, .. } = &o.kind else { continue };
         for w in pts.windows(2) {
             let (a, b) = (w[0], w[1]);
-            if (a.y - b.y).abs() < 1e-3 {
+            let treffer = if (a.y - b.y).abs() < 1e-3 {
                 let (x1, x2) = (a.x.min(b.x), a.x.max(b.x));
-                if (m.y - a.y).abs() <= tol && m.x >= x1 - tol && m.x <= x2 + tol {
-                    return Some(P::new(entlang(m.x, l.x, q.x, halb, x1, x2), a.y));
-                }
+                ((m.y - a.y).abs() <= tol && m.x >= x1 - tol && m.x <= x2 + tol).then(|| (P::new(entlang(m.x, l.x, q.x, halb, x1, x2), a.y), P::new(1.0, 0.0)))
             } else if (a.x - b.x).abs() < 1e-3 {
                 let (y1, y2) = (a.y.min(b.y), a.y.max(b.y));
-                if (m.x - a.x).abs() <= tol && m.y >= y1 - tol && m.y <= y2 + tol {
-                    return Some(P::new(a.x, entlang(m.y, l.y, q.y, halb, y1, y2)));
+                ((m.x - a.x).abs() <= tol && m.y >= y1 - tol && m.y <= y2 + tol).then(|| (P::new(a.x, entlang(m.y, l.y, q.y, halb, y1, y2)), P::new(0.0, 1.0)))
+            } else {
+                None
+            };
+            if let Some(t) = treffer {
+                let d = crate::model::seg_dist(m, a, b);
+                if best.is_none_or(|(bd, _)| d < bd - 1e-4) {
+                    best = Some((d, t));
                 }
             }
         }
     }
-    None
+    best.map(|(_, t)| t)
 }
 
 impl crate::app::App {
@@ -295,19 +307,30 @@ impl crate::app::App {
         };
         let tol = 6.0 / z;
         if let Some(p) = self.pin_near(m, tol, &[]) {
-            return p;
+            // NR1 (24.11.2026): liegt die Maus genau auf einer Leitung (≤ 0,3 mm) eines anderen Netzes als der
+            // Fangpunkt und ist dieser deutlich weiter weg, gilt die Leitung unter der Maus (nachgezeichnete Datei:
+            // die Maus auf der Leitung bei x = 84,6, das Ende sprang auf den Anschluss bei (85 | 52) – fremdes Netz)
+            if !self.sheet().is_some_and(|s| leitung_unter_maus(s, m, p)) {
+                return p;
+            }
         }
-        if let Some((sheet, s)) = self.sheet().and_then(|sh| schiene_bei(sh, m, tol).map(|s| (sh, s))) {
+        // ebenso vor einer Schiene knapp daneben (nachgezeichnete Datei Blatt 4: Maus auf der Leitung bei x = 84,6,
+        // die Schiene 0,8 mm darunter gewann)
+        // (die Leitung kreuzt die Schiene; deren nächster Punkt liegt auf der Kreuzung, zählt also nur der Abstand)
+        let auf_leitung = |sh: &Sheet| sh.objects.iter().any(|o| matches!(&o.kind, Kind::Wire { pts, .. } if pts.windows(2).any(|v| crate::model::seg_dist(m, v[0], v[1]) <= 0.3)));
+        let schiene = self.sheet().and_then(|sh| schiene_bei(sh, m, tol).filter(|s| !((m.y - s.0).abs() > 0.5 && auf_leitung(sh))).map(|s| (sh, s)));
+        if let Some((sheet, s)) = schiene {
             // Maus-Befund M16: zeigt der Anfangsanschluss (noch ohne Eckpunkte) von der Schiene weg, führte die
             // Flucht des Anschlusses um das Symbol herum und auf der Schiene zurück – dann senkrecht an der Maus
             let da = anschluss_richtung(sheet, &self.lib, f.start());
             let bezug = if f.pts.len() == 1 && !zeigt_zur_schiene(f.start(), da, s.0) { self.snap(m) } else { f.bahn.last().copied().unwrap_or_else(|| f.letzter()) };
-            return ende_auf_schiene_fang(bezug, m, self.snap(m), self.raster() / 2.0, s);
+            let p = ende_auf_schiene_fang(bezug, m, self.snap(m), self.raster() / 2.0, s);
+            return ende_eindeutig(sheet, &self.lib, p, m, self.raster(), P::new(1.0, 0.0));
         }
         // auf einer Leitung: auf dem Raster bzw. in der Flucht des Bezugspunkts (Knoten)
         let bezug = f.bahn.last().copied().unwrap_or_else(|| f.letzter());
-        if let Some(p) = self.sheet().and_then(|s| ende_auf_leitung_fang(s, bezug, m, self.snap(m), tol, self.raster() / 2.0)) {
-            return p;
+        if let Some((p, d)) = self.sheet().and_then(|s| ende_auf_leitung_fang_achse(s, bezug, m, self.snap(m), tol, self.raster() / 2.0)) {
+            return self.sheet().map(|s| ende_eindeutig(s, &self.lib, p, m, self.raster(), d)).unwrap_or(p);
         }
         // Flucht des Bezugspunkts (Anfang bzw. letzter Knick) vor dem Raster: liegt die Maus weniger als ein halbes
         // Raster neben ihr, bleibt das Ende in der Flucht (Maustest Runde 12: Lampenanschluss bei x = 202,3, Raster
@@ -327,39 +350,77 @@ impl crate::app::App {
         // Nachzeichnen 24.11.2026: ebenso, wenn der Weg über einen fremden Anschluss läuft; die Ersatzwege dürfen
         // das auch nicht, und neben den beiden Winkeln gibt es Z-Wege auf anderen Höhen (nächstgelegene zuerst) –
         // vorher lief eine Leitung in den Nachbarpol eines LS waagerecht über dessen ersten Pol
-        let am_anschluss = anschluss_richtung(s, &self.lib, ende).is_some() || liegt_auf_leitung(s, ende);
-        let w = if !f.klickbetrieb && f.bahn.is_empty() && (ueberlappt(s, &w) || am_anschluss && ueber_fremdem_anschluss(s, &self.lib, &w)) {
-            let hind: Vec<_> = crate::leitung_hindernis::umrisse(s, &self.lib).into_iter().map(|u| u.r).collect();
-            let hind = crate::leitung_hindernis::wirksam(&hind, f.start(), ende);
-            let (a, e) = (f.start(), ende);
-            let (da, db) = (anschluss_richtung(s, &self.lib, a), anschluss_richtung(s, &self.lib, e));
-            // Ende auf einer Leitung/Schiene: senkrecht darauf zulaufen (wie im Rohweg)
-            let db = db.or_else(|| richtung_auf_leitung(s, e, f.bahn.last().copied().unwrap_or(a)));
-            let mut kand = vec![vec![a, P::new(a.x, e.y), e], vec![a, P::new(e.x, a.y), e]];
-            kand.extend(z_wege(a, da, e, db, self.stich_frei(s, a, e), self.raster(), &w));
-            // längere Stiche: endet der Stich auf einer fremden Leitung (Nachzeichnen 24.11.2026: PE-Pin nach oben,
-            // Stich genau auf der L-Leitung über der Anschlussreihe – PE und L wurden verbunden)
-            kand.extend((2..=4).map(|k| self.leitungsweg_roh_mit(f, ende, self.stich() * k as f32)));
-            // Wege, die die Anschlüsse in ihrer Richtung verlassen bzw. erreichen, zuerst (Nachzeichnen 24.11.2026,
-            // Blatt -F3: der Winkelweg lief seitwärts aus dem LS-Anschluss, obwohl ein Z-Weg frei war)
-            let mut kand: Vec<Vec<P>> = kand.into_iter().map(crate::leitung_fuehrung::bereinigen).collect();
-            kand.sort_by_key(|c| !in_anschlussrichtung(c, da, db));
-            kand.into_iter()
-                .find(|c| {
-                    !ueberlappt(s, c)
-                        && crate::leitung_hindernis::kreuzungen(c, &hind) == 0
-                        && !laeuft_hinein(c, da, db)
-                        && !ueber_fremdem_anschluss(s, &self.lib, c)
-                })
-                .unwrap_or(w)
-        } else {
-            w
-        };
+        // NR1 (24.11.2026): auch Leitungsenden, Klemmstellen und Knicke auf fremden Leitungen zählen
+        // (`beruehrt_fremd`), unabhängig davon, ob das Ziel ein Anschluss ist und ob die Maus eine Bahn vorgab
+        let w = if !f.klickbetrieb && (f.bahn.is_empty() && ueberlappt(s, &w) || beruehrt_fremd(s, &self.lib, &w)) { self.ersatzweg(s, f, ende, w) } else { w };
         let w = if f.klickbetrieb { w } else { self.ende_auf_schiene_verschieben(s, f, w) };
         let w = crate::klemme_leitung::enden_an_klemmen(s, w);
         // gegen Umspringen: Form des letzten Bildes halten, solange sie nicht deutlich schlechter ist
-        let w = self.formhalt(f, ende, w);
-        crate::klemme_leitung::enden_an_klemmen(s, w)
+        let gehalten = crate::klemme_leitung::enden_an_klemmen(s, self.formhalt(f, ende, w.clone()));
+        let w = if beruehrt_fremd(s, &self.lib, &gehalten) && !beruehrt_fremd(s, &self.lib, &w) { w } else { gehalten };
+        // letzte Sicherung: nie still mit Fremdem verbinden
+        if !f.klickbetrieb && beruehrt_fremd(s, &self.lib, &w) {
+            let e = *w.last().unwrap();
+            let c = crate::klemme_leitung::enden_an_klemmen(s, self.ersatzweg(s, f, e, w.clone()));
+            if !beruehrt_fremd(s, &self.lib, &c) {
+                return c;
+            }
+        }
+        w
+    }
+
+    /// Ersatz für den Weg `w`, der Fremdes berührt bzw. auf einer Leitung liegt: die beiden Winkel, Z-Wege auf
+    /// anderen Höhen, seitliche Umwege und längere Stiche. Zuerst ein Weg, der nichts Fremdes berührt, kein Symbol
+    /// durchquert und die Anschlüsse in ihrer Richtung verlässt; sonst einer, der nur nichts Fremdes berührt (durch
+    /// ein Symbol zu laufen ist ein Schönheitsfehler, eine falsche Verbindung ein Datenfehler); sonst `w`.
+    fn ersatzweg(&self, s: &Sheet, f: &crate::leitung_fuehrung::Fuehrung, ende: P, w: Vec<P>) -> Vec<P> {
+        let hind: Vec<_> = crate::leitung_hindernis::umrisse(s, &self.lib).into_iter().map(|u| u.r).collect();
+        let hind = crate::leitung_hindernis::wirksam(&hind, f.start(), ende);
+        let (a, e) = (f.start(), ende);
+        let (da, db) = (anschluss_richtung(s, &self.lib, a), anschluss_richtung(s, &self.lib, e));
+        // Ende auf einer Leitung/Schiene: senkrecht darauf zulaufen (wie im Rohweg)
+        let db = db.or_else(|| richtung_auf_leitung(s, e, f.bahn.last().copied().unwrap_or(a)));
+        let mut kand = vec![vec![a, P::new(a.x, e.y), e], vec![a, P::new(e.x, a.y), e]];
+        kand.extend(z_wege(a, da, e, db, self.stich_frei(s, a, e), self.raster(), &w));
+        // längere Stiche: endet der Stich auf einer fremden Leitung (Nachzeichnen 24.11.2026: PE-Pin nach oben,
+        // Stich genau auf der L-Leitung über der Anschlussreihe – PE und L wurden verbunden)
+        kand.extend((2..=4).map(|k| self.leitungsweg_roh_mit(f, ende, self.stich() * k as f32)));
+        // Wege, die die Anschlüsse in ihrer Richtung verlassen bzw. erreichen, zuerst (Nachzeichnen 24.11.2026,
+        // Blatt -F3: der Winkelweg lief seitwärts aus dem LS-Anschluss, obwohl ein Z-Weg frei war)
+        let mut kand: Vec<Vec<P>> = kand.into_iter().map(crate::leitung_fuehrung::bereinigen).collect();
+        kand.sort_by_key(|c| !in_anschlussrichtung(c, da, db));
+        let fb = fremd_blatt(s, &self.lib, a, e);
+        let sauber = |c: &Vec<P>| c.first().is_some_and(|q| q.dist(a) < 0.01) && c.last().is_some_and(|q| q.dist(e) < 0.01) && grund_fremd_in(&fb, &self.lib, c).is_none();
+        // unter den ganz freien Formen die günstigste (Anschlussrichtung zuerst, dann Länge + je Knick zwei Raster);
+        // vorher die erste gefundene – sie lief oft weit um das Symbol herum, obwohl ein kurzer Haken frei war
+        // (leitung_zeichnen.rs: Sprünge der Vorschau)
+        let r = self.raster().max(1.0);
+        // bei Gleichstand die Form, die der letzten Vorschau am nächsten liegt (sonst springt sie zwischen zwei gleich
+        // langen Umwegen)
+        let bezug: &[P] = if f.vorschau.len() >= 2 { &f.vorschau } else { &w };
+        let kosten = |c: &Vec<P>| {
+            let l = c.windows(2).map(|v| v[0].dist(v[1])).sum::<f32>() + 2.0 * r * c.len().saturating_sub(2) as f32;
+            (!in_anschlussrichtung(c, da, db), (l * 10.0).round() as i64, (crate::leitung_bahn::abweichung(bezug, c) * 10.0).round() as i64)
+        };
+        if let Some(c) = kand
+            .iter()
+            .filter(|c| sauber(c) && !ueberlappt(s, c) && crate::leitung_hindernis::kreuzungen(c, &hind) == 0 && !laeuft_hinein(c, da, db))
+            .min_by_key(|c| kosten(c))
+        {
+            return c.clone();
+        }
+        // Rastersuche (leitung_suche.rs), wenn keine feste Form ganz frei ist
+        if let Some(c) = crate::leitung_suche::suchen(s, &fb, &self.lib, a, da, e, db, self.raster(), self.stich_frei(s, a, e), &hind) {
+            if sauber(&c) {
+                return c;
+            }
+        }
+        if let Some(c) = kand.iter().find(|c| sauber(c) && crate::leitung_hindernis::kreuzungen(c, &hind) == 0 && !laeuft_hinein(c, da, db)) {
+            return c.clone();
+        }
+        // ohne Symbol-Bedingung: kürzester sauberer Weg
+        let laenge = |c: &Vec<P>| c.windows(2).map(|v| v[0].dist(v[1])).sum::<f32>();
+        kand.into_iter().filter(|c| sauber(c) && !laeuft_hinein(c, da, db)).min_by(|x, y| (ueberlappt(s, x), laenge(x)).partial_cmp(&(ueberlappt(s, y), laenge(y))).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(w)
     }
 
     /// Läuft der Weg `w` durch ein Symbol und endet er auf einer Schiene bzw. Leitung (nicht an einem Anschluss), darf
@@ -389,7 +450,8 @@ impl crate::app::App {
             for v in [1.0, -1.0] {
                 let e2 = P::new(e.x + entlang.x * r * k as f32 * v, e.y + entlang.y * r * k as f32 * v);
                 // noch auf derselben Schiene/Leitung (und nicht an einem Anschluss)
-                if !liegt_auf_leitung(s, e2) || anschluss_richtung(s, &self.lib, e2).is_some() || richtung_auf_leitung(s, e2, von) != Some(d) {
+                // NR1: nicht auf eine Kreuzung mit einem anderen Netz rutschen
+                if !liegt_auf_leitung(s, e2) || anschluss_richtung(s, &self.lib, e2).is_some() || richtung_auf_leitung(s, e2, von) != Some(d) || netze_bei(s, &self.lib, e2).len() > 1 {
                     continue;
                 }
                 let c = crate::leitung_fuehrung::bereinigen(self.leitungsweg_roh(f, e2));
@@ -614,6 +676,136 @@ pub fn ueber_fremdem_anschluss(sheet: &Sheet, lib: &[SymDef], w: &[P]) -> bool {
         .any(|q| w.windows(2).any(|s| auf(q, s[0], s[1])))
 }
 
+/// Liegt die Maus `m` genau auf einer Leitung (≤ 0,3 mm), die nicht durch den Fangpunkt `p` läuft, und ist `p`
+/// deutlich weiter weg (> 0,5 mm)? Dann gilt die Leitung unter der Maus (NR1, 24.11.2026).
+fn leitung_unter_maus(sheet: &Sheet, m: P, p: P) -> bool {
+    p.dist(m) > 0.5
+        && sheet.objects.iter().any(|o| {
+            matches!(&o.kind, Kind::Wire { pts, .. } if pts.windows(2).any(|v| crate::model::seg_dist(m, v[0], v[1]) <= 0.3)
+                && !pts.windows(2).any(|v| crate::model::seg_dist(p, v[0], v[1]) < 0.05))
+        })
+}
+
+/// Netze der Leitungen, Schienen und Klemmstellen, die den Punkt `p` berühren.
+fn netze_bei(sheet: &Sheet, lib: &[SymDef], p: P) -> Vec<usize> {
+    const T: f32 = 0.05;
+    let ids: Vec<u64> = sheet
+        .objects
+        .iter()
+        .filter(|o| match &o.kind {
+            Kind::Wire { pts, .. } => pts.windows(2).any(|v| crate::model::seg_dist(p, v[0], v[1]) < T),
+            Kind::Busbar { a, x2, .. } => (p.y - a.y).abs() < T && p.x >= a.x.min(*x2) - T && p.x <= a.x.max(*x2) + T,
+            Kind::Terminal { pos, .. } => pos.dist(p) <= crate::klemme_leitung::KLEMME_R + T,
+            _ => false,
+        })
+        .map(|o| o.id)
+        .collect();
+    if ids.len() < 2 {
+        return ids.iter().map(|_| 0).collect();
+    }
+    let netze = crate::netz::netze(sheet, lib);
+    let mut v: Vec<usize> = ids.iter().filter_map(|id| netze.iter().position(|n| n.contains(id))).collect();
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// Liegt das Ende `p` einer neuen Leitung auf einer Leitung/Schiene genau dort, wo eine zweite eines anderen Netzes
+/// kreuzt oder endet (NR1, 24.11.2026: W2 Blatt 6, das Ende fing sich auf dem Raster an einer Kreuzung und verband
+/// beide Netze), rutscht es entlang der getroffenen Leitung (Richtung `d`) um halbe Raster zur nächsten eindeutigen
+/// Lage (der Maus `m` am nächsten, höchstens 10 Raster).
+pub fn ende_eindeutig(sheet: &Sheet, lib: &[SymDef], p: P, m: P, raster: f32, d: P) -> P {
+    if netze_bei(sheet, lib, p).len() < 2 {
+        return p;
+    }
+    let schritt = (raster / 2.0).max(1.0);
+    let mut best: Option<(f32, P)> = None;
+    for k in 1..=20 {
+        for vz in [1.0f32, -1.0] {
+            let q = P::new(p.x + d.x * schritt * k as f32 * vz, p.y + d.y * schritt * k as f32 * vz);
+            let n = netze_bei(sheet, lib, q);
+            if n.len() == 1 && best.is_none_or(|(b, _)| q.dist(m) < b) {
+                best = Some((q.dist(m), q));
+            }
+        }
+    }
+    best.map(|(_, q)| q).unwrap_or(p)
+}
+
+/// Würde der Weg `w` außer an Anfang und Ende etwas Fremdes berühren und damit verbinden (NR1, 24.11.2026)? Zählt:
+/// ein Symbolanschluss oder eine Klemmstelle auf dem Weg, ein Leitungsende auf dem Weg, ein Knick des Weges auf einer
+/// Leitung oder Schiene, und ein Teilstück, das auf einer Leitung/Schiene liegt (`ueberlappt`). Reines Kreuzen zweier
+/// Leitungen verbindet nicht.
+pub fn beruehrt_fremd(sheet: &Sheet, lib: &[SymDef], w: &[P]) -> bool {
+    grund_fremd(sheet, lib, w).is_some()
+}
+
+/// Blatt ohne die Netze, die an `a` bzw. `e` schon hängen (dort darf ein neuer Weg alles berühren).
+pub fn fremd_blatt(sheet: &Sheet, lib: &[SymDef], a: P, e: P) -> Sheet {
+    const T: f32 = 0.05;
+    let netze = crate::netz::netze(sheet, lib);
+    let mut eigen: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    for o in &sheet.objects {
+        let trifft = match &o.kind {
+            Kind::Wire { pts, .. } => pts.windows(2).any(|v| crate::model::seg_dist(a, v[0], v[1]) < T || crate::model::seg_dist(e, v[0], v[1]) < T),
+            Kind::Busbar { a: b, x2, .. } => [a, e].iter().any(|q| (q.y - b.y).abs() < T && q.x >= b.x.min(*x2) - T && q.x <= b.x.max(*x2) + T),
+            _ => false,
+        };
+        if trifft && !eigen.contains(&o.id) {
+            if let Some(n) = netze.iter().find(|n| n.contains(&o.id)) {
+                eigen.extend(n.iter().copied());
+            }
+        }
+    }
+    Sheet { objects: sheet.objects.iter().filter(|o| !eigen.contains(&o.id)).cloned().collect(), ..sheet.clone() }
+}
+
+/// Wie `beruehrt_fremd` mit dem Grund (Diagnose).
+pub fn grund_fremd(sheet: &Sheet, lib: &[SymDef], w: &[P]) -> Option<String> {
+    let (Some(&a), Some(&e)) = (w.first(), w.last()) else { return None };
+    grund_fremd_in(&fremd_blatt(sheet, lib, a, e), lib, w)
+}
+
+/// Wie `grund_fremd` auf einem Blatt, aus dem die eigenen Netze schon entfernt sind (`fremd_blatt`).
+pub fn grund_fremd_in(sheet: &Sheet, lib: &[SymDef], w: &[P]) -> Option<String> {
+    const T: f32 = 0.05;
+    let (Some(&a), Some(&e)) = (w.first(), w.last()) else { return None };
+    if ueberlappt(sheet, w) {
+        return Some("liegt auf Leitung".into());
+    }
+    if ueber_fremdem_anschluss(sheet, lib, w) {
+        return Some("über Anschluss".into());
+    }
+    let innen = |q: P| q.dist(a) > T && q.dist(e) > T;
+    let auf_weg = |q: P| innen(q) && w.windows(2).any(|s| crate::model::seg_dist(q, s[0], s[1]) < T);
+    let mut strecken: Vec<(P, P)> = vec![];
+    for o in &sheet.objects {
+        match &o.kind {
+            Kind::Wire { pts, .. } => {
+                if pts.first().is_some_and(|q| auf_weg(*q)) || pts.last().is_some_and(|q| auf_weg(*q)) {
+                    return Some(format!("Leitungsende von {} auf dem Weg", o.id));
+                }
+                strecken.extend(pts.windows(2).map(|v| (v[0], v[1])));
+            }
+            Kind::Busbar { a, x2, .. } => strecken.push((*a, P::new(*x2, a.y))),
+            Kind::Terminal { pos, .. } => {
+                let r = crate::klemme_leitung::KLEMME_R + T;
+                if pos.dist(a) > r && pos.dist(e) > r && w.windows(2).any(|s| crate::model::seg_dist(*pos, s[0], s[1]) < r) {
+                    return Some(format!("Klemmstelle {}", o.id));
+                }
+            }
+            _ => {}
+        }
+    }
+    // Knicke des Weges (ohne Anfang und Ende) auf einer Leitung oder Schiene
+    w.get(1..w.len().saturating_sub(1))
+        .unwrap_or(&[])
+        .iter()
+        .filter(|q| innen(**q))
+        .find(|q| strecken.iter().any(|(u, v)| crate::model::seg_dist(**q, *u, *v) < T))
+        .map(|q| format!("Knick {q:?} auf Leitung"))
+}
+
 /// Z-Wege von `a` nach `e` mit Stichen in Anschlussrichtung und dem Querstück auf verschiedenen Höhen (bei
 /// senkrechten Anschlüssen) bzw. Fluchten (bei waagerechten) zwischen den Stichen, im Abstand max(Raster, Stich);
 /// die dem längsten Querstück von `bisher` nächstgelegenen zuerst.
@@ -657,6 +849,11 @@ fn z_wege(a: P, da: Option<P>, e: P, db: Option<P>, stich: f32, raster: f32, bis
         while u >= lo - 0.01 && stufen.len() < 200 {
             stufen.push(u);
             u -= schritt;
+        }
+        // NR1: auch außerhalb der Stiche (Anschlussreihe auf gleicher Höhe: unter bzw. über ihr entlang)
+        for k in 1..=20 {
+            stufen.push(hi + schritt * k as f32);
+            stufen.push(lo - schritt * k as f32);
         }
         stufen.sort_by(|x, y| (x - bezug).abs().total_cmp(&(y - bezug).abs()));
         for u in stufen {

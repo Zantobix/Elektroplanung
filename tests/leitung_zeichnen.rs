@@ -144,6 +144,9 @@ fn zufallsbahnen_ohne_spruenge() {
     // 24.11.2026 (Nutzer, Frage F8): das Querstück liegt auf der Höhe, auf der die Maus abgebogen ist; fährt die Maus
     // hinter dieses Knie zurück, wird es vergessen und die Form wechselt einmal (Linux 16 statt 15, Windows lag bisher
     // eins höher) – daher Grenze 17
-    assert!(faelle.len() <= 17, "{} Bahnen mit Sprüngen", faelle.len());
+    // NR1 (24.11.2026): der Weg berührt nichts Fremdes mehr (`beruehrt_fremd`); wo die gehaltene Form über ein
+    // fremdes Leitungsende oder einen fremden Anschluss liefe (Fall 236: über das Ende von Leitung 3, Fall 8: über den
+    // Anschluss bei 178 | 105), wechselt sie jetzt einmal – gewollt, sonst entstünde eine falsche Verbindung. Linux 20
+    assert!(faelle.len() <= 20, "{} Bahnen mit Sprüngen", faelle.len());
 }
 

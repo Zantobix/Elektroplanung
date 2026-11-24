@@ -57,6 +57,8 @@ pub struct Ergebnis {
     pub versuche: usize,
     pub fremd: Vec<String>,
     pub ueber_anschluss: Vec<String>,
+    /// übersprungen: Anfang bzw. Ziel liegt im Innern einer Leitung
+    pub mehrdeutig: usize,
 }
 
 fn pins(s: &Sheet, app: &App) -> Vec<(u64, u32, P)> {
@@ -71,7 +73,7 @@ pub fn lauf(datei: std::path::PathBuf, seed: u64, je_blatt: usize) -> Ergebnis {
     let mut app = test_app();
     app.open_path(datei, false);
     let mut z = Zufall(seed);
-    let mut erg = Ergebnis { versuche: 0, fremd: vec![], ueber_anschluss: vec![] };
+    let mut erg = Ergebnis { versuche: 0, fremd: vec![], ueber_anschluss: vec![], mehrdeutig: 0 };
     let raster = [1usize, 2, 5]; // 2,5 / 5 / 10 mm
     for b in 0..app.tabs.len() {
         app.active = b;
@@ -83,11 +85,22 @@ pub fn lauf(datei: std::path::PathBuf, seed: u64, je_blatt: usize) -> Ergebnis {
             }
             app.raster_idx = raster[z.bis(raster.len())];
             let (sym_a, k_a, a) = alle[z.bis(alle.len())];
+            // Anschluss, über den schon eine fremde Leitung hinwegläuft (Datenlage, z. B. nachgezeichnete Datei
+            // Blatt 4: Leitung 150 über -X…:1): jede dort beginnende Leitung verbindet beide – nicht messbar
+            let innen = |q: P| s.objects.iter().any(|o| matches!(&o.kind, Kind::Wire { pts, .. } if elektroplanung::knoten::im_innern(pts, q)));
+            if innen(a) {
+                erg.mehrdeutig += 1;
+                continue;
+            }
             let leitungen: Vec<(u64, Vec<P>)> = s.objects.iter().filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { (pts.len() >= 2).then(|| (o.id, pts.clone())) } else { None }).collect();
             let art = z.next();
             let ziel = if art < 0.45 {
                 let (sb, kb, q) = alle[z.bis(alle.len())];
                 if sb == sym_a {
+                    continue;
+                }
+                if innen(q) {
+                    erg.mehrdeutig += 1;
                     continue;
                 }
                 Ziel::Anschluss(sb, kb, q)
@@ -99,12 +112,30 @@ pub fn lauf(datei: std::path::PathBuf, seed: u64, je_blatt: usize) -> Ergebnis {
                     continue;
                 }
                 let t = 0.25 + z.next() * 0.5;
-                Ziel::Leitung(*wid, P::new(u.x + (v.x - u.x) * t, u.y + (v.y - u.y) * t))
+                let q = P::new(u.x + (v.x - u.x) * t, u.y + (v.y - u.y) * t);
+                // Maus knapp (< 2 mm) neben einer anderen Leitung oder Schiene (meist an einer Kreuzung): nicht zu
+                // entscheiden, welche gemeint ist
+                let andere = s.objects.iter().any(|o| match &o.kind {
+                    Kind::Wire { pts, .. } => o.id != *wid && pts.windows(2).any(|w| seg_dist(q, w[0], w[1]) < 2.0),
+                    Kind::Busbar { a, x2, .. } => seg_dist(q, *a, P::new(*x2, a.y)) < 2.0,
+                    _ => false,
+                });
+                if andere {
+                    erg.mehrdeutig += 1;
+                    continue;
+                }
+                Ziel::Leitung(*wid, q)
             } else {
                 // freie Stelle: mindestens 4 mm von Anschlüssen und Leitungen
                 let q = P::new(20.0 + z.next() * 250.0, 30.0 + z.next() * 150.0);
                 let q = app.snap(q);
-                let nah = alle.iter().any(|(_, _, p)| p.dist(q) < 4.0) || leitungen.iter().any(|(_, pts)| pts.windows(2).any(|w| seg_dist(q, w[0], w[1]) < 4.0));
+                // auch Schienen und Klemmstellen (sonst fängt sich das Ende gewollt auf eine Schiene daneben)
+                let sonst = s.objects.iter().any(|o| match &o.kind {
+                    Kind::Busbar { a, x2, .. } => seg_dist(q, *a, P::new(*x2, a.y)) < 4.0,
+                    Kind::Terminal { pos, .. } => pos.dist(q) < 4.0,
+                    _ => false,
+                });
+                let nah = sonst || alle.iter().any(|(_, _, p)| p.dist(q) < 4.0) || leitungen.iter().any(|(_, pts)| pts.windows(2).any(|w| seg_dist(q, w[0], w[1]) < 4.0));
                 if nah {
                     continue;
                 }
@@ -174,8 +205,9 @@ pub fn lauf(datei: std::path::PathBuf, seed: u64, je_blatt: usize) -> Ergebnis {
                 let fremde_alt: Vec<&usize> = alt.iter().filter(|x| !erlaubt.contains(x)).collect();
                 let beruehrt_neu = g.iter().any(|k| erlaubte_knoten.contains(k)) || alt.iter().any(|x| erlaubt.contains(x));
                 if beruehrt_neu && (!fremde_alt.is_empty() || !neu_dazu.is_empty()) && (alt.len() + neu_dazu.len() > 1) {
+                    let fremde_knoten: Vec<&(u64, u32)> = g.iter().filter(|k| kv.get(k).is_some_and(|x| !erlaubt.contains(x))).take(4).collect();
                     erg.fremd.push(format!(
-                        "Blatt {b} Raster {}: von {sym_a}:{k_a} {a:?} nach {ziel_text}, Weg {weg:?}: fremde Netze {} / neu angeschlossen {:?}",
+                        "Blatt {b} Raster {}: von {sym_a}:{k_a} {a:?} nach {ziel_text}, Weg {weg:?}: fremde Netze {} {fremde_knoten:?} / neu angeschlossen {:?}",
                         app.raster(),
                         fremde_alt.len(),
                         neu_dazu
@@ -207,18 +239,19 @@ fn bericht(name: &str, e: &Ergebnis) {
     for f in e.ueber_anschluss.iter().take(if detail { 1000 } else { 10 }) {
         println!("(über) {f}");
     }
-    println!("{name}: {} Leitungen gezeichnet, {} verbinden fremde Netze, {} laufen über fremde Anschlüsse", e.versuche, e.fremd.len(), e.ueber_anschluss.len());
+    println!("{name}: {} Leitungen gezeichnet, {} verbinden fremde Netze, {} laufen über fremde Anschlüsse ({} Anfänge/Ziele auf einer Leitung übersprungen)", e.versuche, e.fremd.len(), e.ueber_anschluss.len(), e.mehrdeutig);
 }
 
 #[test]
 fn w2_gezeichnete_leitungen_verbinden_nur_ihr_ziel() {
     let Some(f) = std::env::var_os("EP_SAMPLE") else { return };
-    let e = lauf(std::path::PathBuf::from(f), 2411, 12);
+    let seed = std::env::var("ZEICHNEN_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or(2411);
+    let e = lauf(std::path::PathBuf::from(f), seed, 12);
     bericht("W2", &e);
-    // Kennzahlen (erste Messung 24.11.2026: 16 von 207 verbinden fremde Netze, 12 über fremde Anschlüsse): dürfen nur
-    // sinken; Ziel 0, dann hart (todo NR1)
-    assert!(e.fremd.len() <= 16, "{} verbinden fremde Netze", e.fremd.len());
-    assert!(e.ueber_anschluss.len() <= 12, "{} über fremde Anschlüsse", e.ueber_anschluss.len());
+    // erste Messung 24.11.2026: 16 von 207 verbinden fremde Netze, 12 über fremde Anschlüsse; seit `beruehrt_fremd`,
+    // Rastersuche (leitung_suche.rs) und eindeutigem Ende hart 0
+    assert!(e.fremd.is_empty(), "{} verbinden fremde Netze", e.fremd.len());
+    assert!(e.ueber_anschluss.is_empty(), "{} über fremde Anschlüsse", e.ueber_anschluss.len());
 }
 
 #[test]
@@ -228,8 +261,9 @@ fn nachgezeichnet_gezeichnete_leitungen_verbinden_nur_ihr_ziel() {
     if !f.exists() {
         return;
     }
-    let e = lauf(f, 99, 25);
+    let seed = std::env::var("ZEICHNEN_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or(99);
+    let e = lauf(f, seed, 25);
     bericht("nachgezeichnet", &e);
-    // erste Messung 24.11.2026: 3 von 63 bzw. 1 über fremden Anschluss
-    assert!(e.fremd.len() <= 3 && e.ueber_anschluss.len() <= 1);
+    // erste Messung 24.11.2026: 3 von 63 bzw. 1 über fremden Anschluss; jetzt hart 0
+    assert!(e.fremd.is_empty() && e.ueber_anschluss.is_empty());
 }
