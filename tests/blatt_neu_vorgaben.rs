@@ -18,6 +18,8 @@ fn neues_blatt_wie_anlage() {
     assert_eq!(r.sheet, 1);
     let s = app.project.sheet(r).unwrap();
     assert_eq!((s.columns, s.col_auto), (20, true));
+    // das Blatt hinter dem Dialog zeigt schon die vorgeschlagene Ausrichtung (Befund 75)
+    assert!(s.portrait, "neues Blatt hinter dem Dialog im Hochformat wie der Vorschlag");
     // Dialog: Strompfade „-1“ (wie Anlage), Ausrichtung wie das vorige Blatt
     if let Some(elektroplanung::props::Props::Sheet(d)) = app.props.as_ref() {
         assert_eq!(d.strompfade, "-1");

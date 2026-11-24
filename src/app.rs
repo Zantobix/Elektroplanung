@@ -1266,14 +1266,19 @@ impl App {
             return;
         }
         if let Some(r) = self.cur() {
+            // Ausrichtung: das Original schlägt Querformat vor; der Nachbau die des vorigen Blattes der Anlage
+            // (Nachzeichnen 24.11.2026, B4/S8: neues Blatt zwischen lauter Hochformat-Blättern kam quer). Das Blatt
+            // hinter dem Dialog bekommt sie gleich mit, sonst zeigt es ein anderes Format als der Vorschlag (Befund 75).
+            let hoch = r.sheet.checked_sub(1).and_then(|i| self.project.anlagen.get(r.anlage)?.sheets.get(i)).map(|v| v.portrait).unwrap_or(false);
+            if let Some(sh) = self.project.sheet_mut(r) {
+                sh.portrait = hoch;
+            }
             self.open_sheet_props_dialog(r);
             if let Some(crate::props::Props::Sheet(s)) = self.props.as_mut() {
                 s.neu = true;
                 // Vorgaben des Dialogs wie Blatteinfgen1Click 0x461960 (blatt_neu.rs): Strompfade „-1“, Querformat
                 s.strompfade = "-1".into();
-                // Ausrichtung: das Original schlägt Querformat vor; der Nachbau die des vorigen Blattes der Anlage
-                // (Nachzeichnen 24.11.2026, B4/S8: neues Blatt zwischen lauter Hochformat-Blättern kam quer)
-                s.portrait = r.sheet.checked_sub(1).and_then(|i| self.project.anlagen.get(r.anlage)?.sheets.get(i)).map(|v| v.portrait).unwrap_or(false);
+                s.portrait = hoch;
                 s.vorgabe = [s.name.clone(), s.nummer.clone(), s.subindex.clone()];
                 s.vorher = (s.art, s.anlage_wahl);
             }

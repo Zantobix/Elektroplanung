@@ -22,6 +22,11 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
   Namen einer Sammelschiene des Blattes liegt in einem anderen Netz als die gleichnamige Schiene bzw. die anderen
   so bezeichneten Leitungen. Nur ein Hinweis – N hinter verschiedenen FI-Schutzschaltern ist gewollt getrennt.
 
+### Behoben
+
+- Hinzufügen › Blatt: hinter dem Dialog wurde das neue Blatt im Querformat gezeigt, während der Dialog das
+  Hochformat des vorigen Blattes vorschlug. Das Blatt hat jetzt gleich die vorgeschlagene Ausrichtung.
+
 ## [0.6.0]
 
 **Zusammenfassung:** Neu gezeichnete Leitungen verbinden nur noch dort, wo sie anfangen und enden – vorher konnte
