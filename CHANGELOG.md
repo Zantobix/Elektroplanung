@@ -18,6 +18,11 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Linux: das heruntergeladene AppImage hatte kein Programmsymbol. Die AppImage-Datei bringt jetzt ihr Symbol mit
+  (Dateimanager), und beim Start trägt sich das Programm mit Symbol ins Startmenü ein (nur im Benutzerordner,
+  abschaltbar unter Optionen › Programmverhalten) – erst damit zeigen GNOME/Wayland das Symbol auch im Dock.
+  Das Fenstersymbol ist jetzt das richtige Programmsymbol statt eines kleinen Ersatzbilds.
+- Pipeline: `actions/checkout` auf v5 (v4 lief auf einer veralteten Node-Version).
 - Pipeline: der Mac-Bau stand in 0.5.1 auf einer Mac-Version, die GitHub nicht mehr anbietet, und brach sofort ab.
   Er läuft jetzt als eigener Workflow „macOS“ (aktueller Mac) nach „Bauen“ und nur, wenn einem Release die .dmg
   fehlt; fehlt GitHub ein Mac-Rechner, wird nur dieser Workflow rot, „Bauen“ bleibt grün.

@@ -17,7 +17,10 @@ fn main() -> eframe::Result {
     let mut vp = egui::ViewportBuilder::default()
         .with_title("Elektroplanung Neues Projekt")
         .with_min_inner_size([830.0, 600.0])
-        .with_icon(Arc::new(app_icon()));
+        .with_icon(Arc::new(app_icon()))
+        // feste Kennung: GNOME/Wayland ordnet das Fenster darüber der .desktop-Datei mit dem Symbol zu
+        // (desktop_eintrag.rs)
+        .with_app_id(elektroplanung::desktop_eintrag::KENNUNG);
     if shot.is_some() {
         vp = vp.with_inner_size([1920.0, 1007.0]).with_position([0.0, 0.0]).with_active(false);
         #[cfg(windows)]
@@ -35,6 +38,12 @@ fn main() -> eframe::Result {
         if shot.is_none() && a.opt.update_pruefen {
             a.update.starten(&cc.egui_ctx, false);
         }
+        // Linux-AppImage: Startmenü-Eintrag mit Symbol (Option, desktop_eintrag.rs)
+        if shot.is_none() && a.opt.desktop_eintrag {
+            if let Some(m) = elektroplanung::desktop_eintrag::einrichten() {
+                a.info = m;
+            }
+        }
         // Absturzschutz: Sicherung eines abgestürzten Programms anbieten (wiederherstellung.rs)
         if shot.is_none() {
             a.wiederherstellen_anbieten();
@@ -43,8 +52,11 @@ fn main() -> eframe::Result {
     }))
 }
 
-/// Kleines eigenes Programmsymbol (Blitz auf Blatt).
+/// Programmsymbol aus resources/elektroplanung.png; ersatzweise ein kleines gezeichnetes (Blitz auf Blatt).
 fn app_icon() -> egui::IconData {
+    if let Some((rgba, width, height)) = elektroplanung::desktop_eintrag::fenster_symbol() {
+        return egui::IconData { rgba, width, height };
+    }
     let n = 32usize;
     let mut rgba = vec![0u8; n * n * 4];
     for y in 0..n {

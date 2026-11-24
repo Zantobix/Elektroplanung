@@ -29,7 +29,7 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       neu: ${{ steps.v.outputs.neu }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: v
         name: Version aus Cargo.toml, gibt es das Tag schon?
         run: |
@@ -66,7 +66,7 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Linux-Pakete (Fensteranbindung X11/Wayland)
@@ -88,6 +88,8 @@ jobs:
           mkdir -p AppDir/usr/bin
           cp target/release/Elektroplanung AppDir/usr/bin/
           cp resources/elektroplanung.png AppDir/elektroplanung.png
+          # Symbol der AppImage-Datei für Dateimanager
+          cp resources/elektroplanung.png AppDir/.DirIcon
           ln -s usr/bin/Elektroplanung AppDir/AppRun
           cat > AppDir/elektroplanung.desktop <<EOF
           [Desktop Entry]
@@ -96,6 +98,7 @@ jobs:
           Comment=Schaltpläne mit Blättern, Symbolen, Leitungen und Schriftfeld
           Exec=Elektroplanung %f
           Icon=elektroplanung
+          StartupWMClass=elektroplanung
           Categories=Graphics;Engineering;
           Terminal=false
           EOF
@@ -115,7 +118,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           path: pakete
@@ -152,7 +155,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           path: pakete

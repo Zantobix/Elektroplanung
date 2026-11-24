@@ -30,7 +30,7 @@ Stand von `main` (wird bei jeder Änderung ersetzt).
 | System | Datei | Hinweis |
 |---|---|---|
 | Windows | `Elektroplanung-<Version>-windows-x86_64.exe` | direkt starten. Die Exe ist nicht signiert: Windows SmartScreen warnt beim ersten Start → „Weitere Informationen“ → „Trotzdem ausführen“. |
-| Linux | `Elektroplanung-<Version>-x86_64.AppImage` | ausführbar machen (`chmod +x …`) und starten |
+| Linux | `Elektroplanung-<Version>-x86_64.AppImage` | ausführbar machen (`chmod +x …`) und starten; beim Start trägt es sich mit Symbol ins Startmenü ein (`~/.local/share/applications`, abschaltbar) |
 | macOS (Apple Silicon) | `Elektroplanung-<Version>-macos-arm64.dmg` | App in „Programme“ ziehen. Nicht notarisiert: beim ersten Start Rechtsklick → „Öffnen“ (bzw. Systemeinstellungen › Datenschutz & Sicherheit › „Trotzdem öffnen“). |
 
 Einstellungen und Benutzerbibliothek liegen in `%APPDATA%\Elektroplanung` bzw. `~/.config/elektroplanung`.

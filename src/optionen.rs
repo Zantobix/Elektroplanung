@@ -54,6 +54,8 @@ pub struct Optionen {
     /// Netz; Eigenschaften dann über Alt+Enter bzw. Kontextmenü (Nutzer 24.11.2026). Aus = Doppelklick öffnet wie im
     /// Original die Eigenschaften.
     pub mehrfachklick_leitung: bool,
+    /// Linux-AppImage: Startmenü-Eintrag mit Programmsymbol im Benutzerordner anlegen (desktop_eintrag.rs)
+    pub desktop_eintrag: bool,
     // Programm › Symboleditor
     pub sym_breite: f32,
     pub sym_hoehe: f32,
@@ -122,6 +124,7 @@ impl Default for Optionen {
             einbinden_beim_verschieben: true,
             netz_waechter: true,
             mehrfachklick_leitung: true,
+            desktop_eintrag: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
             blatt_farbe: [238, 221, 221],
@@ -345,6 +348,9 @@ impl App {
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
                                     mark(ui, &mut o.mehrfachklick_leitung, "Leitung: Doppelklick bis Knoten, Dreifachklick ganzes Netz");
+                                    if cfg!(target_os = "linux") {
+                                        mark(ui, &mut o.desktop_eintrag, "AppImage im Startmenü eintragen (mit Symbol)");
+                                    }
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
                                     mark(ui, &mut o.markieren_cad, "Markierrichtung wie CAD (→ eingeschlossen, ← berührt)");
                                     ui.horizontal(|ui| {
