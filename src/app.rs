@@ -2058,6 +2058,50 @@ const CONN_TOL: f32 = 0.05;
 /// Leitung bis zum nächsten Ziel auf diesem Strahl ziehen: Anschluss eines anderen Objekts oder eine Leitung, die
 /// den Strahl kreuzt. Liefert die neuen Leitungen (Anfang, Ende).
 pub fn auto_wires(sheet: &Sheet, lib: &[SymDef], ids: &[u64], max: f32) -> Vec<(P, P)> {
+    ohne_kurzschluss(sheet, lib, ids, auto_wires_roh(sheet, lib, ids, max))
+}
+
+/// Strahlen weglassen, die zwei Anschlüsse desselben abgelegten Objekts in ein Netz bringen, die vorher getrennt
+/// waren (Nachzeichnen 24.11.2026, Blatt -F3: der Überspannungsschutz unter einer waagerechten Leitung – N, PE und L
+/// liefen alle senkrecht auf sie: Kurzschluss). Betroffen sind alle Strahlen dieser Anschlüsse; wiederholt, bis
+/// nichts mehr zusammenfällt.
+fn ohne_kurzschluss(sheet: &Sheet, lib: &[SymDef], ids: &[u64], mut out: Vec<(P, P)>) -> Vec<(P, P)> {
+    use crate::netz_waechter::knoten;
+    let kv = knoten(sheet, lib, &[]);
+    let mut neu_id = sheet.objects.iter().map(|o| o.id).max().unwrap_or(0) + 1;
+    for _ in 0..8 {
+        if out.is_empty() {
+            break;
+        }
+        let mut s2 = sheet.clone();
+        for (a, b) in &out {
+            s2.objects.push(Obj { id: neu_id, kind: Kind::Wire { pts: vec![*a, *b], leitung: Default::default(), bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
+            neu_id += 1;
+        }
+        let kn = knoten(&s2, lib, &[]);
+        let mut weg: Vec<P> = vec![];
+        for o in sheet.objects.iter().filter(|o| ids.contains(&o.id) && matches!(o.kind, Kind::Symbol { .. })) {
+            let pins = canvas::obj_pins(o, lib);
+            for i in 0..pins.len() {
+                for j in i + 1..pins.len() {
+                    let (ki, kj) = ((o.id, i as u32), (o.id, j as u32));
+                    let jetzt = matches!((kn.get(&ki), kn.get(&kj)), (Some(x), Some(y)) if x == y);
+                    let vorher = matches!((kv.get(&ki), kv.get(&kj)), (Some(x), Some(y)) if x == y);
+                    if jetzt && !vorher {
+                        weg.extend([pins[i], pins[j]]);
+                    }
+                }
+            }
+        }
+        if weg.is_empty() {
+            break;
+        }
+        out.retain(|(a, _)| !weg.iter().any(|q| q.dist(*a) <= CONN_TOL));
+    }
+    out
+}
+
+fn auto_wires_roh(sheet: &Sheet, lib: &[SymDef], ids: &[u64], max: f32) -> Vec<(P, P)> {
     let mut out: Vec<(P, P)> = vec![];
     // Anschlüsse und Leitungsstrecken aller Objekte (mit Objekt-Id)
     let pins: Vec<(u64, P)> = sheet.objects.iter().flat_map(|o| canvas::obj_pins(o, lib).into_iter().map(move |p| (o.id, p))).collect();
@@ -2251,6 +2295,22 @@ mod tests {
         let s = Sheet::new(1);
         let (fx0, _, fx1, _) = s.frame();
         assert!((s.path_center_x(100.0).unwrap() - path_center(fx0, fx1, 8, 100.0)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn automatische_verbindung_ohne_kurzschluss() {
+        // Nachzeichnen 24.11.2026 (SPD unter einer Leitung): ein Schließer zwischen zwei waagerechten Leitungen, die
+        // links verbunden sind (ein Netz) – beide Strahlen würden Anschluss 1 und 2 kurzschließen: keine Verbindung
+        let lib = symbols::builtin();
+        let mut s = Sheet::new(1);
+        s.objects.push(sym(1, "builtin:schliesser", P::new(50.0, 100.0)));
+        s.objects.push(wire(2, P::new(10.0, 60.0), P::new(150.0, 60.0)));
+        s.objects.push(wire(3, P::new(10.0, 140.0), P::new(150.0, 140.0)));
+        s.objects.push(wire(4, P::new(10.0, 60.0), P::new(10.0, 140.0)));
+        assert!(auto_wires(&s, &lib, &[1], AUTO_CONN_MAX).is_empty());
+        // getrennte Leitungen: beide Strahlen bleiben
+        s.objects.retain(|o| o.id != 4);
+        assert_eq!(auto_wires(&s, &lib, &[1], AUTO_CONN_MAX).len(), 2);
     }
 
     #[test]

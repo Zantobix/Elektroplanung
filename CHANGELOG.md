@@ -24,6 +24,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
   16 von 207 Leitungen, jetzt 0). Findet keine der üblichen Formen (Winkel, Z, Umweg) einen freien Weg, sucht eine
   Rastersuche einen. Ein Ende auf einer Leitung rutscht nicht mehr auf eine Kreuzung mit einem anderen Netz, und
   liegt die Maus genau auf einer Leitung, gewinnt diese vor einem Anschluss oder einer Schiene knapp daneben.
+- Automatische Verbindung beim Ablegen: liegt ein Symbol so, dass die Strahlen mehrerer seiner Anschlüsse auf
+  dieselbe Leitung bzw. dasselbe Netz treffen (z. B. ein Überspannungsschutz mit N, PE und L unter einer Leitung),
+  entstanden Leitungen, die die Anschlüsse kurzschlossen. Solche Verbindungen werden jetzt weggelassen.
 - Linux: das heruntergeladene AppImage hatte kein Programmsymbol. Die AppImage-Datei bringt jetzt ihr Symbol mit
   (Dateimanager), und beim Start trägt sich das Programm mit Symbol ins Startmenü ein (nur im Benutzerordner,
   abschaltbar unter Optionen › Programmverhalten) – erst damit zeigen GNOME/Wayland das Symbol auch im Dock.
