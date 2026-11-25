@@ -30,6 +30,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Auch das letzte Blatt einer Anlage lässt sich löschen wie im Original; Anlagen ohne Blatt werden so gespeichert
+  und geladen (bisher wurde beim Laden ein leeres „Blatt 1“ ergänzt).
 - Mehrfachklick auf Leitungen in Stufen: 1× markiert nur das Teilstück bis zur nächsten Ecke (Entf löscht nur dieses
   Stück), 2× die Leitung bis zum nächsten Knoten, 3× das Netz ohne über Sammelschienen weiterzugehen, 4× das ganze
   Potential samt Schienen, der fünfte Klick beginnt wieder beim Teilstück; die Statuszeile nennt die Stufe. Vorher

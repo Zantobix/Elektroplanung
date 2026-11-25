@@ -282,11 +282,7 @@ pub fn import_file(file: &EprFile) -> Result<Project, String> {
     update_busbar_xrefs(&mut p);
     link_verweise(&mut p);
     crate::eigentuemer::verknuepfen(&mut p);
-    for a in &mut p.anlagen {
-        if a.sheets.is_empty() {
-            a.sheets.push(Sheet::new(1));
-        }
-    }
+    // Anlagen ohne Blatt bleiben leer wie im Original (dort lässt sich auch das letzte Blatt löschen)
     // Rahmen der Blätter aus den Rändern ihrer Anlage
     crate::rahmen::abgleichen(&mut p);
     p.next_id = next_id + 10;

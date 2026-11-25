@@ -1379,7 +1379,8 @@ impl App {
             }
             ("Löschen", TAction::Sheet(r)) => {
                 let r = *r;
-                if self.project.anlagen.get(r.anlage).map(|a| a.sheets.len() > 1).unwrap_or(false) {
+                // auch das letzte Blatt einer Anlage (wie im Original: Anlage ohne Blatt, Nutzer 25.11.2026)
+                if self.project.anlagen.get(r.anlage).is_some_and(|a| r.sheet < a.sheets.len()) {
                     self.checkpoint();
                     self.project.anlagen[r.anlage].sheets.remove(r.sheet);
                     self.tabs.retain(|t| *t != r);
@@ -1389,8 +1390,6 @@ impl App {
                         }
                     }
                     self.fix_tabs();
-                } else {
-                    self.dialog = Some(Dialog::Message("Das letzte Blatt einer Anlage kann nicht gelöscht werden.".into()));
                 }
             }
             ("Löschen", TAction::Symbol(k)) => self.delete_library_symbol(&k.clone()),
