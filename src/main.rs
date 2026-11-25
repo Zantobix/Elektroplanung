@@ -17,6 +17,8 @@ fn main() -> eframe::Result {
     let mut vp = egui::ViewportBuilder::default()
         .with_title("Elektroplanung Neues Projekt")
         .with_min_inner_size([830.0, 600.0])
+        // Projektdateien per Drag & Drop öffnen (datei_ablegen.rs)
+        .with_drag_and_drop(true)
         .with_icon(Arc::new(app_icon()))
         // feste Kennung: GNOME/Wayland ordnet das Fenster darüber der .desktop-Datei mit dem Symbol zu
         // (desktop_eintrag.rs)

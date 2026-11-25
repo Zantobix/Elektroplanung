@@ -6,7 +6,8 @@ anders ist als im Original und was noch fehlt, steht im [README](../README.md) u
 
 ## Projekt öffnen und ansehen
 
-- **Datei › Projekt öffnen** (Strg+O) öffnet `.epr`-Dateien des Originals und das eigene Format `.epj`.
+- **Datei › Projekt öffnen** (Strg+O) öffnet `.epr`-Dateien des Originals und das eigene Format `.epj`. Eine Projektdatei
+  lässt sich auch einfach ins Fenster ziehen.
 - Blätter wechseln: Reiter unter der Zeichenfläche, Strg+Bild↓ / Strg+Bild↑ oder Projektbaum rechts.
 - **Mausrad** vergrößert und verkleinert an der Maus (Optionen › Maus „Mausrad umkehren“ = wie im Original),
   **mittlere Maustaste** gedrückt verschiebt die Ansicht, Strg+Num0 zeigt das ganze Blatt.

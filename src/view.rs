@@ -2767,6 +2767,8 @@ impl eframe::App for App {
             self.zwischenspeichern();
         }
         self.handle_shot(&ctx);
+        // Projektdatei ins Fenster gezogen: öffnen wie Datei › Projekt öffnen (datei_ablegen.rs)
+        self.dateien_ablegen(&ctx);
         self.shortcuts(&ctx);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.title()));
 

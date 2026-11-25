@@ -18,6 +18,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Neu
 
+- Projektdatei (.epr, .epj) ins Fenster ziehen öffnet sie; bei ungespeicherten Änderungen kommt vorher die
+  Rückfrage zum Speichern. Beim Darüberziehen zeigt ein Hinweis, was beim Loslassen passiert.
 - Markieren: Auswahlbefehle (alle Objekte einer Art, gleiche wie markiert, Auswahl umkehren mit Strg+I, verbundene
   Leitungen dazu) im Menü Bearbeiten › Auswahl und im Kontextmenü der freien Fläche, ein Auswahlfilter je Objektart
   für die laufende Sitzung und der neue Optionen-Reiter „Markieren“ (Markierrichtung, Vormarkierung, Markierfarbe,
