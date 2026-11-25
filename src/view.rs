@@ -1144,14 +1144,23 @@ impl App {
                 if tid == o.id {
                     canvas::draw_object(&dc, o, None);
                     let w = self.project.leitungen.get(*leitung).map(|l| l.width_mm).unwrap_or(0.25);
-                    clip.line_segment([xf.s(pts[i]), xf.s(pts[i + 1])], Stroke::new((w * xf.z).max(1.0) + 1.5, SEL));
+                    // mit denselben Brückenbögen wie die Leitung (bruecken.rs; Option aus = Karte leer = gerade)
+                    let stueck = match dc.bruecken.get(&o.id) {
+                        Some(x) => crate::bruecken::mit_boegen(&pts[i..=i + 1], x),
+                        None => pts[i..=i + 1].to_vec(),
+                    };
+                    clip.add(egui::Shape::line(stueck.iter().map(|p| xf.s(*p)).collect(), Stroke::new((w * xf.z).max(1.0) + 1.5, SEL)));
                     continue;
                 }
             }
             canvas::draw_object(&dc, o, if sel { Some(SEL) } else { None });
         }
+        // Knotenpunkte: in der Markierfarbe, wenn die Markierung über den Knoten hinausgeht (mindestens zwei markierte
+        // Leitungen treffen sich dort, Mehrfachklick Stufe 3/4 oder Strg+Klick; Nutzer 25.11.2026)
+        let markierte: Vec<&[P]> = sheet.objects.iter().filter(|o| self.selection.contains(&o.id)).filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts.as_slice()) } else { None }).collect();
         for j in canvas::junctions(sheet) {
-            clip.circle_filled(xf.s(j), (0.6 * xf.z).max(2.0), Color32::BLACK);
+            let n = markierte.iter().filter(|pts| pts.windows(2).any(|w| seg_dist(j, w[0], w[1]) < 0.05)).count();
+            clip.circle_filled(xf.s(j), (0.6 * xf.z).max(2.0), if n >= 2 { SEL } else { Color32::BLACK });
         }
         let hover = ui.input(|i| i.pointer.hover_pos());
         if let Some(hp) = hover {
@@ -1404,6 +1413,18 @@ impl App {
         if self.ring.is_some() {
             self.ring_input(ui, xf);
             return;
+        }
+        // gerade geschlossen: der Klick, der es geschlossen hat (bzw. ein Klick unmittelbar danach), wirkt nicht auf
+        // die Zeichenfläche weiter, bis die Taste losgelassen ist (Befund 89)
+        if let Some(t) = self.zusatz.rad_zu {
+            let (jetzt, unten, los) = ui.input(|i| (i.time, i.pointer.primary_down(), i.pointer.button_released(PointerButton::Primary)));
+            if unten || los || jetzt - t < 0.35 {
+                if (pressed_l || los || unten) && jetzt - t < 2.0 {
+                    return;
+                }
+            } else {
+                self.zusatz.rad_zu = None;
+            }
         }
         // Mausrad: egui verteilt eine Rastung (≈ 50 Punkte) über mehrere Bilder; der Zoom folgt dem Betrag,
         // eine Rastung ≈ 10 % (vorher 15 % je Bild, also mehrere Stufen je Rastung)

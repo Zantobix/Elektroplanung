@@ -1242,7 +1242,8 @@ fn sheet_ui(ui: &mut egui::Ui, s: &mut SheetProps, anlagen: &[String]) {
         edit(ui, &mut s.subindex, 115.0);
         ui.end_row();
         label(ui, 90.0, "Strompfade", true);
-        edit(ui, &mut s.strompfade, 115.0);
+        // wie im Original steht „-1“ für „wie Anlage“ (Blatteinfgen1Click); Hinweis beim Überfahren (Befund 75)
+        edit(ui, &mut s.strompfade, 115.0).on_hover_text("-1 = wie Anlage (Strompfade der Anlageneigenschaften)");
         ui.end_row();
         label(ui, 90.0, "Ausrichtung", true);
         egui::ComboBox::from_id_salt("ausr").width(135.0).selected_text(if s.portrait { "Hochformat" } else { "Querformat" }).show_ui(ui, |ui| {

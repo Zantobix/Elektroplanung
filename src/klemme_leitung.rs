@@ -115,8 +115,11 @@ impl App {
         });
         let im_editor = self.sym_edit.is_some();
         let pos = self.klemmstelle_lage(m, tol);
-        // Bezeichnung wie beim Original links über der Klemme (Titelposition −1/−2 mm, rechtsbündig)
-        let text_off = (!im_editor).then_some(P::new(-1.0, -2.0));
+        // Bezeichnung wie beim Original links über der Klemme (Titelposition −1/−2 mm, rechtsbündig). In einer
+        // waagerechten Leitung läge sie so auf der Linie (Maustest M4, 24.11.2026); dort −1/−4 mm wie die meisten
+        // waagerechten Klemmen in W2 (bewusste Abweichung)
+        let waagerecht = treffer.is_some_and(|(_, _, a, b)| (a.y - b.y).abs() < 0.01 && (a.x - b.x).abs() > 0.01);
+        let text_off = (!im_editor).then_some(P::new(-1.0, if waagerecht { -4.0 } else { -2.0 }));
         let id = self.add_obj(Kind::Terminal { pos, leiste, nr, level: 0, text_off, tpl: String::new(), opt: Default::default() });
         if let Some((wid, i, _, _)) = treffer.filter(|_| !im_editor) {
             self.leitung_teilen(wid, i, pos);

@@ -45,6 +45,17 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Markierte Leitung mit Brückenbogen: das markierte Teilstück wird mit seinen Bögen gezeichnet (vorher lag eine
+  gerade rote Linie unter dem schwarzen Bogen); Knotenpunkte innerhalb einer Markierung (Netz, Strg+Klick) erscheinen
+  in der Markierfarbe.
+- Mauszeiger: das Pfeilkreuz beim Verschieben ist wieder etwas dünner; über Texten (Titel/Wert eines Symbols) dasselbe
+  Pfeilkreuz mit einem „A“ darüber.
+- Variantenrad: der Klick auf eine Variante wirkte danach auf der Zeichenfläche weiter und markierte das Symbol
+  darunter.
+- Neue Klemmstelle in einer waagerechten Leitung: die Beschriftung steht über der Leitung (−4 mm) statt auf ihr.
+- Endet eine gezeichnete Leitung frei knapp (bis 3 mm) neben einer anderen, nennt die Statuszeile den Abstand
+  („Ende frei – Leitung 2,5 mm entfernt“).
+- Blatteigenschaften: Hinweis „-1 = wie Anlage“ am Feld Strompfade.
 - Hinzufügen › Blatt: hinter dem Dialog wurde das neue Blatt im Querformat gezeigt, während der Dialog das
   Hochformat des vorigen Blattes vorschlug. Das Blatt hat jetzt gleich die vorgeschlagene Ausrichtung.
 - Dialoge Sammelschiene, Klemmleiste und Texteigenschaft/Symboltitel/Symbolwert: der Fokus steht beim Öffnen im

@@ -70,6 +70,21 @@ pub fn gekuerzt(sheet: &Sheet, lib: &[SymDef], neu: u64, x: P) -> Option<(u64, V
     None
 }
 
+/// Abstand eines freien Leitungsendes `p` der Leitung `wid` zur nächsten anderen Leitung, wenn sie höchstens
+/// `bis` mm daneben vorbeiläuft (Befund 84: Ende knapp neben einer Leitung, ohne Verbindung, ohne Hinweis).
+pub fn freies_ende_nahe(sheet: &Sheet, lib: &[SymDef], wid: u64, p: P, bis: f32) -> Option<f32> {
+    if !freies_ende(sheet, lib, wid, p) {
+        return None;
+    }
+    sheet
+        .objects
+        .iter()
+        .filter(|o| o.id != wid)
+        .filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { pts.windows(2).map(|w| seg_dist(p, w[0], w[1])).reduce(f32::min) } else { None })
+        .filter(|d| *d > 0.05 && *d <= bis)
+        .reduce(f32::min)
+}
+
 impl App {
     /// Gezeichnete Leitung anlegen (`neue_leitung`) und getroffene Leitungen mit freiem Überstand an beiden Enden
     /// der neuen Leitung kürzen (gleicher Rückgängig-Schritt).
@@ -88,6 +103,11 @@ impl App {
         // gezeichnete kann dabei in der älteren aufgehen
         self.leitungen_zusammenfassen(&[id]);
         if self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == id)) {
+            // freies Ende knapp neben einer Leitung: Hinweis statt stiller Lücke (Befund 84)
+            let nah = self.sheet().and_then(|s| enden.iter().filter_map(|e| freies_ende_nahe(s, &self.lib, id, *e, 3.0)).reduce(f32::min));
+            if let Some(d) = nah {
+                self.info = format!("Ende frei – Leitung {} mm entfernt (nicht verbunden)", format!("{d:.1}").replace('.', ","));
+            }
             return Some(id);
         }
         // aufgegangen: die Leitung, die jetzt an ihrer Stelle liegt
@@ -142,6 +162,11 @@ mod tests {
         let s = blatt(vec![klemme(9, p(-0.8, 0.0)), wire(1, vec![p(0.0, 0.0), p(100.0, 0.0)]), wire(2, vec![p(60.0, 50.0), p(60.0, 0.0)])]);
         assert!(!freies_ende(&s, &[], 1, p(0.0, 0.0)));
         assert!(freies_ende(&s, &[], 1, p(100.0, 0.0)));
+        // freies Ende 2,5 mm neben einer anderen Leitung (Befund 84)
+        let mut s2 = s.clone();
+        s2.objects.push(crate::model::Obj { id: 99, kind: Kind::Wire { pts: vec![p(102.5, -20.0), p(102.5, 20.0)], leitung: 0, bez: vec![], opts: 0 }, pen: 0, fixed: false, group: None, raw: None });
+        assert_eq!(freies_ende_nahe(&s2, &[], 1, p(100.0, 0.0), 3.0), Some(2.5));
+        assert_eq!(freies_ende_nahe(&s2, &[], 1, p(100.0, 0.0), 2.0), None);
         assert_eq!(gekuerzt(&s, &[], 2, p(60.0, 0.0)), Some((1, vec![p(0.0, 0.0), p(60.0, 0.0)])));
         // danach: Ecke, kein Knoten
         let mut s2 = s.clone();

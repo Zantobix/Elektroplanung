@@ -264,31 +264,34 @@ fn doppelpfeil(p: &egui::Painter, c: Pos2, d: Vec2, l: f32) {
     spitze(p, c - d * l, -d, 2.5);
 }
 
+/// Pfeilkreuz (Verschieben) um `c`: Pfeile nach rechts, links, oben und unten. Etwas kräftiger als die übrigen
+/// Zusätze (Nutzer 24.11.2026: kaum zu erkennen), aber wieder dünner als am 24.11. (Nutzer 25.11.2026).
+fn kreuz(p: &egui::Painter, c: Pos2) {
+    let (x, y) = (Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0));
+    for st in [Stroke::new(3.8, Color32::WHITE), Stroke::new(1.6, Color32::BLACK)] {
+        p.add(Shape::line_segment([c - x * 6.5, c + x * 6.5], st));
+        p.add(Shape::line_segment([c - y * 6.5, c + y * 6.5], st));
+    }
+    for d in [x, -x, y, -y] {
+        spitze(p, c + d * 9.5, d, 2.9);
+    }
+}
+
 /// Eigene Vektorzeichnung des Zusatzes um den Mittelpunkt `c`.
 pub fn zusatz(p: &egui::Painter, c: Pos2, z: Zusatz) {
     let (x, y) = (Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0));
     match z {
-        Zusatz::Verschieben => {
-            // kräftiger als die übrigen Zusätze (Nutzer 24.11.2026: Pfeile nach rechts/links/oben/unten kaum zu
-            // erkennen): breitere Striche, größere Spitzen
-            for st in [Stroke::new(5.0, Color32::WHITE), Stroke::new(2.5, Color32::BLACK)] {
-                p.add(Shape::line_segment([c - x * 6.0, c + x * 6.0], st));
-                p.add(Shape::line_segment([c - y * 6.0, c + y * 6.0], st));
-            }
-            for d in [x, -x, y, -y] {
-                spitze(p, c + d * 9.5, d, 3.4);
-            }
-        }
+        Zusatz::Verschieben => kreuz(p, c),
         Zusatz::Text => {
-            let font = egui::FontId::new(12.0, egui::FontFamily::Name("bold".into()));
+            // dasselbe Pfeilkreuz wie beim Verschieben, darüber ein „A“ (Nutzer 25.11.2026)
+            let k = c + y * 5.0;
+            kreuz(p, k);
+            let font = egui::FontId::new(11.0, egui::FontFamily::Name("bold".into()));
+            let a = k - y * 16.0;
             for d in [-x, x, -y, y] {
-                p.text(c + d, egui::Align2::CENTER_CENTER, "A", font.clone(), Color32::WHITE);
+                p.text(a + d, egui::Align2::CENTER_CENTER, "A", font.clone(), Color32::WHITE);
             }
-            p.text(c, egui::Align2::CENTER_CENTER, "A", font, Color32::BLACK);
-            // kleine Pfeilspitzen in alle vier Richtungen (Text verschieben)
-            for d in [x, -x, y, -y] {
-                spitze(p, c + d * 9.5, d, 1.8);
-            }
+            p.text(a, egui::Align2::CENTER_CENTER, "A", font, Color32::BLACK);
         }
         Zusatz::Anschluss => {
             // Anschlusspunkt mit abgehender Leitung (Knick nach unten) und Pfeilspitze

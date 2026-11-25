@@ -219,10 +219,16 @@ pub(crate) fn obj_json(o: &Obj) -> Value {
                 m.insert("ziel".into(), json!({ "anlage": z.anlage, "blatt": z.blatt, "obj": z.obj }));
             }
         }
-        Kind::Terminal { pos, leiste, nr, .. } => {
+        Kind::Terminal { pos, leiste, nr, text_off, level, .. } => {
             m.insert("points".into(), json!([p(pos)]));
             m.insert("leiste".into(), json!(leiste));
             m.insert("nr".into(), json!(nr));
+            if let Some(t) = text_off {
+                m.insert("text_off".into(), json!(p(t)));
+            }
+            if *level != 0 {
+                m.insert("level".into(), json!(level));
+            }
         }
     }
     v

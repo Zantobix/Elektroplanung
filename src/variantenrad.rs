@@ -262,6 +262,7 @@ impl App {
             setzen = true;
         }
         if setzen {
+            self.zusatz.rad_zu = Some(ui.input(|i| i.time));
             self.place_symbol_opt(ring.key.clone(), ring.at, ring.sel as u16);
             self.info = format!("Symbol abgelegt (Bild {})", ring.sel + 1);
             self.placing = None;

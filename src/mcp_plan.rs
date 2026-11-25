@@ -49,7 +49,7 @@ pub fn tool_list() -> Vec<Value> {
                 "label": {"type": "array", "description": "Lage der Beschriftung [dx, dy] zum Anfang, Standard [0, -4]"}
             })), &["anlage", "sheet", "name"]),
         tool("add_terminal", "Klemmstelle setzen; liegt sie auf einer Leitung, wird die Leitung wie in der Oberfläche geteilt. Ohne nr die nächste freie Nummer der Leiste.",
-            mit(blatt(), json!({"x": {"type": "number"}, "y": {"type": "number"}, "leiste": {"type": "string", "description": "Klemmleiste, Standard die erste der Anlage"}, "nr": {"type": "integer"}, "split": {"type": "boolean", "description": "Leitung teilen (Standard an)"}})),
+            mit(blatt(), json!({"x": {"type": "number"}, "y": {"type": "number"}, "leiste": {"type": "string", "description": "Klemmleiste, Standard die erste der Anlage"}, "nr": {"type": "integer"}, "split": {"type": "boolean", "description": "Leitung teilen (Standard an)"}, "text_off": {"type": "array", "description": "Lage der Beschriftung [dx, dy] (Standard −1/−2, in waagerechter Leitung −1/−4)"}, "level": {"type": "integer", "description": "Etage (0 = erste)"}})),
             &["anlage", "sheet", "x", "y"]),
         tool("add_reference", "Verweis (Dreieck mit Text) setzen; optional Ziel auf ein Objekt eines Blattes.",
             mit(blatt(), json!({"x": {"type": "number"}, "y": {"type": "number"}, "text": {"type": "string"}, "dir": {"type": "integer", "description": "Richtung der Spitze in Grad: 0, 90, 180, 270"},
@@ -254,6 +254,10 @@ impl Server {
             Some(n) => n as u32,
             None => an.sheets.iter().flat_map(|s| &s.objects).filter_map(|o| if let Kind::Terminal { leiste: l, nr, .. } = &o.kind { (*l == leiste).then_some(*nr) } else { None }).max().unwrap_or(0) + 1,
         };
+        // in einer waagerechten Leitung die Beschriftung höher (wie klemme_leitung::klemmstelle_setzen)
+        let waagerecht = self.project.sheet(r).unwrap().objects.iter().any(|o| matches!(&o.kind, Kind::Wire { pts, .. } if pts.windows(2).any(|w| (w[0].y - w[1].y).abs() < 0.01 && seg_dist(pos, w[0], w[1]) < 0.05)));
+        let text_off = a.get("text_off").and_then(Value::as_array).and_then(|v| Some(P::new(v.first()?.as_f64()? as f32, v.get(1)?.as_f64()? as f32))).unwrap_or(P::new(-1.0, if waagerecht { -4.0 } else { -2.0 }));
+        let level = a.get("level").and_then(Value::as_u64).unwrap_or(0) as u8;
         // Leitung unter der Klemme teilen wie klemme_leitung::klemmstelle_setzen
         if ja(a, "split").unwrap_or(true) {
             let s = self.project.sheet(r).unwrap();
@@ -276,7 +280,7 @@ impl Server {
                 }
             }
         }
-        let id = self.neu(r, Kind::Terminal { pos, leiste: leiste.clone(), nr, level: 0, text_off: Some(P::new(-1.0, -2.0)), tpl: String::new(), opt: Default::default() });
+        let id = self.neu(r, Kind::Terminal { pos, leiste: leiste.clone(), nr, level, text_off: Some(text_off), tpl: String::new(), opt: Default::default() });
         Ok(self.objekt(r, id))
     }
 

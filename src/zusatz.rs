@@ -21,6 +21,9 @@ pub struct Zusatz {
     /// Mehrfachklick auf Leitungen (mehrfachklick.rs): Klickzähler und markiertes Teilstück (Leitung, Abschnitt)
     pub klicks: crate::mehrfachklick::Zaehler,
     pub teil: Option<(u64, usize)>,
+    /// Zeitpunkt, zu dem sich das Variantenrad geschlossen hat: der Klick, der es geschlossen hat, darf nicht auf
+    /// der Zeichenfläche weiterwirken (Befund 89: markierte das Symbol unter dem Rad)
+    pub rad_zu: Option<f64>,
 }
 
 impl App {
