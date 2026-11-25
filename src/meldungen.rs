@@ -444,6 +444,8 @@ struct StatusMerker {
     start: Option<P>,
     /// gehaltene Meldung und Zeitpunkt, seit dem sie steht
     halten: Option<(String, f64)>,
+    /// beim Verschieben: Gesamtverschiebung, bei der die letzte Abweisung kam (danach angenommen = Meldung weg)
+    abgewiesen_bei: Option<P>,
 }
 
 /// So lange (s) bleibt eine Meldung des Netz-Wächters stehen, bevor Überfahr- bzw. Zieh-Texte sie ersetzen
@@ -464,7 +466,14 @@ impl crate::app::App {
         let id = eframe::egui::Id::unique("ep_statuszeile");
         let mut m: StatusMerker = ctx.data(|d| d.get_temp(id)).unwrap_or_default();
         let jetzt = ctx.input(|i| i.time);
-        if wird_gehalten(&self.info) && m.halten.as_ref().is_none_or(|(t, _)| *t != self.info) {
+        // Beim Verschieben zählt die Lage beim Loslassen: Abweisungen einer Zwischenlage stehen nur, solange die Lage
+        // abgewiesen bleibt, und werden nicht gehalten (Nachzeichnen 25.11.2026 #96: nach zulässigem Ablegen stand
+        // noch „würde ein Symbol auf ein anderes legen“); gehalten wird erst nach dem Loslassen
+        let verschieben = matches!(self.drag, Drag::Move { .. });
+        if verschieben {
+            m.halten = None;
+        }
+        if !verschieben && wird_gehalten(&self.info) && m.halten.as_ref().is_none_or(|(t, _)| *t != self.info) {
             m.halten = Some((self.info.clone(), jetzt));
         }
         if let Some((t, seit)) = m.halten.clone() {
@@ -479,10 +488,23 @@ impl crate::app::App {
             m.zuletzt = Some((u64::MAX, 0));
         }
         match &self.drag {
-            Drag::None | Drag::Pan { .. } | Drag::Rubber { .. } => m.start = None,
+            Drag::None | Drag::Pan { .. } | Drag::Rubber { .. } => {
+                m.start = None;
+                m.abgewiesen_bei = None;
+            }
             Drag::Move { applied, .. } => {
-                if ueber_flaeche {
-                    self.info = delta_text(*applied);
+                let abgewiesen = wird_gehalten(&self.info) && match m.abgewiesen_bei {
+                    None => {
+                        m.abgewiesen_bei = Some(*applied);
+                        true
+                    }
+                    Some(a) => a.dist(*applied) < 0.001,
+                };
+                if !abgewiesen {
+                    m.abgewiesen_bei = None;
+                    if ueber_flaeche {
+                        self.info = delta_text(*applied);
+                    }
                 }
                 m.start.get_or_insert(self.mouse_mm);
             }

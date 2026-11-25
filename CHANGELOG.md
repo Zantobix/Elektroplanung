@@ -56,6 +56,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Statuszeile beim Verschieben: eine Abweisung des Netz-Wächters für eine Zwischenlage blieb nach dem Ablegen an
+  zulässiger Stelle noch vier Sekunden stehen; jetzt steht sie nur, solange die Lage abgewiesen ist, und wird erst
+  gehalten, wenn auch die Lage beim Loslassen abgewiesen wurde.
 - Leitung im Klickbetrieb: Eckpunkte ließen sich nicht setzen, wenn Drücken und Loslassen im selben Bild ankamen
   (schneller Klick) oder ein Eckpunkt nahe einer anderen Leitung lag – der Klick verwarf die Leitung bzw. markierte
   die Nachbarleitung. Die letzte Ecke rückt auf die Flucht eines Anschlusses abseits des Rasters statt einen
