@@ -116,6 +116,24 @@ fn firma_name(id: u64) -> String {
     }
     tfi_gruppen().get(&id).map(|(_, n)| n.clone()).unwrap_or_else(|| format!("Hersteller {id:x}"))
 }
+/// Bauteilgruppen (Art 1) und Hersteller (Art 2) der Bibliothek (Gruppen.tfi), sortiert – nur diese lassen sich im
+/// .epr speichern (MCP `list_part_catalog`).
+pub fn katalog() -> (Vec<String>, Vec<String>) {
+    let liste = |art: u8| {
+        let mut v: Vec<String> = tfi_gruppen().values().filter(|(a, _)| *a == art).map(|(_, n)| n.clone()).collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    (liste(1), liste(2))
+}
+
+/// Warnungen für ein einzelnes Bauteil (wie `nicht_gespeichert`).
+pub fn bauteil_warnungen(b: &Bauteil) -> Vec<String> {
+    let p = Project { bauteile: vec![b.clone()], ..Project::new_default() };
+    nicht_gespeichert(&p).into_iter().filter(|w| w.starts_with("Bauteil")).collect()
+}
+
 /// Kennung einer Bauteilgruppe (Art 1) bzw. eines Herstellers (Art 2) nach ihrem Namen.
 fn tfi_id(art: u8, name: &str) -> Option<u64> {
     let mut v: Vec<(&u64, &(u8, String))> = tfi_gruppen().iter().filter(|(_, (a, n))| *a == art && n == name).collect();

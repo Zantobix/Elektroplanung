@@ -68,6 +68,7 @@ pub mod listen;
 pub mod mcp;
 pub mod meldungen;
 pub mod mcp_symbol;
+pub mod mcp_plan;
 pub mod mehrfach;
 pub mod menus;
 pub mod leitung_profil;

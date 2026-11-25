@@ -95,8 +95,12 @@ Protokoll 2025-06-18). Für Claude Code ist er in [.mcp.json](.mcp.json) eingetr
 | `open_project`, `new_project`, `save_project` | Projekt öffnen (.epr/.epj), neu, speichern (`format: epr` oder `epj`) |
 | `project_info`, `set_project_info` | Projektdaten lesen/ändern |
 | `list_sheets`, `get_sheet`, `add_anlage`, `add_sheet`, `set_sheet` | Anlagen und Blätter |
-| `add_object`, `update_object`, `delete_object` | Linie, Rechteck, Kreis, Kurve, Text, Verbindung; verschieben, Texte/BMK ändern |
-| `list_symbols`, `place_symbol` | Symbole aus Projekt und Bibliothek suchen und platzieren (inkl. Zusatzoptionen) |
+| `add_object`, `update_object`, `delete_object` | Linie, Rechteck, Kreis, Kurve, Text/Textbox (Ausrichtung, Drehung, Schrift), Verbindung; verschieben, Texte/BMK ändern |
+| `list_symbols`, `place_symbol` | Symbole aus Projekt und Bibliothek suchen und platzieren (Zusatzoptionen, Bildvariante, Drehen, Spiegeln, Größe) |
+| `add_busbar`, `add_terminal`, `add_reference`, `add_table`, `add_contact_mirror` | Sammelschiene (Auto-Stapel wie im Original), Klemmstelle (teilt die Leitung), Verweis mit Ziel, Tabelle, Kontaktspiegel |
+| `set_wire`, `add_leitung`, `add_potential`, `add_klemmleiste` | Leitungsart, Verbindungsbezeichnungen und Optionen einer Leitung; Leitungsarten, Potentiale, Klemmleisten anlegen |
+| `list_part_catalog`, `list_parts`, `add_part`, `update_part`, `delete_part`, `assign_parts` | Bauteile: Gruppen/Hersteller der Bibliothek, anlegen, ändern, löschen, Symbolen und Klemmstellen zuordnen (mehrere je Objekt) |
+| `check_project` | Tools › Projekt prüfen (offene Anschlüsse, doppelte BMK, gleiches Potential getrennt) |
 | `export_pdf` | alle Blätter als Vektor-PDF (gleiche Zeichenroutinen wie die Oberfläche) |
 | `symbol_open`, `symbol_new`, `symbol_get` | Symboleditor: Symbol aus Projekt/Bibliothek öffnen oder neu anlegen, Elemente auflisten |
 | `symbol_add_element`, `symbol_update_element`, `symbol_delete_element` | Linie, Polygon, Kurve, Ellipse, Text (mit Ausrichtung/Drehmodus), Anschluss, Titel-/Wertanker; Seite, Zusatzoption, Füllung |
@@ -142,6 +146,7 @@ benutzen ein Beispielprojekt des Originals, das über die Umgebungsvariable `EP_
 | Import-Vollständigkeit (`tests/import_vollstaendig.rs`) | Sammelschienen und Querverweise wie Ausdruck Seite 6/18, Klemmstellen, Aderfarben, Tabellen, Bilder, BMK-Vorlagen, Sicherungsübersicht Seite 5, Klemmplan Seite 12 mit allen Zielen und Brücken |
 | Symboltexte in gedrehten Symbolen (`tests/motor_lage.rs`) | "M" im gedrehten Motorsymbol (Seite 1) dreht mit, im Symbol "Motor" (Seite 7) bleibt es waagerecht; hochkant BMK "-M2.1" an derselben Stelle wie im Ausdruck |
 | Maustests in einer Projektkopie, Gegenprobe im Original | Kontextmenüs (Optionen, Bildindex, Symbol bearbeiten), Dialoge verschieben, Zoom/Bildlauf, Zeichnen, Verschieben, Rückgängig, Symbol setzen, Symboleditor mit Titel-/Wertfeld, Speichern → Original zeigt die Änderungen; Rückfrage „Geänderte Daten Speichern?“ |
+| Planobjekte und Bauteile über MCP (`tests/mcp_plan.rs`) | Schienen, Klemmstelle in Leitung, Verweis, Tabelle, Leitungsart, Kontaktspiegel, Bauteile zuordnen/löschen → .epr → wieder gelesen, byteidentische Rundreise. Alle Blätter des Beispielprojekts lassen sich über MCP deckungsgleich nachzeichnen. |
 | Symboleditor über MCP (`tests/mcp_symbol.rs`) | neues Symbol mit Seiten, Zusatzoption, Alternativtext → .epr → wieder gelesen; geändertes W2-Symbol wird geschrieben, alle anderen bleiben gleich |
 
 Analyse-Grundlagen: die 47 Formulare des Originals (Beschriftungen und Anordnung) und das Verhalten des

@@ -90,13 +90,17 @@ pub fn tool_list() -> Vec<Value> {
                 "points": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
                 "text": {"type": "string"}, "size": {"type": "number", "description": "Schrifthöhe in mm"},
                 "vertical": {"type": "boolean"}, "pen": {"type": "integer"},
-                "frame": {"type": "boolean", "description": "Rahmen (text, textbox)"}, "wrap": {"type": "boolean", "description": "Umbruch (textbox)"}
+                "frame": {"type": "boolean", "description": "Rahmen (text, textbox)"}, "wrap": {"type": "boolean", "description": "Umbruch (textbox)"},
+                "align": {"type": "string", "enum": ["left", "center", "right"]}, "bold": {"type": "boolean"}, "italic": {"type": "boolean"}, "underline": {"type": "boolean"},
+                "rotation": {"type": "integer", "description": "Drehung in Grad"}, "color": {"type": "array"}, "font": {"type": "string"},
+                "anchor": {"type": "array", "description": "textbox: Ankerpunkt [x, y] wie get_sheet points[0] (sonst aus der Box berechnet)"}
             })), &["anlage", "sheet", "kind", "points"]),
         tool("place_symbol", "Symbol aus Projekt oder Bibliothek platzieren (key aus list_symbols).",
             merge(sheet_props(), json!({
                 "key": {"type": "string"}, "x": {"type": "number"}, "y": {"type": "number"},
                 "bmk": {"type": "string"}, "value": {"type": "string"}, "rot": {"type": "integer", "description": "Drehung in 90°-Schritten"}, "option": {"type": "integer", "description": "Bildvariante (Seite), z. B. 1 = Taster beim Schließer"},
-                "flags": {"type": "integer", "description": "Zusatzoptionen als Bitmaske (z. B. Steckdose: 1 = Ports, 2 = SPD)"}
+                "flags": {"type": "integer", "description": "Zusatzoptionen als Bitmaske (z. B. Steckdose: 1 = Ports, 2 = SPD)"},
+                "mirror_h": {"type": "boolean"}, "mirror_v": {"type": "boolean"}, "scale": {"type": "number", "description": "Größe (1 = 100 %)"}
             })), &["anlage", "sheet", "key", "x", "y"]),
         tool("update_object", "Objekt ändern: verschieben (dx, dy), Text, BMK, Wert, Drehung.",
             merge(sheet_props(), json!({
@@ -112,10 +116,11 @@ pub fn tool_list() -> Vec<Value> {
             json!({"path": {"type": "string"}}), &["path"]),
     ];
     v.extend(crate::mcp_symbol::tool_list());
+    v.extend(crate::mcp_plan::tool_list());
     v
 }
 
-fn obj_json(o: &Obj) -> Value {
+pub(crate) fn obj_json(o: &Obj) -> Value {
     let p = |p: &P| json!([p.x, p.y]);
     let mut v = json!({ "id": o.id, "pen": o.pen, "kind": crate::epr_write::kind_name(&o.kind), "from_epr": o.raw.is_some() });
     let m = v.as_object_mut().unwrap();
@@ -126,11 +131,26 @@ fn obj_json(o: &Obj) -> Value {
         Kind::Curve { a, c1, c2, b } => {
             m.insert("points".into(), json!([p(a), p(c1), p(c2), p(b)]));
         }
-        Kind::Text { pos, text, size, vertical, style, .. } => {
+        Kind::Text { pos, text, size, vertical, style, align } => {
             m.insert("points".into(), json!([p(pos)]));
             m.insert("text".into(), json!(text));
             m.insert("size".into(), json!(size));
             m.insert("vertical".into(), json!(vertical));
+            m.insert("align".into(), json!(match align { Align::Left => "left", Align::Center => "center", Align::Right => "right" }));
+            for (k, v) in [("bold", style.bold), ("italic", style.italic), ("underline", style.underline)] {
+                if v {
+                    m.insert(k.into(), json!(true));
+                }
+            }
+            if style.rotation != 0 {
+                m.insert("rotation".into(), json!(style.rotation));
+            }
+            if style.color != [0, 0, 0] {
+                m.insert("color".into(), json!(style.color));
+            }
+            if !style.font.is_empty() {
+                m.insert("font".into(), json!(style.font));
+            }
             // Textbox (ZCN 11): Box, Rahmen, Umbruch
             if let Some((a, b)) = &style.rect {
                 m.insert("box".into(), json!([p(a), p(b)]));
@@ -138,19 +158,27 @@ fn obj_json(o: &Obj) -> Value {
                 m.insert("wrap".into(), json!(style.wrap));
             }
         }
-        Kind::Busbar { a, x2, name, .. } => {
+        Kind::Busbar { a, x2, name, label, lage, versatz, .. } => {
             m.insert("points".into(), json!([p(a), [x2, a.y]]));
             m.insert("text".into(), json!(name));
+            m.insert("auto".into(), json!(lage & crate::sammelschiene_lage::FEST == 0));
+            m.insert("unten".into(), json!(lage & crate::sammelschiene_lage::UNTEN != 0));
+            m.insert("label".into(), json!(p(label)));
+            if *versatz != 0.0 {
+                m.insert("versatz".into(), json!(versatz));
+            }
         }
         Kind::Spiegel { pos, owner, rows, .. } => {
             m.insert("points".into(), json!([p(pos)]));
             m.insert("owner".into(), json!(owner));
             m.insert("contacts".into(), json!(rows.iter().map(|z| z.referenz).collect::<Vec<_>>()));
         }
-        Kind::Table { a, b, rows, cols, .. } => {
+        Kind::Table { a, b, rows, cols, cells, header, .. } => {
             m.insert("points".into(), json!([p(a), p(b)]));
             m.insert("rows".into(), json!(rows));
             m.insert("cols".into(), json!(cols));
+            m.insert("cells".into(), json!(cells));
+            m.insert("header".into(), json!(header));
         }
         Kind::Image { a, b, path, .. } => {
             m.insert("points".into(), json!([p(a), p(b)]));
@@ -168,8 +196,18 @@ fn obj_json(o: &Obj) -> Value {
             m.insert("option".into(), json!(option));
             m.insert("flags".into(), json!(flags));
         }
-        Kind::Poly { pts } | Kind::Wire { pts, .. } => {
+        Kind::Poly { pts } => {
             m.insert("points".into(), Value::Array(pts.iter().map(p).collect()));
+        }
+        Kind::Wire { pts, leitung, bez, opts } => {
+            m.insert("points".into(), Value::Array(pts.iter().map(p).collect()));
+            m.insert("leitung".into(), json!(leitung));
+            if !bez.is_empty() {
+                m.insert("bez".into(), json!(bez.iter().map(|(at, t)| json!([at.x, at.y, t])).collect::<Vec<_>>()));
+            }
+            if *opts != 0 {
+                m.insert("opts".into(), json!(opts));
+            }
         }
         Kind::Verweis { pos, text_pos, text, dir, vertical, spitze, ziel } => {
             m.insert("points".into(), json!([p(pos), p(text_pos)]));
@@ -190,17 +228,45 @@ fn obj_json(o: &Obj) -> Value {
     v
 }
 
-fn arg_usize(a: &Value, k: &str) -> Result<usize, String> {
+/// Schriftmerkmale aus den Parametern übernehmen (nur angegebene): Ausrichtung, fett, kursiv, unterstrichen,
+/// Drehung, Farbe, Schriftart.
+fn textstil(a: &Value, style: &mut TextStyle, align: &mut Align, vertical: &mut bool) {
+    let flag = |k: &str| a.get(k).and_then(Value::as_bool);
+    match arg_str(a, "align") {
+        Some("center") | Some("mittig") => *align = Align::Center,
+        Some("right") | Some("rechts") => *align = Align::Right,
+        Some("left") | Some("links") => *align = Align::Left,
+        _ => {}
+    }
+    style.bold = flag("bold").unwrap_or(style.bold);
+    style.italic = flag("italic").unwrap_or(style.italic);
+    style.underline = flag("underline").unwrap_or(style.underline);
+    *vertical = flag("vertical").unwrap_or(*vertical);
+    if let Some(r) = a.get("rotation").and_then(Value::as_i64) {
+        style.rotation = r as i16;
+    }
+    if let Some(c) = a.get("color").and_then(Value::as_array) {
+        let v: Vec<u8> = c.iter().map(|x| x.as_u64().unwrap_or(0).min(255) as u8).collect();
+        if v.len() == 3 {
+            style.color = [v[0], v[1], v[2]];
+        }
+    }
+    if let Some(f) = arg_str(a, "font") {
+        style.font = f.into();
+    }
+}
+
+pub(crate) fn arg_usize(a: &Value, k: &str) -> Result<usize, String> {
     a.get(k).and_then(Value::as_u64).map(|v| v as usize).ok_or_else(|| format!("Parameter '{k}' fehlt"))
 }
-fn arg_f32(a: &Value, k: &str) -> Option<f32> {
+pub(crate) fn arg_f32(a: &Value, k: &str) -> Option<f32> {
     a.get(k).and_then(Value::as_f64).map(|v| v as f32)
 }
-fn arg_str<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
+pub(crate) fn arg_str<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
     a.get(k).and_then(Value::as_str)
 }
 
-fn points(a: &Value) -> Result<Vec<P>, String> {
+pub(crate) fn points(a: &Value) -> Result<Vec<P>, String> {
     a.get("points")
         .and_then(Value::as_array)
         .ok_or("Parameter 'points' fehlt")?
@@ -219,13 +285,13 @@ impl Server {
         Server { project: Project::new_default(), path: None, lib, lib_info, dirty: false, sym: None }
     }
 
-    fn sheet_ref(&self, a: &Value) -> Result<SheetRef, String> {
+    pub(crate) fn sheet_ref(&self, a: &Value) -> Result<SheetRef, String> {
         let r = SheetRef { anlage: arg_usize(a, "anlage")?, sheet: arg_usize(a, "sheet")? };
         self.project.sheet(r).ok_or("Blatt nicht vorhanden")?;
         Ok(r)
     }
 
-    fn all_symbols(&self) -> Vec<&SymDef> {
+    pub(crate) fn all_symbols(&self) -> Vec<&SymDef> {
         let mut v: Vec<&SymDef> = self.project.symdefs.iter().collect();
         v.extend(self.lib.iter().filter(|d| !self.project.symdefs.iter().any(|p| p.key == d.key)));
         v
@@ -235,6 +301,9 @@ impl Server {
     pub fn call(&mut self, name: &str, a: &Value) -> Result<Value, String> {
         crate::rahmen::abgleichen(&mut self.project);
         if let Some(r) = self.symbol_call(name, a) {
+            return r;
+        }
+        if let Some(r) = self.plan_call(name, a) {
             return r;
         }
         match name {
@@ -364,7 +433,7 @@ impl Server {
                     }
                     "text" => {
                         need(1)?;
-                        Kind::Text {
+                        let mut k = Kind::Text {
                             pos: pts[0],
                             text: arg_str(a, "text").unwrap_or_default().into(),
                             size: arg_f32(a, "size").unwrap_or(3.5),
@@ -381,16 +450,27 @@ impl Server {
                                 rotation: a.get("rotation").and_then(Value::as_i64).unwrap_or(0) as i16,
                                 ..Default::default()
                             },
+                        };
+                        if let Kind::Text { style, align, vertical, .. } = &mut k {
+                            textstil(a, style, align, vertical);
                         }
+                        k
                     }
                     "textbox" => {
                         need(2)?;
                         let flag = |k: &str| a.get(k).and_then(Value::as_bool);
                         let mut k = crate::textbox::neu(pts[0], pts[1], arg_str(a, "text").unwrap_or("Text"));
-                        if let Kind::Text { size, style, .. } = &mut k {
+                        if let Kind::Text { pos, size, style, align, vertical, .. } = &mut k {
                             *size = arg_f32(a, "size").unwrap_or(*size);
                             style.frame = flag("frame").unwrap_or(style.frame);
                             style.wrap = flag("wrap").unwrap_or(style.wrap);
+                            textstil(a, style, align, vertical);
+                            // Ankerpunkt wie gelesen (get_sheet points[0]), z. B. bei gedrehten Texten
+                            if let Some(an) = a.get("anchor").and_then(Value::as_array) {
+                                if let (Some(x), Some(y)) = (an.first().and_then(Value::as_f64), an.get(1).and_then(Value::as_f64)) {
+                                    *pos = P::new(x as f32, y as f32);
+                                }
+                            }
                         }
                         k
                     }
@@ -417,11 +497,11 @@ impl Server {
                     key: def.key.clone(),
                     pos,
                     rot: a.get("rot").and_then(Value::as_u64).unwrap_or(0) as u8 % 4,
-                    mirror_h: false,
-                    mirror_v: false,
+                    mirror_h: a.get("mirror_h").and_then(Value::as_bool).unwrap_or(false),
+                    mirror_v: a.get("mirror_v").and_then(Value::as_bool).unwrap_or(false),
                     bmk: bmk.clone(),
                     value: arg_str(a, "value").unwrap_or_default().into(),
-                    scale: 1.0,
+                    scale: arg_f32(a, "scale").filter(|s| *s > 0.0).unwrap_or(1.0),
                     option: a.get("option").and_then(Value::as_u64).unwrap_or(0) as u16,
                     title: Some((crate::app::symbol_title_rot(&def, (a.get("rot").and_then(Value::as_u64).unwrap_or(0) % 4) as u8, a.get("option").and_then(Value::as_u64).unwrap_or(0) as u16).0, false)),
                     flags: a.get("flags").and_then(Value::as_u64).unwrap_or(0) as u32,

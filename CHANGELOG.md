@@ -18,6 +18,11 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Neu
 
+- MCP: neue Werkzeuge für Sammelschienen, Klemmstellen (teilen die Leitung), Verweise, Tabellen, Kontaktspiegel,
+  Leitungsart und Verbindungsbezeichnungen einer Leitung, Leitungsarten, Potentiale, Klemmleisten, Bauteile
+  (anlegen, ändern, löschen, zuordnen; Gruppen und Hersteller der Bibliothek) und „Projekt prüfen“. Texte behalten
+  Ausrichtung, Drehung und Schrift, Symbole Spiegelung und Größe. Damit lässt sich ein ganzes Projekt über MCP
+  deckungsgleich nachzeichnen.
 - Tools › Projekt prüfen meldet „Gleiches Potential getrennt“: eine Leitung mit der Bezeichnung PE, PEN, N oder dem
   Namen einer Sammelschiene des Blattes liegt in einem anderen Netz als die gleichnamige Schiene bzw. die anderen
   so bezeichneten Leitungen. Nur ein Hinweis – N hinter verschiedenen FI-Schutzschaltern ist gewollt getrennt.
