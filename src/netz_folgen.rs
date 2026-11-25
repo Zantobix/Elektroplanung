@@ -752,14 +752,40 @@ impl crate::app::App {
     /// Stehen alle Objekte außer Leitungen wieder genau wie in einem zu Gestenbeginn gemerkten Stand (Symbol hin und
     /// zurück, viermal gedreht …), gelten dessen Leitungen – der neueste passende Stand, damit Handänderungen
     /// erhalten bleiben (Kriterium L10, Maustest 23.11.2026).
-    pub fn rueckkehr_anwenden(&mut self) {
+    ///
+    /// Nur die Leitungen in den Netzen der bewegten Objekte `primaer` (jetzt bzw. im gemerkten Stand) kommen aus dem
+    /// gemerkten Stand; Leitungen anderer Netze bleiben, wie sie jetzt sind. Vorher kamen **alle** Leitungen des
+    /// Blattes zurück – auch eine inzwischen von Hand umgelegte Leitung eines fremden Netzes, die dann beim Ziehen eines
+    /// Symbols über seine frühere Lage hin- und hersprang (Nutzervideo 25.11.2026, „Fremdeinwirkung“).
+    pub fn rueckkehr_anwenden(&mut self, primaer: &[u64]) {
         let (Some(r), Some(s)) = (self.cur(), self.sheet()) else { return };
         let ohne = |v: &[Obj]| -> Vec<Obj> { v.iter().filter(|o| !matches!(o.kind, Kind::Wire { .. })).cloned().collect() };
         let jetzt = ohne(&s.objects);
-        let Some(objs) = self.rueckkehr.iter().rev().find(|(r0, o0)| *r0 == r && ohne(o0) == jetzt).map(|(_, o)| o.clone()) else {
+        let Some(gemerkt) = self.rueckkehr.iter().rev().find(|(r0, o0)| *r0 == r && ohne(o0) == jetzt).map(|(_, o)| o.clone()) else {
             self.rueckkehr_gilt = false;
             return;
         };
+        let mut alt_blatt = s.clone();
+        alt_blatt.objects = gemerkt.clone();
+        // Netze an den Anschlüssen der bewegten Objekte (ein Symbol selbst gehört zu keinem einzelnen Netz)
+        let mut netz: std::collections::HashSet<u64> = Default::default();
+        for blatt in [s, &alt_blatt] {
+            for o in blatt.objects.iter().filter(|o| primaer.contains(&o.id)) {
+                netz.extend(crate::netz::netz_von(blatt, &self.lib, o.id));
+                for pin in crate::canvas::obj_pins(o, &self.lib) {
+                    for w in blatt.objects.iter().filter(|w| matches!(&w.kind, Kind::Wire { pts, .. } if pts.first().is_some_and(|q| q.dist(pin) < 0.05) || pts.last().is_some_and(|q| q.dist(pin) < 0.05))) {
+                        netz.extend(crate::netz::netz_von(blatt, &self.lib, w.id));
+                    }
+                }
+            }
+        }
+        let ist_leitung = |o: &Obj| matches!(o.kind, Kind::Wire { .. });
+        // gemerkter Stand, darin die Leitungen fremder Netze durch ihren jetzigen Stand ersetzt
+        let mut objs: Vec<Obj> = gemerkt.iter().filter(|g| !ist_leitung(g) || netz.contains(&g.id)).cloned().collect();
+        for o in s.objects.iter().filter(|o| ist_leitung(o) && !netz.contains(&o.id)) {
+            objs.push(o.clone());
+        }
+        objs.sort_by_key(|o| gemerkt.iter().position(|g| g.id == o.id).or_else(|| s.objects.iter().position(|x| x.id == o.id)).unwrap_or(usize::MAX));
         let anders = s.objects != objs;
         self.rueckkehr_gilt = true;
         if anders {
@@ -832,7 +858,7 @@ impl crate::app::App {
         // Leitungen, das wäre sonst immer eine „Rückkehr“
         let nur_objekte = self.sheet().is_some_and(|s| s.objects.iter().filter(|o| primaer.contains(&o.id)).all(|o| !matches!(o.kind, Kind::Wire { .. })));
         if nur_objekte && !primaer.is_empty() {
-            self.rueckkehr_anwenden();
+            self.rueckkehr_anwenden(primaer);
         } else {
             self.rueckkehr_gilt = false;
         }

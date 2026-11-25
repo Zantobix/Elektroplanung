@@ -260,3 +260,48 @@ fn lampe_vorbeiziehen_ohne_umweg() {
     let w203 = s.objects.iter().find(|o| o.id == 203).and_then(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts.clone()) } else { None }).unwrap();
     assert!(w203.len() <= 3, "Zuleitung von -E3 ohne Umweg: {w203:?}");
 }
+
+fn ziehen(ui: &mut Ui, app: &mut App, von: P, nach: P) {
+    let q0 = Ui::px(app, von);
+    ui.lauf(app, vec![Event::PointerMoved(q0)]);
+    ui.lauf(app, vec![Event::PointerButton { pos: q0, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    for k in 1..=30 {
+        let q = Ui::px(app, P::new(von.x + (nach.x - von.x) * k as f32 / 30.0, von.y + (nach.y - von.y) * k as f32 / 30.0));
+        ui.lauf(app, vec![Event::PointerMoved(q)]);
+    }
+    let q = Ui::px(app, nach);
+    ui.lauf(app, vec![Event::PointerButton { pos: q, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }]);
+    ui.t += 0.6;
+    ui.lauf(app, vec![]);
+}
+
+/// Nutzervideo 25.11.2026 („Fremdeinwirkung“): -E2 weg- und wieder zurückgezogen, dazwischen die L-Leitung (anderes
+/// Netz) von Hand umgelegt – das Rückkehr-Gedächtnis darf nur die Leitungen an -E2 zurücksetzen, nicht die L-Leitung.
+#[test]
+fn rueckkehr_laesst_fremde_netze() {
+    let Some(f) = std::env::var("EP_FIXTURES").ok().map(|d| std::path::Path::new(&d).join("nachzeichnen/nachgezeichnet_2026-11-25.epr")).filter(|p| p.exists()) else { return };
+    elektroplanung::meldungen::test_antworten(&[]);
+    let mut app = test_app();
+    app.open_path(f, false);
+    let r = SheetRef { anlage: 1, sheet: 3 };
+    app.open_sheet(r);
+    let mut ui = Ui { ctx: egui::Context::default(), frame: eframe::Frame::_new_kittest(), t: 1.0 };
+    for _ in 0..3 {
+        ui.lauf(&mut app, vec![]);
+    }
+    let l_y = |app: &App| app.project.sheet(r).unwrap().objects.iter().find(|o| o.id == 218).and_then(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts[2].y) } else { None }).unwrap();
+    let e2 = |app: &App| app.project.sheet(r).unwrap().objects.iter().find(|o| o.id == 199).and_then(|o| if let Kind::Symbol { pos, .. } = &o.kind { Some(*pos) } else { None }).unwrap();
+    let p0 = e2(&app);
+    ziehen(&mut ui, &mut app, p0, P::new(p0.x + 14.0, p0.y));
+    let p1 = e2(&app);
+    assert!(p1.x > p0.x + 5.0, "-E2 verschoben: {p1:?}");
+    // L-Leitung markieren und ihr waagerechtes Stück von y 95 auf 85 ziehen
+    ui.klick(&mut app, P::new(50.0, 95.0));
+    ziehen(&mut ui, &mut app, P::new(50.0, 95.0), P::new(50.0, 85.0));
+    let l1 = l_y(&app);
+    assert!((l1 - 95.0).abs() > 1.0, "L-Leitung umgelegt: {l1}");
+    // -E2 zurück an die Ausgangslage
+    ziehen(&mut ui, &mut app, p1, p0);
+    assert!(e2(&app).dist(p0) < 0.05, "-E2 zurück: {:?}", e2(&app));
+    assert!((l_y(&app) - l1).abs() < 0.01, "L-Leitung (fremdes Netz) zurückgesetzt: {} statt {l1}", l_y(&app));
+}

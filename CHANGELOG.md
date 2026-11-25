@@ -72,6 +72,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Verschieben: kam ein Symbol an eine frühere Lage zurück, setzte das Rückkehr-Gedächtnis alle Leitungen des Blattes
+  zurück – auch inzwischen von Hand geänderte Leitungen anderer Netze, die dann beim Ziehen hin- und hersprangen.
+  Jetzt nur die Leitungen in den Netzen der bewegten Objekte.
 - Teilstück ziehen: die Leitung sprang bei gleichmäßiger Mausbewegung zwischen zwei Lagen hin und her (Fang auf
   Fluchten hing von nachgeführten Nachbarleitungen ab); beim Ziehen verdeckt der Mehrfachklick-Hinweis keine
   Meldungen mehr.
