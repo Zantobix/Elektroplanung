@@ -88,6 +88,8 @@ pub fn tool_list() -> Vec<Value> {
                 "texts": {"type": "array"}, "params": {"type": "array"}, "owner": {"type": "integer"}
             })), &["anlage", "sheet", "id"]),
         tool("check_project", "Tools › Projekt prüfen: offene Anschlüsse, doppelte BMK, gleiches Potential getrennt.", json!({}), &[]),
+        tool("select_objects", "Bearbeiten › Auswahl: Kennungen der Objekte eines Blattes nach Befehl (ausw_leitungen, ausw_symbole, ausw_klemmen, ausw_schienen, ausw_zeichnung, ausw_texte, ausw_verweise, ausw_tabellen, ausw_gleiche, ausw_umkehren, ausw_verbunden) ausgehend von 'ids'; ohne 'command' nur die Zählung je Art. Ergebnis für update_object/set_wire.",
+            mit(blatt(), json!({ "command": {"type": "string"}, "ids": {"type": "array", "items": {"type": "integer"}} })), &["anlage", "sheet"]),
     ]
 }
 
@@ -194,6 +196,18 @@ impl Server {
             "add_contact_mirror" => self.spiegel(a),
             "get_symbol" => self.symbol_lesen(a),
             "set_symbol" => self.symbol_setzen(a),
+            "select_objects" => (|| {
+                let r = self.sheet_ref(a)?;
+                let s = self.project.sheet(r).ok_or("Blatt nicht vorhanden")?;
+                let ids: Vec<u64> = a.get("ids").and_then(Value::as_array).map(|v| v.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
+                let mut lib = self.lib.clone();
+                lib.extend(self.project.symdefs.iter().filter(|d| !self.lib.iter().any(|l| l.key == d.key)).cloned());
+                let ids = match a.get("command").and_then(Value::as_str) {
+                    Some(c) => crate::auswahl::rechnen(s, &lib, &ids, c, &|_| true).ok_or_else(|| format!("unbekannter Befehl '{c}'"))?,
+                    None => ids,
+                };
+                Ok(json!({ "ids": ids, "summary": crate::auswahl::zaehlung(s, &ids) }))
+            })(),
             "check_project" => {
                 let mut lib = self.lib.clone();
                 lib.extend(self.project.symdefs.iter().filter(|d| !self.lib.iter().any(|l| l.key == d.key)).cloned());

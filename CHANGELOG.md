@@ -23,6 +23,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
   für die laufende Sitzung und der neue Optionen-Reiter „Markieren“ (Markierrichtung, Vormarkierung, Markierfarbe,
   Mehrfachklick bis zu einer Stufe, Löschen mit Leitungen). Die Taste zum Hinzunehmen ist unter Tastenkürzel
   wählbar (Strg oder Umschalt); die Statuszeile nennt, wie viele Objekte welcher Art markiert sind.
+- MCP: `select_objects` liefert die Kennungen der Auswahlbefehle (alle einer Art, gleiche wie, umkehren, verbundene
+  Leitungen) samt Zählung – z. B. als Grundlage, um allen Leitungen eines Blattes eine Leitungsart zu geben.
 - MCP: neue Werkzeuge für Sammelschienen, Klemmstellen (teilen die Leitung), Verweise, Tabellen, Kontaktspiegel,
   Leitungsart und Verbindungsbezeichnungen einer Leitung, Leitungsarten, Potentiale, Klemmleisten, Bauteile
   (anlegen, ändern, löschen, zuordnen; Gruppen und Hersteller der Bibliothek) und „Projekt prüfen“. Texte behalten

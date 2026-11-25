@@ -94,3 +94,21 @@ fn symbol_eigenschaften_ueber_mcp() {
     }
     let _ = std::fs::remove_file(pfad);
 }
+
+#[test]
+fn auswahl_ueber_mcp() {
+    let mut s = Server::new();
+    ok(&mut s, "new_project", json!({"name": "MCP"}));
+    let b = json!({"anlage": 0, "sheet": 0});
+    let mit = |x: Value| { let mut v = b.clone(); v.as_object_mut().unwrap().extend(x.as_object().unwrap().clone()); v };
+    let w1 = ok(&mut s, "add_object", mit(json!({"kind": "wire", "points": [[50.0, 50.0], [80.0, 50.0]]})))["id"].as_u64().unwrap();
+    let w2 = ok(&mut s, "add_object", mit(json!({"kind": "wire", "points": [[80.0, 50.0], [80.0, 90.0]]})))["id"].as_u64().unwrap();
+    ok(&mut s, "add_object", mit(json!({"kind": "line", "points": [[10.0, 10.0], [20.0, 10.0]]})));
+    let r = ok(&mut s, "select_objects", mit(json!({"command": "ausw_leitungen"})));
+    assert_eq!(r["ids"], json!([w1, w2]));
+    assert_eq!(r["summary"], json!("2 Leitungen markiert"));
+    let r = ok(&mut s, "select_objects", mit(json!({"command": "ausw_umkehren", "ids": [w1, w2]})));
+    assert_eq!(r["summary"], json!("1 Zeichenobjekt markiert"));
+    assert_eq!(ok(&mut s, "select_objects", mit(json!({"command": "ausw_verbunden", "ids": [w1]})))["ids"], json!([w1, w2]));
+    assert!(s.call("select_objects", &mit(json!({"command": "gibt_es_nicht"}))).is_err());
+}

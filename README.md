@@ -102,6 +102,7 @@ Protokoll 2025-06-18). Für Claude Code ist er in [.mcp.json](.mcp.json) eingetr
 | `list_part_catalog`, `list_parts`, `add_part`, `update_part`, `delete_part`, `assign_parts` | Bauteile: Gruppen/Hersteller der Bibliothek, anlegen, ändern, löschen, Symbolen und Klemmstellen zuordnen (mehrere je Objekt) |
 | `get_symbol`, `set_symbol` | alle Eigenschaften eines gesetzten Symbols wie im Dialog: Titel/Wert samt Lage und Ausrichtung, Drehen, Spiegeln, Größe, Bild (Variante), Zusatzoptionen (auch nach Namen), Alternativtext-Satz, Funktion, Rackposition, Index, Freigaben, eigene Texte, Parameter, Eigentümer |
 | `check_project` | Tools › Projekt prüfen (offene Anschlüsse, doppelte BMK, gleiches Potential getrennt) |
+| `select_objects` | Bearbeiten › Auswahl: Kennungen nach Befehl (alle einer Art, gleiche wie, umkehren, verbundene Leitungen) samt Zählung |
 | `export_pdf` | alle Blätter als Vektor-PDF (gleiche Zeichenroutinen wie die Oberfläche) |
 | `symbol_open`, `symbol_new`, `symbol_get` | Symboleditor: Symbol aus Projekt/Bibliothek öffnen oder neu anlegen, Elemente auflisten |
 | `symbol_add_element`, `symbol_update_element`, `symbol_delete_element` | Linie, Polygon, Kurve, Ellipse, Text (mit Ausrichtung/Drehmodus), Anschluss, Titel-/Wertanker; Seite, Zusatzoption, Füllung |
