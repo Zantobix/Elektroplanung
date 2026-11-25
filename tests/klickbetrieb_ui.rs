@@ -99,3 +99,74 @@ fn klickbetrieb_nachzeichnen() {
         eprintln!("Klick {i} {q:?}: {d} | {}", app.info);
     }
 }
+
+/// Erkundung (EP_NZ): L-Leitung von X1.3 an ihrem waagerechten Teilstück langsam nach oben/unten ziehen und die Form
+/// je Bild ausgeben (Nutzervideo 25.11.2026: Ende springt zwischen X1.3 und der Leitung über X1.2 hin und her).
+#[test]
+fn teilstueck_ziehen_erkunden() {
+    let Some(p) = std::env::var("EP_NZ").ok() else { return };
+    elektroplanung::meldungen::test_antworten(&[]);
+    let mut app = test_app();
+    app.open_path(p.into(), false);
+    app.open_sheet(SheetRef { anlage: 1, sheet: 3 });
+    let mut ui = Ui { ctx: egui::Context::default(), frame: eframe::Frame::_new_kittest(), t: 1.0 };
+    for _ in 0..3 {
+        ui.lauf(&mut app, vec![]);
+    }
+    let id: u64 = std::env::var("EP_ID").ok().and_then(|v| v.parse().ok()).unwrap_or(218);
+    let x: f32 = std::env::var("EP_X").ok().and_then(|v| v.parse().ok()).unwrap_or(70.0);
+    let y0: f32 = std::env::var("EP_Y0").ok().and_then(|v| v.parse().ok()).unwrap_or(95.0);
+    let y1: f32 = std::env::var("EP_Y1").ok().and_then(|v| v.parse().ok()).unwrap_or(75.0);
+    let senkrecht = std::env::var("EP_SENKRECHT").is_ok();
+    ui.klick(&mut app, P::new(x, y0));
+    let pk = |p: P| Ui::px(&app_ref(&app), p);
+    fn app_ref(a: &App) -> &App {
+        a
+    }
+    let q0 = pk(P::new(x, y0));
+    ui.lauf(&mut app, vec![Event::PointerButton { pos: q0, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    let n = 60;
+    let mut alt = String::new();
+    for k in 0..=n {
+        let v = y0 + (y1 - y0) * k as f32 / n as f32;
+        let q = if senkrecht { Ui::px(&app, P::new(v, x)) } else { Ui::px(&app, P::new(x, v)) };
+        ui.lauf(&mut app, vec![Event::PointerMoved(q)]);
+        let s = app.project.sheet(SheetRef { anlage: 1, sheet: 3 }).unwrap();
+        let form: Vec<String> = s.objects.iter().filter(|o| o.id == id || std::env::var("EP_ALLE").is_ok()).filter_map(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(format!("{}:{:?}", o.id, pts.iter().map(|p| (p.x, p.y)).collect::<Vec<_>>())) } else { None }).collect();
+        let f = form.join(" ");
+        if f != alt {
+            eprintln!("Maus {v:6.2}: {f} | {}", app.info);
+            alt = f;
+        }
+    }
+}
+
+/// Nutzervideo 25.11.2026 („Wackeln“): die L-Leitung von X1.3 auf -F3 (Nachzeichen-Stand 25.11.) an ihrem
+/// waagerechten Teilstück gleichmäßig nach oben gezogen – die Lage darf nur in Zugrichtung wandern, nie zurückspringen.
+#[test]
+fn teilstueck_wackelt_nicht() {
+    let Some(f) = std::env::var("EP_FIXTURES").ok().map(|d| std::path::Path::new(&d).join("nachzeichnen/nachgezeichnet_2026-11-25.epr")).filter(|p| p.exists()) else { return };
+    elektroplanung::meldungen::test_antworten(&[]);
+    let mut app = test_app();
+    app.open_path(f, false);
+    let r = SheetRef { anlage: 1, sheet: 3 };
+    app.open_sheet(r);
+    let mut ui = Ui { ctx: egui::Context::default(), frame: eframe::Frame::_new_kittest(), t: 1.0 };
+    for _ in 0..3 {
+        ui.lauf(&mut app, vec![]);
+    }
+    let y_von = |app: &App| app.project.sheet(r).unwrap().objects.iter().find(|o| o.id == 218).and_then(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts[2].y) } else { None }).unwrap();
+    assert_eq!(y_von(&app), 95.0);
+    ui.klick(&mut app, P::new(50.0, 95.0));
+    let q0 = Ui::px(&app, P::new(50.0, 95.0));
+    ui.lauf(&mut app, vec![Event::PointerButton { pos: q0, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    let mut zuletzt = 95.0;
+    for k in 0..=60 {
+        let q = Ui::px(&app, P::new(50.0, 95.0 - 20.0 * k as f32 / 60.0));
+        ui.lauf(&mut app, vec![Event::PointerMoved(q)]);
+        let y = y_von(&app);
+        assert!(y <= zuletzt + 0.01, "Schritt {k}: zurückgesprungen von {zuletzt} auf {y}");
+        zuletzt = y;
+    }
+    assert!(zuletzt < 80.0, "gezogen bis {zuletzt}");
+}

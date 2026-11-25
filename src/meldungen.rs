@@ -469,11 +469,12 @@ impl crate::app::App {
         // Beim Verschieben zählt die Lage beim Loslassen: Abweisungen einer Zwischenlage stehen nur, solange die Lage
         // abgewiesen bleibt, und werden nicht gehalten (Nachzeichnen 25.11.2026 #96: nach zulässigem Ablegen stand
         // noch „würde ein Symbol auf ein anderes legen“); gehalten wird erst nach dem Loslassen
-        let verschieben = matches!(self.drag, Drag::Move { .. });
-        if verschieben {
+        // während eines Ziehens (Verschieben, Teilstück, Knick …) nichts halten: sonst verdeckte z. B. der gehaltene
+        // Mehrfachklick-Text „Teilstück …“ die Meldungen beim Ziehen
+        if !matches!(self.drag, Drag::None) {
             m.halten = None;
         }
-        if !verschieben && wird_gehalten(&self.info) && m.halten.as_ref().is_none_or(|(t, _)| *t != self.info) {
+        if matches!(self.drag, Drag::None) && wird_gehalten(&self.info) && m.halten.as_ref().is_none_or(|(t, _)| *t != self.info) {
             m.halten = Some((self.info.clone(), jetzt));
         }
         if let Some((t, seit)) = m.halten.clone() {

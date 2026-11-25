@@ -69,6 +69,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Teilstück ziehen: die Leitung sprang bei gleichmäßiger Mausbewegung zwischen zwei Lagen hin und her (Fang auf
+  Fluchten hing von nachgeführten Nachbarleitungen ab); beim Ziehen verdeckt der Mehrfachklick-Hinweis keine
+  Meldungen mehr.
 - Statuszeile beim Verschieben: eine Abweisung des Netz-Wächters für eine Zwischenlage blieb nach dem Ablegen an
   zulässiger Stelle noch vier Sekunden stehen; jetzt steht sie nur, solange die Lage abgewiesen ist, und wird erst
   gehalten, wenn auch die Lage beim Loslassen abgewiesen wurde.

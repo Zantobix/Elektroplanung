@@ -162,8 +162,18 @@ impl App {
         let fang = self.fluchtfang_weite().unwrap_or(0.0);
         // mit Netz-Wächter nur Fluchten des eigenen Netzes (und Anschlüsse): auf eine fremde Leitung gefangen, würde das
         // Teilstück zwei Netze übereinanderlegen und abgewiesen (netz_waechter.rs)
-        let flucht = self
-            .sheet()
+        // Fluchten aus dem Stand vor dem Ziehen: aus dem laufenden Stand genommen, hingen sie von der Lage des letzten
+        // Bildes ab (nachgeführte Nachbarleitungen) – das Teilstück sprang bei ruhiger Mausbewegung zwischen zwei
+        // Lagen hin und her (Nutzervideo 25.11.2026, „Wackeln“)
+        let vorher = self.sheet().map(|s| {
+            let mut v = s.clone();
+            if !self.netz_vorher.is_empty() {
+                v.objects = self.netz_vorher.clone();
+            }
+            v
+        });
+        let flucht = vorher
+            .as_ref()
             .map(|s| {
                 if !self.opt.netz_waechter {
                     return fluchten(s, &self.lib, id, waagerecht);
