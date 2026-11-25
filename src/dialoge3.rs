@@ -1072,6 +1072,21 @@ impl App {
         }
     }
 
+    /// Offenen Dialog wie mit „OK“ anwenden (für Tests und Skripte; gleicher Weg wie der Knopf).
+    pub fn dlg3_ok(&mut self) {
+        if let Some(d) = self.dlg3.take() {
+            if let Some(keep) = self.apply_dlg3(d) {
+                self.dlg3 = Some(keep);
+            }
+        }
+    }
+
+    /// Offenen Dialog wie mit „Abbruch“ schließen (neu angelegte Einträge werden zurückgenommen).
+    pub fn dlg3_abbrechen(&mut self) {
+        self.dlg3 = None;
+        self.neu_verwerfen();
+    }
+
     /// PDFs mehrerer Projekte erzeugen (neben der Projektdatei, Endung .pdf). Rückgabe: Statuszeile.
     fn batch_pdf(&mut self, liste: &[String]) -> String {
         let mut ok = 0;

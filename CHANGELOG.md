@@ -22,6 +22,13 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
   Namen einer Sammelschiene des Blattes liegt in einem anderen Netz als die gleichnamige Schiene bzw. die anderen
   so bezeichneten Leitungen. Nur ein Hinweis – N hinter verschiedenen FI-Schutzschaltern ist gewollt getrennt.
 
+### Geändert
+
+- Werkzeugknopf „Neue Sammelschiene“ wie im Original: auf einem Schaltplan entsteht sofort ein Sammelschienen-Objekt
+  mit einer neuen Schiene „L<n>“ über die Blattbreite, automatisch unter die vorhandenen Schienen gestapelt, und
+  dessen Eigenschaften-Dialog öffnet sich; Abbruch nimmt beides zurück. Vorher legte der Knopf wie
+  Hinzufügen › Sammelschiene nur die Schiene an, ohne Objekt auf dem Blatt.
+
 ### Behoben
 
 - Hinzufügen › Blatt: hinter dem Dialog wurde das neue Blatt im Querformat gezeigt, während der Dialog das

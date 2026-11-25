@@ -181,7 +181,8 @@ impl App {
                 self.potential_neu();
             }
             if tool_button(ui, Icon::NewBusbar, "Neue Sammelschiene", true, false).clicked() {
-                self.new_busbar();
+                // Original: Objekt auf dem Schaltplan anlegen (ToolButton18Click), nicht nur die Schiene
+                self.schiene_objekt_neu();
             }
             sep(ui, 5.0);
             let has_sel = !self.selection.is_empty();
