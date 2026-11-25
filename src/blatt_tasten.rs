@@ -47,6 +47,17 @@ pub struct Stand {
     pub zyklus: Option<(Vec<SheetRef>, usize)>,
     /// Strg ist in diesem Bild gedrückt (setzt `shortcuts`; Ende des Strg+Tab-Zyklus)
     pub strg_unten: bool,
+    /// Mausrad über den Blattreitern: aufgelaufene Drehung (Punkte), ein Blatt je `RAD_SCHRITT`
+    pub rad: f32,
+}
+
+/// So viel Raddrehung (egui-Punkte) wechselt ein Blatt; eine Rastung liefert meist 50.
+pub const RAD_SCHRITT: f32 = 40.0;
+
+/// Blattwechsel aus aufgelaufener Raddrehung: (Schritte, Rest). Nach oben/links = voriges Blatt.
+pub fn rad_schritte(summe: f32) -> (i32, f32) {
+    let n = (summe / RAD_SCHRITT).trunc() as i32;
+    (n, summe - n as f32 * RAD_SCHRITT)
 }
 
 /// Tastendruck, der hier ausgewertet wird.
@@ -205,6 +216,45 @@ impl App {
         }
     }
 
+    /// Mausrad über der Reiterleiste `rect`: ein Blatt je Rastung, nach oben das vorige, nach unten das nächste
+    /// (ohne Umlauf). Option „Mausrad über den Blattreitern wechselt das Blatt“ (Programmverhalten).
+    pub fn reiter_rad(&mut self, ctx: &egui::Context, rect: egui::Rect) {
+        if !self.opt.reiter_rad || self.tabs.is_empty() {
+            self.bt.rad = 0.0;
+            return;
+        }
+        let (ueber, d) = ctx.input(|i| {
+            // Rastungen eines Mausrads (Zeilen/Seiten): höchstens ein Blatt je Bild und Richtung – unter X11 kommen je
+            // Rastung zwei Ereignisse an; Touchpad (Punkte): aufsummieren
+            let (mut punkte, mut zeilen) = (egui::Vec2::ZERO, egui::Vec2::ZERO);
+            for e in &i.events {
+                if let egui::Event::MouseWheel { unit, delta, .. } = e {
+                    match unit {
+                        egui::MouseWheelUnit::Point => punkte += *delta,
+                        egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => zeilen += *delta,
+                    }
+                }
+            }
+            let rast = |v: f32| if v == 0.0 { 0.0 } else { v.signum() * RAD_SCHRITT };
+            (i.pointer.hover_pos().is_some_and(|p| rect.contains(p)), punkte + egui::vec2(rast(zeilen.x), rast(zeilen.y)))
+        });
+        if !ueber {
+            self.bt.rad = 0.0;
+            return;
+        }
+        // senkrechtes Rad, sonst waagerechtes (Touchpad, Umschalt+Rad)
+        let wert = if d.y.abs() >= d.x.abs() { d.y } else { d.x };
+        let (n, rest) = rad_schritte(self.bt.rad + wert);
+        self.bt.rad = rest;
+        if n != 0 {
+            let ziel = (self.active as i32 - n).clamp(0, self.tabs.len() as i32 - 1) as usize;
+            if ziel != self.active {
+                self.active = ziel;
+                self.selection.clear();
+            }
+        }
+    }
+
     /// Knickrichtung der gerade gezogenen Leitung kippen (Leertaste, „/“); `false`, wenn keine Leitung gezogen wird.
     pub fn knick_umschalten(&mut self) -> bool {
         let crate::app::Drag::Wire { f } = &mut self.drag else { return false };
@@ -360,6 +410,13 @@ mod tests {
         app.blatt_verfolgen();
         tab(&mut app, false);
         assert_eq!(app.active, 2, "zwei kurze Strg+Tab wechseln hin und her");
+    }
+
+    #[test]
+    fn rad_schritte_mit_rest() {
+        assert_eq!(rad_schritte(50.0), (1, 10.0));
+        assert_eq!(rad_schritte(-100.0), (-2, -20.0));
+        assert_eq!(rad_schritte(15.0), (0, 15.0));
     }
 
     #[test]

@@ -2787,9 +2787,11 @@ impl eframe::App for App {
         egui::Panel::bottom("status").exact_size(20.0).frame(pf).show(ui, |ui| {
             self.status_bar(ui);
         });
-        egui::Panel::bottom("tabs").exact_size(23.0).frame(pf).show(ui, |ui| {
+        let reiter = egui::Panel::bottom("tabs").exact_size(23.0).frame(pf).show(ui, |ui| {
             self.bottom_row(ui);
         });
+        // Mausrad über den Blattreitern wechselt das Blatt (Option, Nutzer 25.11.2026; blatt_tasten.rs)
+        self.reiter_rad(&ctx, reiter.response.rect);
         let rw = self.right_w;
         let resp = egui::Panel::right("right")
             .resizable(false)

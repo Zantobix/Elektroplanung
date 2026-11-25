@@ -18,6 +18,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Neu
 
+- Mausrad über den Blattreitern wechselt das Blatt (eine Rastung = ein Blatt; Option unter Programmverhalten).
+- Optionen › Tastenkürzel: Suchfeld nach Befehl oder Tastenkombination.
 - Strg+Umschalt+Tab wechselt zum Reiter links; Optionen › Tastenkürzel „Strg+Tab wechselt … nach Verlauf“ springt
   stattdessen zum zuletzt angezeigten Blatt (bei gehaltener Strg-Taste weiter zurück, wie in Browsern).
 - Projektdatei (.epr, .epj) ins Fenster ziehen öffnet sie; bei ungespeicherten Änderungen kommt vorher die
@@ -42,6 +44,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Optionen-Fenster: alle Reiter gleich groß, kein Springen beim Reiterwechsel, am Rahmen in der Größe veränderbar;
+  was nicht passt, rollt.
 - Druckdialog wie im Original: der Standarddrucker steht mit seinem Namen in der Liste, Von/Bis zeigen 0, das Feld
   „Änderung seit dem“ ist zunächst leer.
 - Auch das letzte Blatt einer Anlage lässt sich löschen wie im Original; Anlagen ohne Blatt werden so gespeichert

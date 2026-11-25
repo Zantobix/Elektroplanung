@@ -4,7 +4,7 @@
 
 use crate::app::App;
 use crate::model::*;
-use crate::props::{bold, tool_window};
+use crate::props::bold;
 use eframe::egui::{self, Color32, RichText, Vec2};
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +61,8 @@ pub struct Optionen {
     pub mehrfachklick_stufen: u8,
     /// Strg+Tab nach Verlauf (zuletzt angezeigtes Blatt) statt nach Lage der Reiter (Nutzer 25.11.2026)
     pub strg_tab_verlauf: bool,
+    /// Mausrad über den Blattreitern wechselt das Blatt (Nutzer 25.11.2026)
+    pub reiter_rad: bool,
     /// Vormarkierung: Objekt unter der Maus hervorheben (NR13; aus = nur der Mauszeiger zeigt es)
     pub vormarkierung: bool,
     /// Farbe markierter Objekte (NR13; Vorgabe Rot wie bisher)
@@ -141,6 +143,7 @@ impl Default for Optionen {
             mehrfachklick_leitung: true,
             mehrfachklick_stufen: 4,
             strg_tab_verlauf: false,
+            reiter_rad: true,
             vormarkierung: true,
             markier_farbe: [220, 0, 0],
             desktop_eintrag: true,
@@ -221,6 +224,14 @@ pub struct OptDlg {
     pub t: Vec<String>,
     /// Befehl, dessen neue Tastenkombination gerade aufgenommen wird
     pub capture: Option<&'static str>,
+    /// Suchtext im Reiter Tastenkürzel (Befehlsname oder Tastenkombination)
+    pub suche: String,
+}
+
+/// Passt der Befehl `name` mit Belegung `taste` zur Suche `q` (Teilwort, Groß/klein egal; leer = alles)?
+pub fn kuerzel_passt(q: &str, name: &str, taste: &str) -> bool {
+    let q = q.trim().to_lowercase();
+    q.is_empty() || name.to_lowercase().contains(&q) || taste.to_lowercase().contains(&q)
 }
 
 /// Rasterfarben zur Auswahl: hell (frühere Vorgabe), mittel (Vorgabe), kräftig
@@ -295,7 +306,7 @@ impl App {
             f1(o.titel_verweis.0),
             f1(o.titel_verweis.1),
         ];
-        self.opt_dlg = Some(OptDlg { o, tab: 0, t, capture: None });
+        self.opt_dlg = Some(OptDlg { o, tab: 0, t, capture: None, suche: String::new() });
     }
 
     pub fn optionen_ui(&mut self, ctx: &egui::Context) {
@@ -305,7 +316,8 @@ impl App {
         let lib_info = self.lib_info.clone();
         let rasters: Vec<String> = crate::app::RASTER.iter().map(|r| r.0.to_string()).collect();
         let filter = self.zusatz.filter.clone();
-        let closed = tool_window(ctx, "optionen", "Option", [611.0, 395.0], egui::Order::Middle, |ui| {
+        // eine Größe für alle Reiter, am Rahmen veränderbar; was nicht passt, rollt (Nutzer 25.11.2026)
+        let closed = crate::props::tool_window_gross(ctx, "optionen_gross", "Option", [840.0, 640.0], [620.0, 420.0], egui::Order::Middle, |ui| {
             ui.horizontal(|ui| {
                 // „Markieren“ (NR13) ist eine Erweiterung des Nachbaus; die Reiter des Originals behalten ihre Nummern
                 for (i, t) in ["Programm", "Projektvorgaben1", "Projektvorgaben2", "Datenbank", "Markieren", "Tastenkürzel"].iter().enumerate() {
@@ -319,8 +331,9 @@ impl App {
             let capture = &mut d.capture;
             let o = &mut d.o;
             let t = &mut d.t;
-            egui::Frame::new().show(ui, |ui| {
-                ui.set_min_height(318.0);
+            let suche = &mut d.suche;
+            let hoehe = (ui.available_height() - 40.0).max(100.0);
+            egui::ScrollArea::vertical().id_salt("optrollen").auto_shrink([false, false]).max_height(hoehe).show(ui, |ui| {
                 match d.tab {
                     0 => {
                         ui.horizontal_top(|ui| {
@@ -371,6 +384,7 @@ impl App {
                                     mark(ui, &mut o.hilfslinien, "Hilfslinien beim Verschieben");
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
+                                    mark(ui, &mut o.reiter_rad, "Mausrad über den Blattreitern wechselt das Blatt");
                                     if cfg!(target_os = "linux") {
                                         mark(ui, &mut o.desktop_eintrag, "Im Startmenü eintragen (mit Programmsymbol)");
                                     }
@@ -540,12 +554,24 @@ impl App {
                             }
                         }
                         ui.small("Kopieren, Ausschneiden, Einfügen: Strg+C, Strg+X, Strg+V (fest). Pfeiltasten verschieben die Markierung (mit Umschalt um 1 mm).");
-                        egui::ScrollArea::vertical().max_height(270.0).show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("Suchen").font(bold(13.0)));
+                            ui.add(egui::TextEdit::singleline(suche).hint_text("Befehl oder Taste, z. B. „Blatt“ oder „Strg+S“").desired_width(320.0));
+                            if !suche.is_empty() && ui.small_button("×").clicked() {
+                                suche.clear();
+                            }
+                        });
+                        ui.scope(|ui| {
                             egui::Grid::new("tasten").striped(true).num_columns(4).show(ui, |ui| {
                                 // Taste zum Erweitern der Markierung: nur eine Umschalttaste, daher Auswahl statt Aufnahme
-                                crate::optionen_markieren::dazu_zeile(ui, o);
-                                crate::optionen_markieren::strg_tab_zeile(ui, o);
-                                for b in crate::kuerzel::BEFEHLE {
+                                if kuerzel_passt(suche, "Markierung erweitern Taste beim Klicken", if crate::kuerzel::auswahl_dazu_umschalt(&o.tasten) { "Umschalt" } else { "Strg" }) {
+                                    crate::optionen_markieren::dazu_zeile(ui, o);
+                                }
+                                if kuerzel_passt(suche, "Strg+Tab Strg+Umschalt+Tab Blatt wechseln Reiter Verlauf", "Strg+Tab") {
+                                    crate::optionen_markieren::strg_tab_zeile(ui, o);
+                                }
+                                let treffer: Vec<&crate::kuerzel::Befehl> = crate::kuerzel::BEFEHLE.iter().filter(|b| kuerzel_passt(suche, b.name, &crate::kuerzel::belegung(&o.tasten, b.id))).collect();
+                                for b in treffer {
                                     ui.label(b.name);
                                     let cur = crate::kuerzel::belegung(&o.tasten, b.id);
                                     if *capture == Some(b.id) {
@@ -597,7 +623,7 @@ impl App {
                 }
             });
             ui.horizontal(|ui| {
-                ui.add_space(115.0);
+                ui.add_space((ui.available_width() / 2.0 - 150.0).max(10.0));
                 if ui.add_sized([75.0, 25.0], egui::Button::new("Abbruch")).clicked() {
                     result = Some(false);
                 }
@@ -671,6 +697,14 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn suche_in_tastenkuerzeln() {
+        assert!(kuerzel_passt("", "Speichern", "Strg+S"));
+        assert!(kuerzel_passt("speich", "Speichern", "Strg+S"));
+        assert!(kuerzel_passt("strg+s", "Speichern", "Strg+S"));
+        assert!(!kuerzel_passt("drucken", "Speichern", "Strg+S"));
+    }
 
     #[test]
     fn rasterfarbe_vorgabe_und_alte_einstellungen() {

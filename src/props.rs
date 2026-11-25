@@ -241,6 +241,59 @@ pub fn tool_window(ctx: &egui::Context, id: &str, title: &str, size: [f32; 2], o
     closed
 }
 
+/// Wie `tool_window`, aber am Rahmen in der Größe veränderbar und mit fester Größe unabhängig vom Inhalt (Optionen:
+/// alle Reiter gleich groß, kein Springen beim Reiterwechsel – Nutzer 25.11.2026). Der Inhalt rollt, wenn er nicht
+/// passt; `add` bekommt die ganze Innenfläche.
+pub fn tool_window_gross(ctx: &egui::Context, id: &str, title: &str, size: [f32; 2], min: [f32; 2], order: egui::Order, add: impl FnOnce(&mut egui::Ui)) -> bool {
+    let mut closed = false;
+    egui::Window::new(title)
+        .id(egui::Id::unique(id))
+        .title_bar(false)
+        .collapsible(false)
+        .resizable(true)
+        .default_size(size)
+        .min_size(min)
+        .order(order)
+        .movable(true)
+        // nur die erste Lage mittig; danach behält das Fenster Lage und Größe
+        .default_pos(ctx.content_rect().center() - Vec2::new(size[0], size[1]) / 2.0)
+        .frame(egui::Frame::new().fill(Color32::from_rgb(240, 240, 240)).stroke(egui::Stroke::new(1.0, Color32::from_gray(110))).shadow(egui::epaint::Shadow { offset: [2, 3], blur: 8, spread: 0, color: Color32::from_black_alpha(60) }))
+        .show(ctx, |ui| {
+            let w = ui.available_width();
+            let (r, _) = ui.allocate_exact_size(Vec2::new(w, 26.0), egui::Sense::hover());
+            let p = ui.painter();
+            p.rect_filled(r, 0.0, Color32::WHITE);
+            p.text(r.left_center() + Vec2::new(7.0, 0.0), egui::Align2::LEFT_CENTER, title, egui::FontId::proportional(13.0), Color32::BLACK);
+            let xr = egui::Rect::from_min_size(egui::pos2(r.right() - 30.0, r.top() + 2.0), Vec2::new(28.0, 22.0));
+            let resp = ui.interact(xr, ui.scope_id().with("x"), egui::Sense::click());
+            if resp.hovered() {
+                ui.painter().rect_filled(xr, 0.0, Color32::from_rgb(232, 17, 35));
+            }
+            let xc = if resp.hovered() { Color32::WHITE } else { Color32::BLACK };
+            let c = xr.center();
+            for (a, b) in [(Vec2::new(-4.5, -4.5), Vec2::new(4.5, 4.5)), (Vec2::new(-4.5, 4.5), Vec2::new(4.5, -4.5))] {
+                ui.painter().line_segment([c + a, c + b], egui::Stroke::new(1.2, xc));
+            }
+            if resp.clicked() {
+                closed = true;
+            }
+            egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 4)).show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                let v = &mut ui.style_mut().visuals;
+                v.widgets.inactive.bg_fill = Color32::WHITE;
+                v.widgets.inactive.weak_bg_fill = Color32::from_rgb(225, 225, 225);
+                v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, Color32::from_gray(90));
+                v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0, 120, 215));
+                v.extreme_bg_color = Color32::WHITE;
+                v.widgets.inactive.corner_radius = egui::CornerRadius::ZERO;
+                v.widgets.hovered.corner_radius = egui::CornerRadius::ZERO;
+                v.widgets.active.corner_radius = egui::CornerRadius::ZERO;
+                add(ui);
+            });
+        });
+    closed
+}
+
 fn edit(ui: &mut egui::Ui, s: &mut String, w: f32) -> egui::Response {
     // Mindestbreite: in Grids schrumpft ein Feld sonst auf die Spaltenbreite des ersten (noch schmalen) Bildes
     // und bleibt so („2100“ abgeschnitten, Maus-Befund M9)
