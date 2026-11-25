@@ -36,7 +36,7 @@ fn projekt() -> Project {
         }
         y += 8.0;
     }
-    s.objects.push(text(200, 20.0, y + 4.0, "Sonderzeichen: Ω µ ² ≥ → ✓ „Zitat“ … – —", "", false, false));
+    s.objects.push(text(200, 20.0, y + 4.0, "Sonderzeichen: Ω µ ² ≥ → „Zitat“ … – —", "", false, false));
     s.objects.push(text(201, 20.0, y + 12.0, "Sonderzeichen Arial: Ω µ ² ≥ → „Zitat“ … – —", "Arial", false, false));
     let mut senkrecht = text(202, 270.0, 150.0, "Senkrecht Prüfung", "", false, false);
     if let Kind::Text { vertical, .. } = &mut senkrecht.kind {
@@ -77,7 +77,9 @@ fn pdf_pruefprojekt() {
     // Bild als XObject mit Transparenzmaske, im Inhalt gezeichnet
     assert!(s.contains("/Subtype /Image /Width 40 /Height 20") && s.contains("/SMask "), "Bild eingebettet");
     assert!(s.contains("/XObject << /Im1 ") && s.contains("/Im1 Do"), "Bild gezeichnet");
-    // Times-Text mit Ω/≥/→: diese Zeichen aus der eingebetteten Times New Roman, kein „?“ (wenn installiert)
+    // Times-Text mit Ω/≥/→: diese Zeichen aus der eingebetteten Times New Roman, kein „?“ (wenn installiert).
+    // Kein ✓ o. Ä. im Prüftext: ob eine Ersatzschrift es hat, hängt von den installierten Schriften ab (auf dem
+    // Linux-Runner fehlte es am 25.11.2026 und wurde zu „?“).
     if elektroplanung::schriften::finden("Times New Roman", false, false).is_some() {
         let fragezeichen: Vec<&str> = s.lines().filter(|l| l.contains(") Tj") && l.contains('?')).collect();
         assert!(fragezeichen.is_empty(), "{fragezeichen:?}");
