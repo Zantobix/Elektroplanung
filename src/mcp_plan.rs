@@ -74,6 +74,19 @@ pub fn tool_list() -> Vec<Value> {
             json!({"id": {"type": "integer"}, "parts": {"type": "array", "items": {"type": "integer"}}}), &["id", "parts"]),
         tool("add_contact_mirror", "Kontaktspiegel unter eine Spule setzen: owner = Objekt-Id der Spule; Zeilen = Kontakte gleicher Kennzeichnung (auto führt sie nach). Ohne owner frei an x/y.",
             mit(blatt(), json!({"owner": {"type": "integer"}, "x": {"type": "number"}, "y": {"type": "number"}, "auto": {"type": "boolean"}})), &["anlage", "sheet"]),
+        tool("get_symbol", "Alle Eigenschaften eines gesetzten Symbols (wie Dialog Eigenschaften) und die Auswahl der Definition: Bildvarianten, Zusatzoptionen, Alternativtext-Sätze, Texte, Bauteile.",
+            mit(blatt(), json!({"id": {"type": "integer"}})), &["anlage", "sheet", "id"]),
+        tool("set_symbol", "Eigenschaften eines gesetzten Symbols ändern (nur angegebene): bmk (Titel), value (Wert), title_x/title_y, value_x/value_y, title_align/value_align (0 links, 1 mittig, 2 rechts), rot (0–3), mirror_h, mirror_v, scale, option (Bild, Index aus get_symbol.variants), flags (Zusatzoptionen als Bitmaske) bzw. flag_names (Liste der Namen), alt (Alternativtext-Satz, 0 = Standard), funktion, rack (Rackposition), counter (Index für %C), querverweise, sicherung (Freigaben), texts [[Nr, Text]], params [[Nr, Wert]], owner (Eigentümer: Objekt-Id, 0 = keiner).",
+            mit(blatt(), json!({
+                "id": {"type": "integer"}, "bmk": {"type": "string"}, "value": {"type": "string"},
+                "title_x": {"type": "number"}, "title_y": {"type": "number"}, "value_x": {"type": "number"}, "value_y": {"type": "number"},
+                "title_align": {"type": "integer"}, "value_align": {"type": "integer"}, "rot": {"type": "integer"},
+                "mirror_h": {"type": "boolean"}, "mirror_v": {"type": "boolean"}, "scale": {"type": "number"},
+                "option": {"type": "integer"}, "flags": {"type": "integer"}, "flag_names": {"type": "array", "items": {"type": "string"}},
+                "alt": {"type": "integer"}, "funktion": {"type": "string"}, "rack": {"type": "integer"}, "counter": {"type": "integer"},
+                "querverweise": {"type": "boolean"}, "sicherung": {"type": "boolean"},
+                "texts": {"type": "array"}, "params": {"type": "array"}, "owner": {"type": "integer"}
+            })), &["anlage", "sheet", "id"]),
         tool("check_project", "Tools › Projekt prüfen: offene Anschlüsse, doppelte BMK, gleiches Potential getrennt.", json!({}), &[]),
     ]
 }
@@ -179,6 +192,8 @@ impl Server {
                 Ok(json!({ "id": id, "parts": crate::bauteilliste::liste(&self.project, id) }))
             })(),
             "add_contact_mirror" => self.spiegel(a),
+            "get_symbol" => self.symbol_lesen(a),
+            "set_symbol" => self.symbol_setzen(a),
             "check_project" => {
                 let mut lib = self.lib.clone();
                 lib.extend(self.project.symdefs.iter().filter(|d| !self.lib.iter().any(|l| l.key == d.key)).cloned());
@@ -342,6 +357,140 @@ impl Server {
             crate::kontaktspiegel::nachfuehren(&mut self.project, &lib);
         }
         Ok(self.objekt(r, id))
+    }
+
+    fn symbol_def(&self, key: &str) -> Option<crate::symbols::SymDef> {
+        self.project.symdefs.iter().chain(self.lib.iter()).find(|d| d.key == key).cloned()
+    }
+
+    fn symbol_lesen(&self, a: &Value) -> Result<Value, String> {
+        let r = self.sheet_ref(a)?;
+        let id = a.get("id").and_then(Value::as_u64).ok_or("Parameter 'id' fehlt")?;
+        let o = self.project.sheet(r).unwrap().objects.iter().find(|o| o.id == id).ok_or("Objekt nicht gefunden")?;
+        let Kind::Symbol { key, pos, rot, mirror_h, mirror_v, bmk, value, scale, option, title, flags, ext } = &o.kind else { return Err("Objekt ist kein Symbol".into()) };
+        let def = self.symbol_def(key);
+        let gesetzt: Vec<&String> = def.as_ref().map(|d| d.flag_names.iter().enumerate().filter(|(i, n)| !n.is_empty() && flags & (1 << i) != 0).map(|(_, n)| n).collect()).unwrap_or_default();
+        Ok(json!({
+            "id": id, "key": key, "name": def.as_ref().map(|d| d.name.clone()), "pos": [pos.x, pos.y],
+            "bmk": bmk, "value": value, "rot": rot, "mirror_h": mirror_h, "mirror_v": mirror_v, "scale": scale,
+            "title": title.map(|(p, v)| json!({"x": p.x, "y": p.y, "vertical": v})), "title_align": ext.title_align,
+            "value_pos": ext.value_off.map(|p| json!([p.x, p.y])), "value_align": ext.value_align,
+            "option": option, "variants": def.as_ref().map(|d| d.options.clone()).unwrap_or_default(),
+            "flags": flags, "flag_names_set": gesetzt,
+            "flag_options": def.as_ref().map(|d| d.flag_names.iter().enumerate().filter(|(_, n)| !n.is_empty()).map(|(i, n)| json!({"bit": i, "name": n})).collect::<Vec<_>>()).unwrap_or_default(),
+            "alt": ext.alt, "alt_sets": def.as_ref().map(|d| d.alt_sets.iter().map(|s| s.iter().map(|(n, t)| json!([n, t])).collect::<Vec<_>>()).collect::<Vec<_>>()).unwrap_or_default(),
+            "funktion": ext.funktion, "rack": ext.rack, "counter": ext.counter,
+            "querverweise": ext.querverweise, "sicherung": ext.sicherung,
+            "texts": ext.texts.iter().map(|(n, t)| json!([n, t])).collect::<Vec<_>>(),
+            "params": ext.params.iter().map(|(n, t)| json!([n, t])).collect::<Vec<_>>(),
+            "owner": ext.eigentuemer,
+            "parts": crate::bauteilliste::liste(&self.project, id),
+        }))
+    }
+
+    fn symbol_setzen(&mut self, a: &Value) -> Result<Value, String> {
+        let r = self.sheet_ref(a)?;
+        let id = a.get("id").and_then(Value::as_u64).ok_or("Parameter 'id' fehlt")?;
+        let key = match self.project.sheet(r).unwrap().objects.iter().find(|o| o.id == id).map(|o| &o.kind) {
+            Some(Kind::Symbol { key, .. }) => key.clone(),
+            Some(_) => return Err("Objekt ist kein Symbol".into()),
+            None => return Err("Objekt nicht gefunden".into()),
+        };
+        let def = self.symbol_def(&key);
+        // Zusatzoptionen auch nach Namen
+        let flag_bits: Option<u32> = match a.get("flag_names").and_then(Value::as_array) {
+            Some(namen) => {
+                let d = def.as_ref().ok_or("Symboldefinition fehlt")?;
+                let mut b = 0u32;
+                for n in namen.iter().filter_map(Value::as_str) {
+                    let i = d.flag_names.iter().position(|f| f == n).ok_or_else(|| format!("Zusatzoption '{n}' gibt es nicht (get_symbol.flag_options)"))?;
+                    b |= 1 << i;
+                }
+                Some(b)
+            }
+            None => a.get("flags").and_then(Value::as_u64).map(|v| v as u32),
+        };
+        if let (Some(o), Some(d)) = (a.get("option").and_then(Value::as_u64), def.as_ref()) {
+            if !d.options.is_empty() && o as usize >= d.options.len() {
+                return Err(format!("Bild {o} gibt es nicht ({} Varianten)", d.options.len()));
+            }
+        }
+        if let (Some(n), Some(d)) = (a.get("alt").and_then(Value::as_u64), def.as_ref()) {
+            if n as usize > d.alt_sets.len() {
+                return Err(format!("Alternativtext-Satz {n} gibt es nicht ({} Sätze)", d.alt_sets.len()));
+            }
+        }
+        let paare = |k: &str| a.get(k).and_then(Value::as_array).map(|v| v.iter().filter_map(|e| Some((e.get(0)?.as_u64()? as u32, e.get(1)?.as_str()?.to_string()))).collect::<Vec<_>>());
+        let num = |k: &str| a.get(k).and_then(Value::as_f64).map(|v| v as f32);
+        let o = self.project.sheet_mut(r).unwrap().objects.iter_mut().find(|o| o.id == id).unwrap();
+        let Kind::Symbol { rot, mirror_h, mirror_v, bmk, value, scale, option, title, flags, ext, .. } = &mut o.kind else { unreachable!() };
+        if let Some(v) = arg_str(a, "bmk") {
+            *bmk = v.into();
+        }
+        if let Some(v) = arg_str(a, "value") {
+            *value = v.into();
+        }
+        if let Some(v) = a.get("rot").and_then(Value::as_u64) {
+            *rot = (v % 4) as u8;
+        }
+        if let Some(v) = ja(a, "mirror_h") {
+            *mirror_h = v;
+        }
+        if let Some(v) = ja(a, "mirror_v") {
+            *mirror_v = v;
+        }
+        if let Some(v) = num("scale").filter(|v| *v > 0.0) {
+            *scale = v;
+        }
+        if let Some(v) = a.get("option").and_then(Value::as_u64) {
+            *option = v as u16;
+        }
+        if let Some(b) = flag_bits {
+            *flags = b;
+        }
+        if num("title_x").is_some() || num("title_y").is_some() {
+            let (alt, v) = title.unwrap_or((P::default(), false));
+            *title = Some((P::new(num("title_x").unwrap_or(alt.x), num("title_y").unwrap_or(alt.y)), v));
+        }
+        if num("value_x").is_some() || num("value_y").is_some() {
+            let alt = ext.value_off.unwrap_or_default();
+            ext.value_off = Some(P::new(num("value_x").unwrap_or(alt.x), num("value_y").unwrap_or(alt.y)));
+        }
+        if let Some(v) = a.get("title_align").and_then(Value::as_u64) {
+            ext.title_align = v.min(2) as u8;
+        }
+        if let Some(v) = a.get("value_align").and_then(Value::as_u64) {
+            ext.value_align = v.min(2) as u8;
+        }
+        if let Some(v) = a.get("alt").and_then(Value::as_u64) {
+            ext.alt = v as u16;
+        }
+        if let Some(v) = arg_str(a, "funktion") {
+            ext.funktion = v.into();
+        }
+        if let Some(v) = a.get("rack").and_then(Value::as_i64) {
+            ext.rack = v as i32;
+        }
+        if let Some(v) = a.get("counter").and_then(Value::as_i64) {
+            ext.counter = v as i32;
+        }
+        if let Some(v) = ja(a, "querverweise") {
+            ext.querverweise = v;
+        }
+        if let Some(v) = ja(a, "sicherung") {
+            ext.sicherung = v;
+        }
+        if let Some(v) = paare("texts") {
+            ext.texts = v;
+        }
+        if let Some(v) = paare("params") {
+            ext.params = v;
+        }
+        if let Some(v) = a.get("owner").and_then(Value::as_u64) {
+            ext.eigentuemer = v;
+        }
+        self.dirty = true;
+        self.symbol_lesen(&json!({"anlage": r.anlage, "sheet": r.sheet, "id": id}))
     }
 
     fn objekt(&self, r: SheetRef, id: u64) -> Value {

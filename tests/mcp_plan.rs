@@ -65,3 +65,32 @@ fn planobjekte_ueber_mcp() {
     assert_eq!(ok(&mut s2, "verify_epr_roundtrip", json!({"path": pfad.to_string_lossy()}))["identical"], json!(true));
     let _ = std::fs::remove_file(pfad);
 }
+
+/// Eigenschaften eines gesetzten Symbols über MCP (get_symbol/set_symbol): Bild, Zusatzoptionen nach Namen,
+/// Titel/Wert, Drehen/Spiegeln/Größe, Funktion, Rack, Index, Freigaben, Texte, Parameter – nach .epr erhalten.
+#[test]
+fn symbol_eigenschaften_ueber_mcp() {
+    let mut s = Server::new();
+    ok(&mut s, "new_project", json!({}));
+    let b = json!({"anlage": 0, "sheet": 0});
+    let mit = |x: Value| { let mut v = b.clone(); v.as_object_mut().unwrap().extend(x.as_object().unwrap().clone()); v };
+    let liste = ok(&mut s, "list_symbols", json!({"filter": "Schließer", "limit": 20}));
+    let Some(k) = liste["symbols"].as_array().unwrap().iter().find(|x| x["name"] == "Schließer" && x["variants"].as_array().is_some_and(|v| v.len() > 1)) else { return };
+    let id = ok(&mut s, "place_symbol", mit(json!({"key": k["key"], "x": 100.0, "y": 80.0})))["id"].clone();
+    let g = ok(&mut s, "get_symbol", mit(json!({"id": id})));
+    let flag = g["flag_options"][0]["name"].clone();
+    let r = ok(&mut s, "set_symbol", mit(json!({"id": id, "bmk": "-S1", "value": "Taster", "option": 1, "flag_names": [flag], "rot": 1, "mirror_h": true, "scale": 1.5,
+        "title_x": 5.0, "title_y": -3.0, "title_align": 2, "funktion": "Licht", "rack": 2, "counter": 3, "querverweise": false, "sicherung": true, "texts": [[1, "PE"]], "params": [[1, "B16"]]})));
+    assert_eq!((r["option"].clone(), r["flag_names_set"][0].clone(), r["funktion"].clone()), (json!(1), flag, json!("Licht")));
+    assert!(s.call("set_symbol", &mit(json!({"id": id, "option": 99}))).is_err());
+    let pfad = std::env::temp_dir().join("ep_mcp_symbol_test.epr");
+    ok(&mut s, "save_project", json!({"path": pfad.to_string_lossy(), "format": "epr"}));
+    let mut s2 = Server::new();
+    ok(&mut s2, "open_project", json!({"path": pfad.to_string_lossy()}));
+    let nid = ok(&mut s2, "get_sheet", b.clone())["objects"][0]["id"].clone();
+    let r2 = ok(&mut s2, "get_symbol", mit(json!({"id": nid})));
+    for k in ["bmk", "value", "option", "flags", "rot", "mirror_h", "scale", "title", "title_align", "funktion", "rack", "counter", "querverweise", "sicherung", "texts", "params"] {
+        assert_eq!(r[k], r2[k], "{k} nach dem Laden");
+    }
+    let _ = std::fs::remove_file(pfad);
+}

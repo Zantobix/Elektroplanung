@@ -100,6 +100,7 @@ Protokoll 2025-06-18). Für Claude Code ist er in [.mcp.json](.mcp.json) eingetr
 | `add_busbar`, `add_terminal`, `add_reference`, `add_table`, `add_contact_mirror` | Sammelschiene (Auto-Stapel wie im Original), Klemmstelle (teilt die Leitung), Verweis mit Ziel, Tabelle, Kontaktspiegel |
 | `set_wire`, `add_leitung`, `add_potential`, `add_klemmleiste` | Leitungsart, Verbindungsbezeichnungen und Optionen einer Leitung; Leitungsarten, Potentiale, Klemmleisten anlegen |
 | `list_part_catalog`, `list_parts`, `add_part`, `update_part`, `delete_part`, `assign_parts` | Bauteile: Gruppen/Hersteller der Bibliothek, anlegen, ändern, löschen, Symbolen und Klemmstellen zuordnen (mehrere je Objekt) |
+| `get_symbol`, `set_symbol` | alle Eigenschaften eines gesetzten Symbols wie im Dialog: Titel/Wert samt Lage und Ausrichtung, Drehen, Spiegeln, Größe, Bild (Variante), Zusatzoptionen (auch nach Namen), Alternativtext-Satz, Funktion, Rackposition, Index, Freigaben, eigene Texte, Parameter, Eigentümer |
 | `check_project` | Tools › Projekt prüfen (offene Anschlüsse, doppelte BMK, gleiches Potential getrennt) |
 | `export_pdf` | alle Blätter als Vektor-PDF (gleiche Zeichenroutinen wie die Oberfläche) |
 | `symbol_open`, `symbol_new`, `symbol_get` | Symboleditor: Symbol aus Projekt/Bibliothek öffnen oder neu anlegen, Elemente auflisten |
