@@ -2,7 +2,7 @@
 //!
 //! Original (Bitmapexport1Click 0x47f9dc): ohne Einstellungsformular; nur mit geöffnetem Blatt. Es legt ein TBitmap
 //! an, so groß wie das Blatt der Anlage (ANL +0x98/+0x9c in 0,1 mm, quer gedreht) mal LOGPIXELSX des Bildschirms
-//! mal 5 – bei 96 dpi also 480 dpi (A4 quer 5613 × 3969 Bildpunkte) –, zeichnet das aktuelle Blatt mit der
+//! mal 5 – bei 96 dpi also 480 dpi (A4 quer 5612 × 3968 Bildpunkte, abgeschnitten; Cloud-Gegenprobe 25.11.2026) –, zeichnet das aktuelle Blatt mit der
 //! Zeichenroutine 0x438b94 hinein (ohne Kantenglättung) und fragt dann mit TSaveDialog (Vorgabe-Endung „bmp“,
 //! Filter „Windows Bitmap|*.bmp|JPG|*.jpg“) nach der Datei: Filter 1 speichert die Bitmap, sonst ein TJPEGImage
 //! (Delphi-Vorgabe Qualität 90). Schlägt das Anlegen fehl: „Nicht genug Speicher vorhanden“ (Überschrift „Fehler“).
@@ -52,7 +52,8 @@ impl Default for BildDlg {
 pub fn pixel_groesse(sheet: &Sheet, dpi: u32) -> (usize, usize) {
     let (w, h) = sheet.dims();
     let k = dpi as f64 / 25.4;
-    ((w as f64 * k).round_ties_even().max(1.0) as usize, (h as f64 * k).round_ties_even().max(1.0) as usize)
+    // abgeschnitten wie das Original (297 mm bei 480 dpi = 5612,6 → 5612; im Original exportiert und nachgemessen)
+    ((w as f64 * k).floor().max(1.0) as usize, (h as f64 * k).floor().max(1.0) as usize)
 }
 
 /// Dateiformat nach der Endung: „png“, „jpg“/„jpeg“, sonst Windows-Bitmap (Vorgabe-Endung des Originals).
@@ -398,14 +399,15 @@ mod tests {
         assert_eq!(f[0].file_name().unwrap(), "Plan_4.bmp");
     }
 
-    /// Vorgabe wie das Original bei 96 dpi Bildschirm: A4 quer 5613 × 3969, hoch 3969 × 5613; Formate nach Endung.
+    /// Vorgabe wie das Original bei 96 dpi Bildschirm: A4 quer 5612 × 3968, hoch 3968 × 5612 (Original-Export
+    /// nachgemessen); Formate nach Endung.
     #[test]
     fn groesse_und_formate_wie_original() {
         assert_eq!(dpi(BildDlg::default().dpi_idx), 480);
         let mut s = Sheet::new(1);
-        assert_eq!(pixel_groesse(&s, 480), (5613, 3969));
+        assert_eq!(pixel_groesse(&s, 480), (5612, 3968));
         s.portrait = true;
-        assert_eq!(pixel_groesse(&s, 480), (3969, 5613));
+        assert_eq!(pixel_groesse(&s, 480), (3968, 5612));
         assert_eq!(format_nach_endung(Path::new("a/b.BMP")), Format::Bmp);
         assert_eq!(format_nach_endung(Path::new("a/b")), Format::Bmp);
         assert_eq!(format_nach_endung(Path::new("a/b.jpeg")), Format::Jpg);
@@ -426,7 +428,7 @@ mod tests {
         s.objects.push(Obj { id: 2, kind: Kind::Text { pos: P::new(150.0, 60.0), text: "MMMM".into(), size: 8.0, align: Align::Left, vertical: false, style: Default::default() }, pen: 0, fixed: false, group: None, raw: None });
         let r = SheetRef { anlage: 0, sheet: 0 };
         let img = render_headless(&p, &[], r, 150, true).unwrap();
-        assert_eq!(img.dimensions(), (1754, 1240));
+        assert_eq!(img.dimensions(), (1753, 1240));
         let k = 150.0 / 25.4;
         let dark = |x0: f32, y0: f32, x1: f32, y1: f32| {
             let mut n = 0;

@@ -60,6 +60,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 - Endet eine gezeichnete Leitung frei knapp (bis 3 mm) neben einer anderen, nennt die Statuszeile den Abstand
   („Ende frei – Leitung 2,5 mm entfernt“).
 - Blatteigenschaften: Hinweis „-1 = wie Anlage“ am Feld Strompfade.
+- Bitmapexport: Bildgröße wie das Original abgeschnitten statt gerundet (A4 quer bei 480 dpi 5612 × 3968 statt
+  5613 × 3969, im Original exportiert und nachgemessen).
 - Bibliothek: Zusatzoptionen einiger Symbole hatten Zeichensalat als Namen („°o“, „¼ó“ bei Wechsler, Verbindung,
   NOT-AUS) – Zufallstreffer beim Lesen von Symbole.tfi werden verworfen.
 - Hinzufügen › Blatt: hinter dem Dialog wurde das neue Blatt im Querformat gezeigt, während der Dialog das
