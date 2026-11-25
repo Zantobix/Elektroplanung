@@ -13,8 +13,16 @@ Die Versionsnummer steht nur in `Cargo.toml`. Erreicht eine neue Nummer `main`, 
 
 ## [Unveröffentlicht]
 
-Änderungen nach 0.6.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
+Änderungen nach 0.7.0 werden hier gesammelt (Text des automatischen Entwicklungsstands); bei der nächsten Version
 erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `### Behoben` (leere weglassen).
+
+## [0.7.0]
+
+**Zusammenfassung:** Markieren wird deutlich mächtiger: Auswahlbefehle, ein Auswahlfilter je Objektart, ein eigener
+Optionen-Reiter und Mehrfachklick in Stufen vom Teilstück bis zum ganzen Potential. Projekte lassen sich per
+Drag & Drop öffnen, Strg+Pfeil verschiebt um 1 mm, der Fang auf Fluchten wirkt auch ohne Raster, und beim
+Verschieben werden Umwege aufgelöst. Behoben sind u. a. zu kurz gezeichnete Sammelschienen und springende Leitungen
+fremder Netze beim Verschieben.
 
 ### Neu
 
