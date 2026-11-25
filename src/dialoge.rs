@@ -20,10 +20,13 @@ fn lbl(ui: &mut egui::Ui, w: f32, t: &str) {
     ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, t, bold(13.0), Color32::BLACK);
 }
 
-/// Drucker des Systems (Windows: Get-Printer); erster Eintrag = Standarddrucker.
+/// Drucker des Systems (Windows: Get-Printer); erster Eintrag = Standarddrucker. Wie im Original (Printer.Printers,
+/// vorgewählt Printer.PrinterIndex) steht dort sein Name, sofern das System ihn nennt, sonst „Standarddrucker“.
 fn drucker() -> Vec<String> {
-    let mut v = vec!["Standarddrucker".to_string()];
-    v.extend(crate::pdf::printers());
+    let alle = crate::pdf::printers();
+    let std_name = crate::pdf::default_printer().filter(|n| alle.contains(n));
+    let mut v = vec![std_name.clone().unwrap_or_else(|| "Standarddrucker".to_string())];
+    v.extend(alle.into_iter().filter(|n| Some(n) != std_name.as_ref()));
     v
 }
 
@@ -44,7 +47,7 @@ impl App {
         // Anlagenliste wie 0x49c75c: „Alle“ vorn (Index 0), vorgewählt bei mehreren Anlagen, sonst die einzige;
         // „An Papiergröße anpassen“ ist im Formular nicht gesetzt
         let a = crate::dialog_regeln::druck_anlage_vorwahl(self.project.anlagen.len());
-        self.dlg2 = Some(Dlg2::Drucken { anlage: a, drucker: 0, drucker_liste: drucker(), art: 0, von: String::new(), bis: String::new(), datum: today(), skal: false });
+        self.dlg2 = Some(Dlg2::Drucken { anlage: a, drucker: 0, drucker_liste: drucker(), art: 0, von: "0".into(), bis: "0".into(), datum: String::new(), skal: false });
     }
 
     pub fn open_potential_dialog(&mut self, idx: usize) {
@@ -259,7 +262,8 @@ impl App {
                 };
                 for anlage in gewaehlt {
                     let Some(a) = self.project.anlagen.get(anlage) else { continue };
-                    let (v, b): (u32, u32) = (von.trim().parse().unwrap_or(1), bis.trim().parse().unwrap_or(u32::MAX));
+                    // Vorgabe im Formular „0“ = keine Grenze (wie bisher leer)
+                    let (v, b): (u32, u32) = (von.trim().parse().ok().filter(|n| *n > 0).unwrap_or(1), bis.trim().parse().ok().filter(|n| *n > 0).unwrap_or(u32::MAX));
                     for (si, s) in a.sheets.iter().enumerate() {
                         let r = SheetRef { anlage, sheet: si };
                         let take = match art {

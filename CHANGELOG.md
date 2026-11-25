@@ -30,6 +30,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Druckdialog wie im Original: der Standarddrucker steht mit seinem Namen in der Liste, Von/Bis zeigen 0, das Feld
+  „Änderung seit dem“ ist zunächst leer.
 - Auch das letzte Blatt einer Anlage lässt sich löschen wie im Original; Anlagen ohne Blatt werden so gespeichert
   und geladen (bisher wurde beim Laden ein leeres „Blatt 1“ ergänzt).
 - Mehrfachklick auf Leitungen in Stufen: 1× markiert nur das Teilstück bis zur nächsten Ecke (Entf löscht nur dieses

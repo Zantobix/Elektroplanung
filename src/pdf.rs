@@ -533,6 +533,22 @@ pub fn printer_settings(name: Option<&str>) {
     }
 }
 
+/// Name des Standarddruckers: Windows Win32_Printer.Default, sonst `lpstat -d` (CUPS, Ausgabe mit LC_ALL=C:
+/// „system default destination: NAME“).
+pub fn default_printer() -> Option<String> {
+    #[cfg(windows)]
+    let out = std::process::Command::new("powershell").args(["-NoProfile", "-Command", "(Get-CimInstance Win32_Printer -Filter 'Default=true').Name"]).output();
+    #[cfg(not(windows))]
+    let out = std::process::Command::new("lpstat").arg("-d").env("LC_ALL", "C").output();
+    let text = String::from_utf8_lossy(&out.ok()?.stdout).trim().to_string();
+    if cfg!(windows) {
+        return (!text.is_empty()).then_some(text);
+    }
+    // CUPS-Namen enthalten keine Leerzeichen; „no system default destination“ ergibt so keinen Namen
+    let name = text.rsplit_once(": ").map(|(_, n)| n.trim().to_string())?;
+    (!name.is_empty() && !name.contains(' ')).then_some(name)
+}
+
 /// Druckernamen des Systems: Windows Get-Printer, sonst `lpstat -e` (CUPS).
 pub fn printers() -> Vec<String> {
     #[cfg(windows)]
