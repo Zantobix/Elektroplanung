@@ -18,6 +18,11 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Neu
 
+- Markieren: Auswahlbefehle (alle Objekte einer Art, gleiche wie markiert, Auswahl umkehren mit Strg+I, verbundene
+  Leitungen dazu) im Menü Bearbeiten › Auswahl und im Kontextmenü der freien Fläche, ein Auswahlfilter je Objektart
+  für die laufende Sitzung und der neue Optionen-Reiter „Markieren“ (Markierrichtung, Vormarkierung, Markierfarbe,
+  Mehrfachklick bis zu einer Stufe, Löschen mit Leitungen). Die Taste zum Hinzunehmen ist unter Tastenkürzel
+  wählbar (Strg oder Umschalt); die Statuszeile nennt, wie viele Objekte welcher Art markiert sind.
 - MCP: neue Werkzeuge für Sammelschienen, Klemmstellen (teilen die Leitung), Verweise, Tabellen, Kontaktspiegel,
   Leitungsart und Verbindungsbezeichnungen einer Leitung, Leitungsarten, Potentiale, Klemmleisten, Bauteile
   (anlegen, ändern, löschen, zuordnen; Gruppen und Hersteller der Bibliothek) und „Projekt prüfen“. Texte behalten

@@ -141,6 +141,11 @@ impl App {
                 e => self.menu_symbol(ui, e, obj.as_ref()),
             }
         }
+        // Nachbau (NR13): Auswahlbefehle und Auswahlfilter auf der freien Fläche, hinter den Einträgen des Originals
+        if ziel == MenueZiel::Leer && self.sym_edit.is_none() {
+            ui.separator();
+            self.auswahl_menue(ui);
+        }
     }
 
     /// Untermenü Ausrichtung für Symboltexte (Titel/Wert) und Texte, mit Häkchen wie im Original.

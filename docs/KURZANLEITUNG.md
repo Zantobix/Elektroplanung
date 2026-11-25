@@ -34,15 +34,19 @@ anders ist als im Original und was noch fehlt, steht im [README](../README.md) u
 ## Markieren, verschieben, löschen
 
 - Klick markiert ein Objekt, **Strg+Klick** nimmt weitere dazu oder heraus, ein Rahmen markiert alles darin
-  (Optionen › Programmverhalten „Markierrichtung wie CAD“: von rechts nach links alles Berührte).
+  (Optionen › Markieren „Markierrichtung wie CAD“: von rechts nach links alles Berührte).
 - Auf Leitungen (Option, Standard an) zählt jeder weitere schnelle Klick eine Stufe weiter: **1×** nur das
   Teilstück bis zur nächsten Ecke (Entf löscht nur dieses Stück), **2×** bis zum nächsten Knoten, **3×** das Netz bis
   zu den Sammelschienen, **4×** das ganze Potential mit den Schienen, **5×** wieder das Teilstück. Die Statuszeile
   zeigt die Stufe.
 - Verschieben mit der Maus oder den Pfeiltasten: angeschlossene Leitungen folgen. Der **Netz-Wächter** lässt keine
   Bearbeitung zu, die fremde Netze verbinden, trennen oder übereinanderlegen würde – die Statuszeile nennt den Grund.
+- **Bearbeiten › Auswahl** (auch im Kontextmenü der freien Fläche): alle Leitungen, Symbole, Texte … eines Blattes,
+  „Gleiche wie markiert“, „Auswahl umkehren“ (Strg+I), „Verbundene Leitungen dazu“; unter „Filter“ lassen sich
+  Objektarten für diese Sitzung vom Markieren ausnehmen (die Statuszeile zeigt den Filter). Einstellungen dazu:
+  Optionen › Markieren; die Taste zum Hinzunehmen (Strg oder Umschalt) unter Optionen › Tastenkürzel.
 - **Entf** löscht die Markierung; ein Symbol nimmt wie im Original die Leitungen mit, die an seinen Anschlüssen
-  beginnen oder enden (Optionen › Programmverhalten, abschaltbar). Strg+Z nimmt zurück, Strg+W bzw. Strg+Y
+  beginnen oder enden (Optionen › Markieren, abschaltbar). Strg+Z nimmt zurück, Strg+W bzw. Strg+Y
   wiederholt.
 
 ## Schienen, Klemmen, Verweise
@@ -78,6 +82,7 @@ anders ist als im Original und was noch fehlt, steht im [README](../README.md) u
 | G | Gitter | Esc | Werkzeug Auswahl |
 | L / Umschalt+R / K / T / X | Linie, Rechteck, Kreis, Text, Klemmstelle | Strg+Umschalt+N | Neues Blatt |
 | Strg+Plus / Minus / Num0 | Vergrößern, Verkleinern, ganzes Blatt | F12 | Fehlerbericht |
+| Strg+I | Auswahl umkehren | | |
 
 ## Steuerung über KI (MCP)
 

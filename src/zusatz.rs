@@ -24,6 +24,8 @@ pub struct Zusatz {
     /// Zeitpunkt, zu dem sich das Variantenrad geschlossen hat: der Klick, der es geschlossen hat, darf nicht auf
     /// der Zeichenfläche weiterwirken (Befund 89: markierte das Symbol unter dem Rad)
     pub rad_zu: Option<f64>,
+    /// Auswahlfilter der Sitzung (auswahl.rs, NR13): diese Objektarten treffen Klick, Rahmen und Strg+A nicht
+    pub filter: crate::auswahl::Filter,
 }
 
 impl App {

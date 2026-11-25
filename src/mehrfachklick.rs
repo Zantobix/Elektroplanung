@@ -31,16 +31,28 @@ pub struct Zaehler {
 impl Zaehler {
     /// Klick auf Leitung `id` bei `pos` (px) zur Zeit `t` zählen; Rückgabe: Stufe 1–4.
     pub fn zaehlen(&mut self, id: u64, pos: [f32; 2], t: f64) -> u8 {
+        self.zaehlen_bis(id, pos, t, 4)
+    }
+
+    /// Wie `zaehlen`, aber höchstens bis Stufe `bis` (Optionen › Markieren „Mehrfachklick bis Stufe“), danach
+    /// wieder 1.
+    pub fn zaehlen_bis(&mut self, id: u64, pos: [f32; 2], t: f64, bis: u8) -> u8 {
         let nah = (pos[0] - self.pos[0]).hypot(pos[1] - self.pos[1]) <= WEG;
         self.n = if self.n > 0 && id == self.id && nah && t - self.zeit <= ZEIT { self.n + 1 } else { 1 };
         (self.zeit, self.pos, self.id) = (t, pos, id);
-        stufe(self.n)
+        stufe_bis(self.n, bis)
     }
 }
 
 /// Stufe zur Klickzahl: 1, 2, 3, 4, dann wieder 1 (5×), 2 (6×) …
 pub fn stufe(n: u32) -> u8 {
-    ((n.max(1) - 1) % 4 + 1) as u8
+    stufe_bis(n, 4)
+}
+
+/// Stufe zur Klickzahl mit höchster Stufe `bis` (1–4): z. B. bis 2 → 1, 2, 1, 2 …
+pub fn stufe_bis(n: u32, bis: u8) -> u8 {
+    let bis = bis.clamp(1, 4) as u32;
+    ((n.max(1) - 1) % bis + 1) as u8
 }
 
 /// Teilstück der Leitung unter `m` (Index des Abschnitts `pts[i]`–`pts[i+1]`), nächstgelegenes bis `tol`.
@@ -166,6 +178,8 @@ mod tests {
     #[test]
     fn stufen_im_kreis() {
         assert_eq!((1..=9).map(stufe).collect::<Vec<_>>(), vec![1, 2, 3, 4, 1, 2, 3, 4, 1]);
+        assert_eq!((1..=5).map(|n| stufe_bis(n, 2)).collect::<Vec<_>>(), vec![1, 2, 1, 2, 1]);
+        assert_eq!((1..=3).map(|n| stufe_bis(n, 0)).collect::<Vec<_>>(), vec![1, 1, 1]);
         let mut z = Zaehler::default();
         assert_eq!(z.zaehlen(5, [10.0, 10.0], 1.0), 1);
         assert_eq!(z.zaehlen(5, [11.0, 10.0], 1.2), 2);

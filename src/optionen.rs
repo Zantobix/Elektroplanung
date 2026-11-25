@@ -57,6 +57,12 @@ pub struct Optionen {
     /// Netz; Eigenschaften dann über Alt+Enter bzw. Kontextmenü (Nutzer 24.11.2026). Aus = Doppelklick öffnet wie im
     /// Original die Eigenschaften.
     pub mehrfachklick_leitung: bool,
+    /// höchste Stufe des Mehrfachklicks (1 Teilstück … 4 ganzes Potential), danach wieder 1 (NR13)
+    pub mehrfachklick_stufen: u8,
+    /// Vormarkierung: Objekt unter der Maus hervorheben (NR13; aus = nur der Mauszeiger zeigt es)
+    pub vormarkierung: bool,
+    /// Farbe markierter Objekte (NR13; Vorgabe Rot wie bisher)
+    pub markier_farbe: [u8; 3],
     /// Linux: Startmenü-Eintrag mit Programmsymbol im Benutzerordner anlegen (AppImage bzw. direkt gestartet, desktop_eintrag.rs)
     pub desktop_eintrag: bool,
     // Programm › Symboleditor
@@ -131,6 +137,9 @@ impl Default for Optionen {
             netz_waechter: true,
             loeschen_mit_leitungen: true,
             mehrfachklick_leitung: true,
+            mehrfachklick_stufen: 4,
+            vormarkierung: true,
+            markier_farbe: [220, 0, 0],
             desktop_eintrag: true,
             sym_breite: 100.0,
             sym_hoehe: 100.0,
@@ -292,9 +301,12 @@ impl App {
         let mut pick_lib = false;
         let lib_info = self.lib_info.clone();
         let rasters: Vec<String> = crate::app::RASTER.iter().map(|r| r.0.to_string()).collect();
+        let filter = self.zusatz.filter.clone();
         let closed = tool_window(ctx, "optionen", "Option", [611.0, 395.0], egui::Order::Middle, |ui| {
             ui.horizontal(|ui| {
-                for (i, t) in ["Programm", "Projektvorgaben1", "Projektvorgaben2", "Datenbank", "Tastenkürzel"].iter().enumerate() {
+                // „Markieren“ (NR13) ist eine Erweiterung des Nachbaus; die Reiter des Originals behalten ihre Nummern
+                for (i, t) in ["Programm", "Projektvorgaben1", "Projektvorgaben2", "Datenbank", "Markieren", "Tastenkürzel"].iter().enumerate() {
+                    let i = [0, 1, 2, 3, 5, 4][i];
                     if ui.selectable_label(d.tab == i, *t).clicked() {
                         d.tab = i;
                     }
@@ -356,13 +368,10 @@ impl App {
                                     mark(ui, &mut o.hilfslinien, "Hilfslinien beim Verschieben");
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
-                                    mark(ui, &mut o.loeschen_mit_leitungen, "Symbol löschen: angeschlossene Leitungen mitlöschen");
-                                    mark(ui, &mut o.mehrfachklick_leitung, "Leitung: Mehrfachklick 1× Teilstück, 2× bis Knoten, 3× Netz, 4× mit Schiene");
                                     if cfg!(target_os = "linux") {
                                         mark(ui, &mut o.desktop_eintrag, "Im Startmenü eintragen (mit Programmsymbol)");
                                     }
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
-                                    mark(ui, &mut o.markieren_cad, "Markierrichtung wie CAD (→ eingeschlossen, ← berührt)");
                                     ui.horizontal(|ui| {
                                         ui.label(RichText::new("Zwischenspeichern alle").font(bold(13.0)));
                                         ui.add(egui::DragValue::new(&mut o.sicherung_min).range(0..=60));
@@ -516,6 +525,7 @@ impl App {
                             });
                         });
                     }
+                    5 => crate::optionen_markieren::reiter(ui, o, &filter),
                     4 => {
                         // Tastenkürzel: Befehl, Belegung, Ändern (nächste Taste aufnehmen), Standard, Entfernen
                         if let Some(id) = *capture {
@@ -529,6 +539,8 @@ impl App {
                         ui.small("Kopieren, Ausschneiden, Einfügen: Strg+C, Strg+X, Strg+V (fest). Pfeiltasten verschieben die Markierung (mit Umschalt um 1 mm).");
                         egui::ScrollArea::vertical().max_height(270.0).show(ui, |ui| {
                             egui::Grid::new("tasten").striped(true).num_columns(4).show(ui, |ui| {
+                                // Taste zum Erweitern der Markierung: nur eine Umschalttaste, daher Auswahl statt Aufnahme
+                                crate::optionen_markieren::dazu_zeile(ui, o);
                                 for b in crate::kuerzel::BEFEHLE {
                                     ui.label(b.name);
                                     let cur = crate::kuerzel::belegung(&o.tasten, b.id);

@@ -208,6 +208,13 @@ Eine Kurzanleitung mit allen Tastenkürzeln steht in [docs/KURZANLEITUNG.md](doc
   und vergibt eine neue BMK (das Original legt sie verdeckt auf das Original mit gleicher BMK); das Mausrad zoomt feiner
   (≈ 5 % je Rastung statt ≈ 1,8-fach).
 - Bewusste Erweiterungen gegenüber dem Original (bleiben, auch wenn das Original sie nicht hat):
+  - Markieren (`src/auswahl.rs`, `src/optionen_markieren.rs`): Bearbeiten › Auswahl bzw. Kontextmenü der freien
+    Fläche mit „Alle Leitungen/Symbole/Klemmstellen/Sammelschienen/Zeichenobjekte/Texte/Verweise/Tabellen und
+    Bilder“, „Gleiche wie markiert“, „Auswahl umkehren“ (Strg+I), „Verbundene Leitungen dazu“ (alle als Tastenkürzel
+    belegbar) und ein Auswahlfilter je Objektart für die laufende Sitzung (gilt für Klick, Rahmen und Strg+A;
+    Statuszeile zeigt ihn). Optionen › Markieren sammelt Markierrichtung, Vormarkierung, Markierfarbe, Mehrfachklick
+    (bis zu welcher Stufe) und Löschen mit Leitungen; Widersprüchliches ist ausgegraut. Die Taste zum Hinzunehmen
+    (Strg wie im Original oder Umschalt) steht unter Tastenkürzel.
   - Ansicht mit gedrückter mittlerer Maustaste verschieben; Optionen › Maus „Mittlere Maustaste: Ansicht in
     Mausrichtung“ kehrt die Richtung um (Standard: das Blatt folgt der Maus).
   - Textgenerator: Zähler wie im Original (`@` + ein Zeichen, Start 0 oder Wert in Klammern), dazu die Werte

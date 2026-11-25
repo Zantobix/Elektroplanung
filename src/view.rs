@@ -13,7 +13,6 @@ use std::sync::atomic::Ordering;
 
 const BG: Color32 = Color32::from_rgb(240, 240, 240);
 const VIEW_BG: Color32 = Color32::from_rgb(128, 128, 128);
-const SEL: Color32 = Color32::from_rgb(220, 0, 0);
 const PREVIEW: Color32 = Color32::from_rgb(0, 0, 200);
 /// Fangpunkte werden in diesem Umkreis der Maus angezeigt (mm)
 const SNAP_SHOW: f32 = 10.0;
@@ -935,7 +934,8 @@ impl App {
             format!("X: {}  Y: {:>5}", fmt(self.mouse_mm.x), fmt(self.mouse_mm.y)),
             self.info.clone(),
             if self.project.abgeschlossen { "Projekt ist abgeschlossen".to_string() } else { "Projekt wird bearbeitet".to_string() },
-            String::new(),
+            // aktiver Auswahlfilter der Sitzung (auswahl.rs)
+            self.zusatz.filter.hinweis(),
         ];
         for (i, t) in texts.iter().enumerate() {
             let w = if i < 3 { widths[i] } else { full.right() - x };
@@ -976,6 +976,8 @@ impl App {
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
+        #[allow(non_snake_case)]
+        let SEL = { let c = self.opt.markier_farbe; Color32::from_rgb(c[0], c[1], c[2]) };
         // Zeichenfläche mit Bildlaufleisten rechts und unten wie im Original (TScrollBox)
         let full = ui.max_rect();
         let area = Rect::from_min_max(full.min, full.max - Vec2::splat(SCROLLBAR));
@@ -1381,6 +1383,17 @@ impl App {
                 i.pointer.is_decidedly_dragging(),
             )
         });
+        // Taste zum Hinzunehmen/Herausnehmen beim Markieren (Optionen › Tastenkürzel „Markierung erweitern“,
+        // Vorgabe Strg wie im Original; NR13). Mit Umschalt beginnt ein Abzweig auf einer Leitung mit Strg+Umschalt.
+        let dazu_umschalt = crate::kuerzel::auswahl_dazu_umschalt(&self.opt.tasten);
+        let (dazu, abzweig) = ui.input(|i| {
+            let (c, s) = (i.modifiers.command, i.modifiers.shift);
+            if dazu_umschalt {
+                (s && !c, s && c)
+            } else {
+                (c, s && !c)
+            }
+        });
         // Nur Eingaben, die wirklich auf der Zeichenfläche landen: liegt ein Menü, Untermenü oder Dialog über dem
         // Blatt, gehört der Klick dorthin (sonst löscht der Druck die Markierung und das Menü verschwindet vor dem
         // Loslassen – Optionen/Bildindex im Kontextmenü ließen sich so nicht wählen)
@@ -1406,7 +1419,7 @@ impl App {
         }
         // Vormarkierung des Auswahlwerkzeugs und Mauszeiger mit Zusatz wie im Original (hover.rs, zeiger.rs)
         let frei = self.tool == Tool::Select && matches!(self.drag, Drag::None) && self.placing.is_none() && self.ring.is_none() && !self.zoom_tool && self.owner_pick.is_none() && !self.spiegel_pick_aktiv() && !self.bezeichner_pick_aktiv();
-        let vormarkierung = hover.filter(|_| inside && frei).and_then(|h| self.vormarkierung(xf.m(h), tol, xf.z));
+        let vormarkierung = hover.filter(|_| inside && frei && self.opt.vormarkierung).and_then(|h| self.vormarkierung(xf.m(h), tol, xf.z));
         let wahl = hover.filter(|_| inside).map(|h| crate::zeiger::waehlen(&self.zeiger_zustand(xf.m(h), tol, xf.z, vormarkierung, ctrl)));
         crate::zeiger::setzen(ui.ctx(), wahl);
         // Variantenrad offen: nimmt (wie das modale Fenster des Originals mit Mausfang) alle Eingaben
@@ -1529,11 +1542,11 @@ impl App {
 
         // Mehrfachklick auf eine Leitung in Stufen (Option, mehrfachklick.rs, NR12): 1× Teilstück, 2× bis Knoten,
         // 3× Netz ohne Sammelschiene, 4× ganzes Potential, 5× wieder Teilstück; eigener Zähler (egui kennt nur 3)
-        if inside && self.tool == Tool::Select && self.opt.mehrfachklick_leitung && !ctrl && ui.input(|i| i.pointer.button_clicked(PointerButton::Primary)) {
+        if inside && self.tool == Tool::Select && self.opt.mehrfachklick_leitung && !dazu && ui.input(|i| i.pointer.button_clicked(PointerButton::Primary)) {
             let mm = xf.m(h);
             if let Some(id) = self.hit_top(mm, tol).filter(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == *id && matches!(o.kind, Kind::Wire { .. })))) {
                 let t = ui.input(|i| i.time);
-                let stufe = self.zusatz.klicks.zaehlen(id, [h.x, h.y], t);
+                let stufe = self.zusatz.klicks.zaehlen_bis(id, [h.x, h.y], t, self.opt.mehrfachklick_stufen);
                 self.mehrfachklick(id, mm, tol, stufe);
                 self.drag = Drag::None;
                 return;
@@ -1546,7 +1559,7 @@ impl App {
             let top = self.doppelklick_ziel(m, tol);
             // Mehrfachklick auf eine Leitung (Option, nach PADS): Doppelklick = bis zum nächsten Knoten,
             // Dreifachklick = ganzes Netz; Eigenschaften über Alt+Enter bzw. Kontextmenü
-            if self.opt.mehrfachklick_leitung && !ctrl && self.hit_top(m, tol).is_some_and(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == id && matches!(o.kind, Kind::Wire { .. })))) {
+            if self.opt.mehrfachklick_leitung && !dazu && self.hit_top(m, tol).is_some_and(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == id && matches!(o.kind, Kind::Wire { .. })))) {
                 // schon oben über den Klickzähler erledigt (mehrfachklick.rs)
                 self.drag = Drag::None;
                 return;
@@ -1707,7 +1720,7 @@ impl App {
                         return;
                     }
                     // Umschalt auf einer Leitung: Abzweig beginnen (leitung_anschluss.rs)
-                    if !ctrl && ui.input(|i| i.modifiers.shift) && self.leitung_an_leitung_beginnen(m, tol) {
+                    if abzweig && self.leitung_an_leitung_beginnen(m, tol) {
                         return;
                     }
                     // Punkt einer Linie, eines Rechtecks, einer Kurve … ziehen wie im Original (zeichen_punkt.rs)
@@ -1715,7 +1728,7 @@ impl App {
                         return;
                     }
                     if let Some(id) = self.hit_top(m, tol) {
-                        if ctrl {
+                        if dazu {
                             if let Some(i) = self.selection.iter().position(|s| *s == id) {
                                 self.selection.remove(i);
                             } else {
@@ -1726,12 +1739,12 @@ impl App {
                         }
                         self.expand_groups();
                         // einzeln markierte Leitung: nur das gegriffene Teilstück verschieben (segment_ziehen.rs)
-                        if !ctrl && self.teilstueck_greifen(id, m, tol) {
+                        if !dazu && self.teilstueck_greifen(id, m, tol) {
                             return;
                         }
                         self.drag = Drag::Move { start: self.snap(m), applied: P::default(), moved: false };
                     } else {
-                        if !ctrl {
+                        if !dazu {
                             self.selection.clear();
                         }
                         self.drag = Drag::Rubber { start: m };
@@ -2244,6 +2257,8 @@ impl App {
                 if ui.add_enabled(has, egui::Button::new("Löschen").shortcut_text("Del")).clicked() {
                     self.delete_selection();
                 }
+                // Nachbau (NR13): Auswahlbefehle und Auswahlfilter (auswahl.rs)
+                self.auswahl_menue(ui);
                 // Original: Trennlinie am Ende, Rückgängig/Forwärts nur über Strg+Z / Strg+W und die Werkzeugleiste
                 ui.separator();
                 if ui.add(egui::Button::new("Suchen…").shortcut_text(crate::kuerzel::belegung(&self.opt.tasten, "suchen"))).clicked() {
@@ -3008,6 +3023,9 @@ impl App {
             "rueck" => self.do_undo(),
             "vor" | "vor2" => self.do_redo(),
             "loeschen" => self.delete_selection(),
+            id if id.starts_with("ausw_") => {
+                self.auswahl_befehl(id);
+            }
             "alles" => {
                 if let Some(s) = self.sheet() {
                     self.selection = s.objects.iter().filter(|o| self.selectable(o)).map(|o| o.id).collect();

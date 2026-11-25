@@ -46,7 +46,28 @@ pub const BEFEHLE: &[Befehl] = &[
     Befehl { id: "w_text", name: "Werkzeug: Text", vorgabe: "T" },
     Befehl { id: "w_klemme", name: "Werkzeug: Klemmstelle", vorgabe: "X" },
     Befehl { id: "fehlerbericht", name: "Fehlerbericht speichern", vorgabe: "F12" },
+    // Auswahlbefehle (auswahl.rs, NR13): ohne Vorgabe außer „Auswahl umkehren“
+    Befehl { id: "ausw_leitungen", name: "Auswahl: alle Leitungen", vorgabe: "" },
+    Befehl { id: "ausw_symbole", name: "Auswahl: alle Symbole", vorgabe: "" },
+    Befehl { id: "ausw_klemmen", name: "Auswahl: alle Klemmstellen", vorgabe: "" },
+    Befehl { id: "ausw_schienen", name: "Auswahl: alle Sammelschienen", vorgabe: "" },
+    Befehl { id: "ausw_zeichnung", name: "Auswahl: alle Zeichenobjekte", vorgabe: "" },
+    Befehl { id: "ausw_texte", name: "Auswahl: alle Texte und Textfelder", vorgabe: "" },
+    Befehl { id: "ausw_verweise", name: "Auswahl: alle Verweise", vorgabe: "" },
+    Befehl { id: "ausw_tabellen", name: "Auswahl: alle Tabellen und Bilder", vorgabe: "" },
+    Befehl { id: "ausw_gleiche", name: "Auswahl: gleiche wie markiert", vorgabe: "" },
+    Befehl { id: "ausw_umkehren", name: "Auswahl umkehren", vorgabe: "Strg+I" },
+    Befehl { id: "ausw_verbunden", name: "Auswahl: verbundene Leitungen dazu", vorgabe: "" },
 ];
+
+/// Schlüssel in `Optionen::tasten` für die Taste zum Erweitern der Markierung („Umschalt“, sonst Strg wie im
+/// Original). Kein Befehl mit Taste, daher nicht in `BEFEHLE`.
+pub const AUSWAHL_DAZU: &str = "auswahl_dazu";
+
+/// Erweitert Umschalt (statt Strg) die Markierung?
+pub fn auswahl_dazu_umschalt(eigene: &BTreeMap<String, String>) -> bool {
+    eigene.get(AUSWAHL_DAZU).is_some_and(|v| v.eq_ignore_ascii_case("umschalt") || v.eq_ignore_ascii_case("shift"))
+}
 
 /// Belegung eines Befehls (eigene aus den Optionen, sonst Vorgabe; leer = keine).
 pub fn belegung(eigene: &BTreeMap<String, String>, id: &str) -> String {
@@ -152,8 +173,12 @@ mod tests {
     fn alle_vorgaben_gueltig_und_eindeutig() {
         let leer = BTreeMap::new();
         for b in BEFEHLE {
-            assert!(parse(b.vorgabe).is_some(), "{} = {}", b.id, b.vorgabe);
+            assert!(b.vorgabe.is_empty() || parse(b.vorgabe).is_some(), "{} = {}", b.id, b.vorgabe);
         }
+        assert!(!auswahl_dazu_umschalt(&leer));
+        let mut u = BTreeMap::new();
+        u.insert(AUSWAHL_DAZU.to_string(), "Umschalt".to_string());
+        assert!(auswahl_dazu_umschalt(&u));
         assert!(doppelt(&leer).is_empty(), "{:?}", doppelt(&leer));
         let mut eigene = BTreeMap::new();
         eigene.insert("drehen".to_string(), "Strg+S".to_string());

@@ -1708,9 +1708,9 @@ impl App {
     }
 
     /// Lässt sich das Objekt markieren? Im Editor nur sichtbare; mit „Fixierung aktivieren“ keine fixierten
-    /// (wie im Original weder per Klick noch per Aufziehen).
+    /// (wie im Original weder per Klick noch per Aufziehen); dazu der Auswahlfilter der Sitzung (auswahl.rs).
     pub fn selectable(&self, o: &Obj) -> bool {
-        self.edit_visible(o.id) && !(o.fixed && self.fix_active)
+        self.markierbar_ohne_filter(o) && self.zusatz.filter.erlaubt(&o.kind)
     }
 
     pub fn edit_props(&mut self, id: u64) {
