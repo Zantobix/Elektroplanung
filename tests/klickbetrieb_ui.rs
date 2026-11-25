@@ -170,3 +170,93 @@ fn teilstueck_wackelt_nicht() {
     }
     assert!(zuletzt < 80.0, "gezogen bis {zuletzt}");
 }
+
+/// Erkundung (EP_NZ, EP_VON=x,y, EP_NACH=x,y): Objekt unter EP_VON greifen und schrittweise nach EP_NACH ziehen;
+/// danach alle Leitungen ausgeben, die sich geändert haben.
+#[test]
+fn verschieben_erkunden() {
+    let (Some(p), Some(von), Some(nach)) = (std::env::var("EP_NZ").ok(), std::env::var("EP_VON").ok(), std::env::var("EP_NACH").ok()) else { return };
+    let xy = |s: &str| {
+        let v: Vec<f32> = s.split(',').map(|t| t.trim().parse().unwrap()).collect();
+        P::new(v[0], v[1])
+    };
+    let (von, nach) = (xy(&von), xy(&nach));
+    elektroplanung::meldungen::test_antworten(&[]);
+    let mut app = test_app();
+    app.open_path(p.into(), false);
+    let r = SheetRef { anlage: 1, sheet: 3 };
+    app.open_sheet(r);
+    let mut ui = Ui { ctx: egui::Context::default(), frame: eframe::Frame::_new_kittest(), t: 1.0 };
+    for _ in 0..3 {
+        ui.lauf(&mut app, vec![]);
+    }
+    let vorher = app.project.sheet(r).unwrap().objects.clone();
+    let q0 = Ui::px(&app, von);
+    ui.lauf(&mut app, vec![Event::PointerMoved(q0)]);
+    ui.lauf(&mut app, vec![Event::PointerButton { pos: q0, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    for k in 1..=40 {
+        let q = Ui::px(&app, P::new(von.x + (nach.x - von.x) * k as f32 / 40.0, von.y + (nach.y - von.y) * k as f32 / 40.0));
+        ui.lauf(&mut app, vec![Event::PointerMoved(q)]);
+    }
+    let q = Ui::px(&app, nach);
+    ui.lauf(&mut app, vec![Event::PointerButton { pos: q, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }]);
+    ui.lauf(&mut app, vec![]);
+    eprintln!("Markierung: {:?} | {}", app.selection, app.info);
+    let nachher = &app.project.sheet(r).unwrap().objects;
+    for o in nachher {
+        let alt = vorher.iter().find(|v| v.id == o.id);
+        if alt.map(|a| format!("{:?}", a.kind)) != Some(format!("{:?}", o.kind)) {
+            let f = |k: &Kind| match k {
+                Kind::Wire { pts, .. } => format!("{:?}", pts.iter().map(|p| (p.x, p.y)).collect::<Vec<_>>()),
+                Kind::Symbol { pos, bmk, .. } => format!("{bmk} {:?}", (pos.x, pos.y)),
+                k => format!("{:?}", std::mem::discriminant(k)),
+            };
+            eprintln!("{}: {} -> {}", o.id, alt.map(|a| f(&a.kind)).unwrap_or("neu".into()), f(&o.kind));
+        }
+    }
+    for v in &vorher {
+        if !nachher.iter().any(|o| o.id == v.id) {
+            eprintln!("{}: entfernt", v.id);
+        }
+    }
+    let s = app.project.sheet(r).unwrap();
+    let mut alt_blatt = s.clone();
+    alt_blatt.objects = vorher.clone();
+    eprintln!("Wächter: {:?}", elektroplanung::netz_waechter::pruefen(&vorher, s, &app.lib, &app.selection));
+    for (a, b) in [(202u64, 204u64), (202, 218), (204, 218)] {
+        let n = elektroplanung::netz::netz_von(s, &app.lib, a);
+        eprintln!("{a} und {b} im selben Netz: vorher {} nachher {}", elektroplanung::netz::netz_von(&alt_blatt, &app.lib, a).contains(&b), n.contains(&b));
+    }
+}
+
+/// Nutzerbild 2 (25.11.2026): -E3 auf -F3 mit der Maus nach links an -E2 vorbeigezogen – ihre Zuleitung läuft danach
+/// als kurzer Stich auf die Leitung darüber statt im Zickzack unter den Lampen entlang; kein Netz ändert sich.
+#[test]
+fn lampe_vorbeiziehen_ohne_umweg() {
+    let Some(f) = std::env::var("EP_FIXTURES").ok().map(|d| std::path::Path::new(&d).join("nachzeichnen/nachgezeichnet_2026-11-25.epr")).filter(|p| p.exists()) else { return };
+    elektroplanung::meldungen::test_antworten(&[]);
+    let mut app = test_app();
+    app.open_path(f, false);
+    let r = SheetRef { anlage: 1, sheet: 3 };
+    app.open_sheet(r);
+    let mut ui = Ui { ctx: egui::Context::default(), frame: eframe::Frame::_new_kittest(), t: 1.0 };
+    for _ in 0..3 {
+        ui.lauf(&mut app, vec![]);
+    }
+    let vorher = app.project.sheet(r).unwrap().clone();
+    let (von, nach) = (P::new(127.0, 149.4), P::new(80.0, 149.4));
+    let q0 = Ui::px(&app, von);
+    ui.lauf(&mut app, vec![Event::PointerMoved(q0)]);
+    ui.lauf(&mut app, vec![Event::PointerButton { pos: q0, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    for k in 1..=40 {
+        let q = Ui::px(&app, P::new(von.x + (nach.x - von.x) * k as f32 / 40.0, von.y));
+        ui.lauf(&mut app, vec![Event::PointerMoved(q)]);
+    }
+    let q = Ui::px(&app, nach);
+    ui.lauf(&mut app, vec![Event::PointerButton { pos: q, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }]);
+    ui.lauf(&mut app, vec![]);
+    let s = app.project.sheet(r).unwrap();
+    assert_eq!(elektroplanung::netz_waechter::pruefen(&vorher.objects, s, &app.lib, &[200]), None);
+    let w203 = s.objects.iter().find(|o| o.id == 203).and_then(|o| if let Kind::Wire { pts, .. } = &o.kind { Some(pts.clone()) } else { None }).unwrap();
+    assert!(w203.len() <= 3, "Zuleitung von -E3 ohne Umweg: {w203:?}");
+}

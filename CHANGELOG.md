@@ -45,6 +45,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Nach dem Verschieben werden Umwege aufgelöst: Schleifen (Leitung kreuzt sich selbst), Höcker im Innern einer
+  Leitung und Zickzack-Wege, für die es einen einfachen Weg gibt – auch als kurzer Stich auf eine Leitung desselben
+  Netzes. Nur, wenn der neue Weg nichts Fremdes berührt und kein Symbol durchquert.
 - Fang auf Fluchten auch ohne Raster (Rasterfang „Kein“): Leitungsenden, Klemmstellen, gezogene Teilstücke und
   verschobene Symbole rücken auf die Flucht von Anschlüssen und Leitungsenden (6 Bildpunkte). Ein Teilstück findet
   auch mit Raster wieder genau auf die Flucht seines Anschlusses abseits des Rasters zurück.

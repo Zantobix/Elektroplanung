@@ -358,6 +358,9 @@ impl crate::app::App {
         if ids.is_empty() {
             return;
         }
+        // Schleifen, Höcker und Zickzack aus der Nachführung auflösen (umweg.rs, Nutzer 25.11.2026); vor dem
+        // Vereinigen, das danach Leitungen auf dem eigenen Netz zusammenfasst
+        self.aufraeum_schritt(|a| a.umwege_aufloesen(&ids));
         self.aufraeum_schritt(|a| {
             a.leitungen_vereinigen(&ids);
         });
