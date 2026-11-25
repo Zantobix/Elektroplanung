@@ -31,7 +31,7 @@ impl DxfDialog {
         DxfDialog { pfad, z, e, wahl: Massstab::Datei, faktor: "1".into() }
     }
 
-    fn massstab(&self) -> f32 {
+    pub fn massstab(&self) -> f32 {
         match self.wahl {
             Massstab::Datei => dxf::mm_je_einheit(self.z.einheit),
             Massstab::Mm => 1.0,

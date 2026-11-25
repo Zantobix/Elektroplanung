@@ -60,6 +60,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 - Endet eine gezeichnete Leitung frei knapp (bis 3 mm) neben einer anderen, nennt die Statuszeile den Abstand
   („Ende frei – Leitung 2,5 mm entfernt“).
 - Blatteigenschaften: Hinweis „-1 = wie Anlage“ am Feld Strompfade.
+- DXF-Import: Bögen in Polylinien (LWPOLYLINE mit Ausbuchtung, wie CAD-Programme Rundungen schreiben) wurden als
+  gerade Strecke übernommen; sie kommen jetzt als Bogen an (getestet mit Dateien im Format R12, R2000 und R2010).
 - Bitmapexport: Bildgröße wie das Original abgeschnitten statt gerundet (A4 quer bei 480 dpi 5612 × 3968 statt
   5613 × 3969, im Original exportiert und nachgemessen).
 - Bibliothek: Zusatzoptionen einiger Symbole hatten Zeichensalat als Namen („°o“, „¼ó“ bei Wechsler, Verbindung,

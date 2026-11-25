@@ -183,18 +183,75 @@ fn mtext_rein(s: &str) -> String {
     out
 }
 
+/// Punkte von `a` (ausschließlich) bis `b` (einschließlich): gerade bei Ausbuchtung 0, sonst ein Kreisbogen mit dem
+/// Öffnungswinkel 4·atan(bulge) (positiv = gegen den Uhrzeigersinn), in Stücke von höchstens 10°.
+pub fn bogen_punkte(a: P, b: P, bulge: f32) -> Vec<P> {
+    if bulge.abs() < 1e-6 || a.dist(b) < 1e-6 {
+        return vec![b];
+    }
+    let winkel = 4.0 * bulge.atan();
+    let sehne = a.dist(b);
+    let r = sehne / (2.0 * (winkel / 2.0).sin());
+    // Mittelpunkt: von der Sehnenmitte senkrecht um h
+    let (mx, my) = ((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+    let h = r * (winkel / 2.0).cos();
+    let (dx, dy) = ((b.x - a.x) / sehne, (b.y - a.y) / sehne);
+    let c = P::new(mx - dy * h, my + dx * h);
+    let w0 = (a.y - c.y).atan2(a.x - c.x);
+    let schritte = ((winkel.abs().to_degrees() / 10.0).ceil() as usize).max(2);
+    let r = r.abs();
+    (1..=schritte).map(|i| if i == schritte { b } else { let w = w0 + winkel * i as f32 / schritte as f32; P::new(c.x + r * w.cos(), c.y + r * w.sin()) }).collect()
+}
+
 /// Element aus einem Satz (ohne INSERT/POLYLINE-Folgen).
 fn element(s: &Satz) -> Option<Ent> {
     Some(match s.art.as_str() {
         "LINE" => Ent::Lines(vec![P::new(s.get(10), s.get(20)), P::new(s.get(11), s.get(21))], false),
-        "LWPOLYLINE" | "SPLINE" => {
-            // SPLINE: Stützpunkte (11/21), sonst Kontrollpunkte (10/20) als Linienzug
-            let (xs, ys) = if s.art == "SPLINE" && !s.all(11).is_empty() { (s.all(11), s.all(21)) } else { (s.all(10), s.all(20)) };
+        "LWPOLYLINE" => {
+            // Punkte mit Ausbuchtung (42 = tan(Winkel/4) des Bogens zum nächsten Punkt, wie CAD-Programme Bögen in
+            // Polylinien schreiben): Bogenstücke als kurze Strecken
+            let mut v: Vec<(P, f32)> = vec![];
+            let mut x = None;
+            for (c, t) in &s.f {
+                match c {
+                    10 => x = Some(num(t)),
+                    20 => {
+                        if let Some(xv) = x.take() {
+                            v.push((P::new(xv, num(t)), 0.0));
+                        }
+                    }
+                    42 => {
+                        if let Some(l) = v.last_mut() {
+                            l.1 = num(t);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if v.len() < 2 {
+                return None;
+            }
+            let zu = (s.get(70) as i32) & 1 == 1;
+            let mut pts = vec![v[0].0];
+            let n = v.len();
+            for i in 0..if zu { n } else { n - 1 } {
+                let (a, bulge) = v[i];
+                let b = v[(i + 1) % n].0;
+                pts.extend(bogen_punkte(a, b, bulge));
+            }
+            if zu {
+                pts.pop();
+            }
+            Ent::Lines(pts, zu)
+        }
+        "SPLINE" => {
+            // Stützpunkte (11/21), sonst Kontrollpunkte (10/20) als Linienzug
+            let (xs, ys) = if !s.all(11).is_empty() { (s.all(11), s.all(21)) } else { (s.all(10), s.all(20)) };
             let pts: Vec<P> = xs.iter().zip(ys.iter()).map(|(x, y)| P::new(*x, *y)).collect();
             if pts.len() < 2 {
                 return None;
             }
-            Ent::Lines(pts, (s.get(70) as i32) & 1 == 1 && s.art == "LWPOLYLINE")
+            Ent::Lines(pts, false)
         }
         "CIRCLE" => Ent::Circle(P::new(s.get(10), s.get(20)), s.get(40)),
         "ARC" => Ent::Arc(P::new(s.get(10), s.get(20)), s.get(40), s.get(50), s.get(51)),
@@ -623,5 +680,21 @@ pub(crate) mod tests {
         assert_eq!(aci_rgb(7), [0, 0, 0]);
         assert_eq!(aci_rgb(250), [51, 51, 51]);
         let _ = aci_rgb(123);
+    }
+}
+
+#[cfg(test)]
+mod bulge_tests {
+    use super::*;
+
+    #[test]
+    fn halbkreis_aus_bulge() {
+        // bulge 1 = Halbkreis gegen den Uhrzeigersinn von (0|0) nach (20|0): Scheitel bei (10|−10)
+        let p = bogen_punkte(P::new(0.0, 0.0), P::new(20.0, 0.0), 1.0);
+        assert_eq!(*p.last().unwrap(), P::new(20.0, 0.0));
+        let tief = p.iter().map(|q| q.y).fold(f32::MAX, f32::min);
+        assert!((tief + 10.0).abs() < 0.05, "Scheitel {tief}");
+        assert!(p.iter().all(|q| (q.dist(P::new(10.0, 0.0)) - 10.0).abs() < 0.01));
+        assert_eq!(bogen_punkte(P::new(0.0, 0.0), P::new(5.0, 0.0), 0.0), vec![P::new(5.0, 0.0)]);
     }
 }
