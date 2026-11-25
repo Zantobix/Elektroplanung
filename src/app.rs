@@ -967,16 +967,6 @@ impl App {
         }
     }
 
-    pub fn delete_selection(&mut self) {
-        if self.selection.is_empty() {
-            return;
-        }
-        self.checkpoint();
-        let sel = self.selection.clone();
-        self.with_sheet(|s, _| s.objects.retain(|o| !sel.contains(&o.id)));
-        self.selection.clear();
-    }
-
     pub fn copy(&mut self) {
         // Kontaktspiegel kopiert das Original nicht mit (kontaktspiegel.rs)
         let objs: Vec<Obj> = self.selected_objs().into_iter().filter(|o| !matches!(o.kind, Kind::Spiegel { .. })).collect();

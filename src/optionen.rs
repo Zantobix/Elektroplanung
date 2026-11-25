@@ -50,6 +50,9 @@ pub struct Optionen {
     pub einbinden_beim_verschieben: bool,
     /// Bearbeitungen abweisen, die fremde Netze kurzschließen würden (Nachbau-Erweiterung, `netz_waechter.rs`)
     pub netz_waechter: bool,
+    /// Symbol löschen nimmt die an seinen Anschlüssen endenden Leitungen mit und setzt dadurch nicht mehr gespeiste
+    /// Sammelschienen zurück – wie im Original (`loeschen.rs`, Nutzer 25.11.2026: Standard an); aus = nur Markiertes
+    pub loeschen_mit_leitungen: bool,
     /// Mehrfachklick auf Leitungen wie in PADS: Doppelklick markiert bis zum nächsten Knoten, Dreifachklick das ganze
     /// Netz; Eigenschaften dann über Alt+Enter bzw. Kontextmenü (Nutzer 24.11.2026). Aus = Doppelklick öffnet wie im
     /// Original die Eigenschaften.
@@ -126,6 +129,7 @@ impl Default for Optionen {
             hilfslinien: true,
             einbinden_beim_verschieben: true,
             netz_waechter: true,
+            loeschen_mit_leitungen: true,
             mehrfachklick_leitung: true,
             desktop_eintrag: true,
             sym_breite: 100.0,
@@ -352,6 +356,7 @@ impl App {
                                     mark(ui, &mut o.hilfslinien, "Hilfslinien beim Verschieben");
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
+                                    mark(ui, &mut o.loeschen_mit_leitungen, "Symbol löschen: angeschlossene Leitungen mitlöschen");
                                     mark(ui, &mut o.mehrfachklick_leitung, "Leitung: Doppelklick bis Knoten, Dreifachklick ganzes Netz");
                                     if cfg!(target_os = "linux") {
                                         mark(ui, &mut o.desktop_eintrag, "Im Startmenü eintragen (mit Programmsymbol)");

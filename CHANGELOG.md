@@ -24,6 +24,10 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Löschen wie im Original: Entf auf ein Symbol löscht die Leitungen mit, die an seinen Anschlüssen beginnen oder
+  enden (vorher blieben sie als offene Stummel stehen). Wird dabei – oder einzeln – die Leitung gelöscht, die eine
+  Sammelschiene an ihrem Anfang speist, setzt das Programm die Schiene wie das Original auf die volle Blattbreite
+  zurück. Abschaltbar unter Optionen › Programmverhalten („Symbol löschen: angeschlossene Leitungen mitlöschen“).
 - Werkzeugknopf „Neue Sammelschiene“ wie im Original: auf einem Schaltplan entsteht sofort ein Sammelschienen-Objekt
   mit einer neuen Schiene „L<n>“ über die Blattbreite, automatisch unter die vorhandenen Schienen gestapelt, und
   dessen Eigenschaften-Dialog öffnet sich; Abbruch nimmt beides zurück. Vorher legte der Knopf wie
