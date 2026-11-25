@@ -39,17 +39,56 @@ pub fn auf_fluchten(m: P, q: P, punkte: &[P], halb: f32) -> P {
     P::new(beste(m.x, q.x, &mut punkte.iter().map(|p| p.x)), beste(m.y, q.y, &mut punkte.iter().map(|p| p.y)))
 }
 
+/// Verschiebung `d`, mit der einer der Punkte `bewegt` je Achse auf die nächste Flucht aus `punkte` rückt (höchstens
+/// `weite` daneben); sonst `d` unverändert.
+pub fn verschieben_auf_fluchten(bewegt: &[P], punkte: &[P], d: P, weite: f32) -> P {
+    let achse = |b: &dyn Fn(&P) -> f32, dw: f32| -> f32 {
+        let mut best: Option<(f32, f32)> = None;
+        for p in bewegt {
+            let w = b(p) + dw;
+            for q in punkte {
+                let abst = b(q) - w;
+                if abst.abs() <= weite && best.is_none_or(|(a, _)| abst.abs() < a) {
+                    best = Some((abst.abs(), abst));
+                }
+            }
+        }
+        dw + best.map(|(_, k)| k).unwrap_or(0.0)
+    };
+    P::new(achse(&|p: &P| p.x, d.x), achse(&|p: &P| p.y, d.y))
+}
+
 impl App {
+    /// Fangweite für Fluchten: mit Raster ein halbes Raster; mit Rasterfang „Kein“ 6 Bildpunkte (Nutzer 25.11.2026:
+    /// auch ohne Raster auf die Flucht von Anschlüssen und Leitungen fangen). Mit gehaltener Umschalttaste kein Fang.
+    pub fn fluchtfang_weite(&self) -> Option<f32> {
+        if self.no_snap {
+            None
+        } else if self.fang() > 0.0 {
+            Some(self.raster() / 2.0)
+        } else {
+            Some(6.0 / self.view.zoom.max(0.01))
+        }
+    }
+
     /// Rasterpunkt der Maus mit Fluchtfang (siehe Modulkopf); `bezug` = zusätzliche Fluchtpunkte (Anfang, Knicke).
     pub fn fang_mit_fluchten(&self, m: P, bezug: &[P]) -> P {
         let q = self.snap(m);
-        if self.fang() <= 0.0 || self.no_snap {
-            return q;
-        }
+        let Some(weite) = self.fluchtfang_weite() else { return q };
         let Some(s) = self.sheet() else { return q };
         let mut pkt = fluchtpunkte(s, &self.lib);
         pkt.extend_from_slice(bezug);
-        auf_fluchten(m, q, &pkt, self.raster() / 2.0)
+        auf_fluchten(m, q, &pkt, weite)
+    }
+
+    /// Verschieben ohne Raster: die Anschlüsse der bewegten Objekte `ids` (Lage vor dem Ziehen = jetzt − `applied`)
+    /// rücken mit der Gesamtverschiebung `total` je Achse auf die Flucht anderer Anschlüsse und Leitungsenden.
+    pub fn verschieben_fluchtfang(&self, ids: &[u64], applied: P, total: P) -> P {
+        let (Some(weite), Some(s)) = (self.fluchtfang_weite(), self.sheet()) else { return total };
+        let bewegt: Vec<P> = s.objects.iter().filter(|o| ids.contains(&o.id)).flat_map(|o| canvas::obj_pins(o, &self.lib)).collect();
+        let fest: Vec<P> = fluchtpunkte(s, &self.lib).into_iter().filter(|q| !bewegt.iter().any(|b| b.dist(*q) < 0.01)).collect();
+        let vorher: Vec<P> = bewegt.iter().map(|p| p.sub(applied)).collect();
+        verschieben_auf_fluchten(&vorher, &fest, total, weite)
     }
 
     /// Lage einer neuen Klemmstelle bei der Maus `m` (wie `klemmstelle_setzen`): auf einer Leitung deren Lage auf der

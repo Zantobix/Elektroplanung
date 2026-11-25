@@ -158,7 +158,8 @@ impl App {
         let alt = if waagerecht { a.y } else { a.x };
         let soll = alt + if waagerecht { d.y } else { d.x };
         let raster = if waagerecht { self.snap(P::new(a.x, soll)).y } else { self.snap(P::new(soll, a.y)).x };
-        let fang = self.raster() / 2.0;
+        // Fangweite: halbes Raster, ohne Raster 6 Bildpunkte (fang.rs); mit Umschalt kein Fluchtfang
+        let fang = self.fluchtfang_weite().unwrap_or(0.0);
         // mit Netz-Wächter nur Fluchten des eigenen Netzes (und Anschlüsse): auf eine fremde Leitung gefangen, würde das
         // Teilstück zwei Netze übereinanderlegen und abgewiesen (netz_waechter.rs)
         let flucht = self
@@ -174,7 +175,9 @@ impl App {
             })
             .unwrap_or_default()
             .into_iter()
-            .filter(|f| (f - soll).abs() <= fang && (f - alt).abs() > EPS)
+            // auch die Ausgangslage zählt: ein von einem Anschluss abseits des Rasters weggezogenes Teilstück findet
+            // so wieder genau auf dessen Flucht zurück (Nutzervideo 25.11.2026, Anschluss 13 bei x = 69,6)
+            .filter(|f| (f - soll).abs() <= fang)
             .min_by(|x, y| (x - soll).abs().total_cmp(&(y - soll).abs()));
         let neu = match flucht {
             Some(f) if (f - soll).abs() <= (raster - soll).abs() => f,

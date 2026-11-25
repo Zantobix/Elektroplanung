@@ -45,6 +45,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Fang auf Fluchten auch ohne Raster (Rasterfang „Kein“): Leitungsenden, Klemmstellen, gezogene Teilstücke und
+  verschobene Symbole rücken auf die Flucht von Anschlüssen und Leitungsenden (6 Bildpunkte). Ein Teilstück findet
+  auch mit Raster wieder genau auf die Flucht seines Anschlusses abseits des Rasters zurück.
 - Optionen-Fenster: alle Reiter gleich groß, kein Springen beim Reiterwechsel, am Rahmen in der Größe veränderbar;
   was nicht passt, rollt.
 - Druckdialog wie im Original: der Standarddrucker steht mit seinem Namen in der Liste, Von/Bis zeigen 0, das Feld

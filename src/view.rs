@@ -1830,6 +1830,9 @@ impl App {
                     // Runde 12, bewusste Abweichung: das Original verschiebt um Vielfache des Rasters und behält den Rest)
                     let a0 = pin.sub(applied);
                     total = self.snap(a0.add(total)).sub(a0);
+                } else if !still && self.fang() <= 0.0 {
+                    // ohne Raster: Anschlüsse auf die Flucht anderer Anschlüsse und Leitungsenden (fang.rs)
+                    total = self.verschieben_fluchtfang(&movable, applied, total);
                 }
                 // gezielt auf eine Leitung gezogen (ein freies Symbol bzw. eine freie Klemmstelle): auf die Leitung
                 // einrasten statt auf die Strompfadmitte, beim Loslassen wird es eingebaut (symbol_in_leitung.rs)
