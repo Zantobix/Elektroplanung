@@ -1,7 +1,7 @@
 //! Löschen wie im Original (Cloud-Gegenprobe 25.11.2026, beide Fälle im Original unter Wine gelöscht, gespeichert und
 //! ausgelesen): W2 „Sicherungen -F10, -F1 und -F2“.
-//! 1. Entf auf −F2 (4 Anschlüsse): 56 → 52 Leitungen, Schienen −F2.L/−F2.N auf 13…271.
-//! 2. Entf nur auf die Einspeiseleitung von −F2.L: 56 → 55 Leitungen, nur −F2.L auf 13…271, −F2.N bleibt.
+//! 1. Entf auf −F2 (4 Anschlüsse): 56 → 52 Leitungen, Schienen −F2.L/−F2.N auf 13…284 (im .epr Länge 271).
+//! 2. Entf nur auf die Einspeiseleitung von −F2.L: 56 → 55 Leitungen, nur −F2.L auf 13…284, −F2.N bleibt.
 use elektroplanung::blatt_tasten::test_app;
 use elektroplanung::model::*;
 
@@ -32,8 +32,8 @@ fn symbol_loeschen_wie_original() {
     app.delete_selection();
     let s = app.project.sheet(r).unwrap();
     assert_eq!(leitungen(s), 52);
-    assert_eq!(schiene(s, "-F2.L"), (13.0, 102.0, 271.0));
-    assert_eq!(schiene(s, "-F2.N"), (13.0, 107.0, 271.0));
+    assert_eq!(schiene(s, "-F2.L"), (13.0, 102.0, 284.0));
+    assert_eq!(schiene(s, "-F2.N"), (13.0, 107.0, 284.0));
     // Rückgängig: alles wieder da
     app.do_undo();
     assert_eq!(leitungen(app.project.sheet(r).unwrap()), 56);
@@ -47,8 +47,8 @@ fn einspeiseleitung_loeschen_wie_original() {
     app.delete_selection();
     let s = app.project.sheet(r).unwrap();
     assert_eq!(leitungen(s), 55);
-    assert_eq!(schiene(s, "-F2.L"), (13.0, 102.0, 271.0));
-    assert_eq!(schiene(s, "-F2.N"), (97.5, 107.0, 186.5));
+    assert_eq!(schiene(s, "-F2.L"), (13.0, 102.0, 284.0));
+    assert_eq!(schiene(s, "-F2.N"), (97.5, 107.0, 284.0));
 }
 
 #[test]
@@ -60,5 +60,5 @@ fn option_aus_nur_markiertes() {
     app.delete_selection();
     let s = app.project.sheet(r).unwrap();
     assert_eq!(leitungen(s), 56);
-    assert_eq!(schiene(s, "-F2.L"), (102.5, 102.0, 181.5));
+    assert_eq!(schiene(s, "-F2.L"), (102.5, 102.0, 284.0));
 }

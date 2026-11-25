@@ -538,7 +538,7 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
             b.set_i32(10, *nr as i32);
             return;
         }
-        // Sammelschiene: Anfang (6/7), Ende x (10), Namensversatz (2/3)
+        // Sammelschiene: Anfang (6/7), Länge (10, siehe epr::busbar), Namensversatz (2/3)
         if let Kind::Busbar { a, x2, label, lage, versatz, .. } = new {
             // Lage (Feld 15 Byte 0) und Y-Versatz (Feld 11 Wort 0) nur bei Änderung, die übrigen Bytes bleiben
             if let Kind::Busbar { lage: ol, versatz: ov, .. } = old {
@@ -551,7 +551,7 @@ fn patch(b: &mut Block, old: &Kind, new: &Kind, pen: usize) {
             }
             b.set_i32(6, to01(a.x));
             b.set_i32(7, to01(a.y));
-            b.set_i32(10, to01(*x2));
+            b.set_i32(10, to01(*x2 - a.x));
             b.set_i32(2, to01(label.x));
             b.set_i32(3, to01(label.y));
             return;

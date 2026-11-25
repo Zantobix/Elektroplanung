@@ -5,7 +5,7 @@
 //!   bleiben.
 //! - Wird eine Leitung gelöscht, deren Ende am Anfang einer Sammelschiene liegt (Einspeisung), setzt das Original die
 //!   Schiene auf die Standardlage zurück (x wie der Werkzeugknopf „Neue Sammelschiene“, `schiene_neu::werkzeug_lage`;
-//!   −F2.L 102,5…181,5 → 13…271), die Höhe bleibt.
+//!   −F2.L 102,5…284 → 13…284, im .epr Länge 181,5 → 271), die Höhe bleibt.
 //!
 //! Beides hängt an der Option „Symbol löschen: angeschlossene Leitungen mitlöschen“ (Standard an, Nutzer 25.11.2026);
 //! aus = nur die markierten Objekte (bisheriges Verhalten des Nachbaus, Leitungen bleiben als offene Stummel).
@@ -117,7 +117,7 @@ mod tests {
         s.objects.retain(|o| ![1, 2, 3].contains(&o.id));
         schienen_zuruecksetzen(&mut s, &weg);
         let Kind::Busbar { a, x2, .. } = &s.objects.iter().find(|o| o.id == 6).unwrap().kind else { panic!() };
-        // Querformat, Rand links 5 → 13 … 271, Höhe bleibt
-        assert_eq!((a.x, a.y, *x2), (13.0, 70.0, 271.0));
+        // Querformat, Rand links 5 → 13 … 284 (im .epr Länge 271), Höhe bleibt
+        assert_eq!((a.x, a.y, *x2), (13.0, 70.0, 284.0));
     }
 }

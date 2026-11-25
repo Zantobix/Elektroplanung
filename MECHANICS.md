@@ -182,7 +182,7 @@ Originals. Feldbelegungen wurden zusätzlich durch Änderungen im Original-Progr
 ## Nachtrag 20.11.2026 – vollständiger Import, Symboltexte (geprüft gegen "Elektroplanung Wohnung 2.pdf")
 - OBJ Feld 4 unterscheidet: 0x1FFFF Verweis (ohne TIT = nur Pfeil, z. B. im Schriftfeld; Feld 14 = 900 → ▼,
   1800 → ►, jeweils mit Bit 0), 0x0101FFFF Verweis mit hochkant stehendem Text, **0xFFFF Sammelschiene**, **0x2FFFF Klemmstelle**.
-- Sammelschiene (OBJ 0xFFFF): Feld 6/7 Anfang, 10 Ende x, 2/3 Lage des Namens (linke obere Ecke) relativ zum
+- Sammelschiene (OBJ 0xFFFF): Feld 6/7 Anfang, 10 **Länge** (Ende = Anfang + Länge; im Original gegengeprüft: Startpunkt 50, Länge 100 → Feld 1000, gezeichnet 50–150 mm), 2/3 Lage des Namens (linke obere Ecke) relativ zum
   Anfang, 8/9 Kennung der SMS (SMS Feld 8/9, Name in SMS › TIT), 15 Byte 0 = Lage (Bit 0 unten gestapelt,
   Bit 1 feste Lage), 11 Wort 0 = Y-Versatz (0,1 mm). Nicht die Strichart: PE ist strichpunktiert über den Stift
   der Schiene; unten liegende N-Schienen (Seite 28) sind durchgezogen. Lage beim Zeichnen (0x438b94): Schienen

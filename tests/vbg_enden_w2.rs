@@ -57,7 +57,7 @@ fn doppelte(f: &EprFile) -> Vec<(u64, Vec<String>)> {
 }
 
 /// Prüfmaßstab: jedes Ende jeder Verbindung in W2 aus der Geometrie neu bestimmt (wie der Nachbau beim Speichern
-/// neuer bzw. geänderter Leitungen) = vom Original gespeicherte Werte. Ergebnis: 1751 von 1754 gleich; die drei
+/// neuer bzw. geänderter Leitungen) = vom Original gespeicherte Werte. Ergebnis: 1752 von 1754 gleich; die zwei
 /// Abweichungen sind einzeln begründet (siehe `BEGRUENDET`).
 #[test]
 fn w2_alle_enden_aus_der_geometrie() {
@@ -99,13 +99,12 @@ fn w2_alle_enden_aus_der_geometrie() {
     }
     assert_eq!(gesamt, 2 * 877, "alle VBG-Blöcke in W2");
     // Begründete Abweichungen (Blatt, Lage, Ende):
-    // - Blatt 2 (280,0/185,5): die Leitung endet 9 mm hinter dem Ende der Schiene (x2 = 271,0), gespeichert ist
-    //   die Schiene – im Original wurde sie offenbar nach dem Anschließen gekürzt, die Verbindung prüft es nicht
-    //   nach. Beim Speichern bleibt das Ende (Ziel unverändert, `vbg_enden::schreiben`).
+    // - (bis 25.11.2026 auch Blatt 2 (280,0/185,5): galt als „hinter dem Ende der Schiene“ – Feld 10 der Schiene
+    //   ist aber die Länge, die Schiene reicht bis 284; seitdem gleich)
     // - Blatt 2 (64,3/74,5) und (66,3/79,5): Verbindungen aus einem einzigen Punkt im Innern einer Schiene, Anfang
     //   Anschluss 0, Ende Anschluss 1 (sonst steht 1 nur an Enden auf dem Ende einer Schiene); vermutlich ebenfalls
     //   später geänderte Schienen. Der Nachbau liest sie nicht als Leitung, sie bleiben byteidentisch.
-    const BEGRUENDET: [(u32, f32, f32, usize); 3] = [(2, 280.0, 185.5, 1), (2, 64.3, 74.5, 1), (2, 66.3, 79.5, 1)];
+    const BEGRUENDET: [(u32, f32, f32, usize); 2] = [(2, 64.3, 74.5, 1), (2, 66.3, 79.5, 1)];
     let rest: Vec<_> = abweichungen.iter().filter(|(n, p, i, _, _)| !BEGRUENDET.iter().any(|b| b.0 == *n && P::new(b.1, b.2).dist(*p) < 0.01 && b.3 == *i)).collect();
     assert!(rest.is_empty(), "{gleich} von {gesamt} gleich, unbegründet: {rest:?}");
     assert_eq!(gleich, gesamt - BEGRUENDET.len());

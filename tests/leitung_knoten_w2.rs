@@ -172,5 +172,7 @@ fn w2_knotenzahl_unveraendert() {
             }
         }
     }
-    assert_eq!(n, 615);
+    // 616 seit 25.11.2026: Sammelschienen-Feld 10 ist die Länge (epr::busbar) – ein Abgriff an -F2.L liegt erst
+    // damit auf der Schiene
+    assert_eq!(n, 616);
 }

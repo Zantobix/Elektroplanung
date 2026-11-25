@@ -45,6 +45,10 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Sammelschienen waren zu kurz gezeichnet: im .epr steht nicht das Ende, sondern die Länge der Schiene (im Original
+  gegengeprüft). Alle Schienen enden jetzt wie im Original (z. B. bei 284 statt 271 mm); Leitungen, die hinter dem
+  falschen Ende auf die Schiene trafen, gelten als angeschlossen. Eine kurze Schiene weit rechts wurde beim Laden
+  sogar verworfen.
 - Markierte Leitung mit Brückenbogen: das markierte Teilstück wird mit seinen Bögen gezeichnet (vorher lag eine
   gerade rote Linie unter dem schwarzen Bogen); Knotenpunkte innerhalb einer Markierung (Netz, Strg+Klick) erscheinen
   in der Markierfarbe.

@@ -39,12 +39,13 @@ pub fn anlegen(anl: &mut Anlage) -> String {
 }
 
 /// Lage einer neuen Schiene des Werkzeugknopfs „Neue Sammelschiene“ (ToolButton18Click 0x46d9b0): Anfang 8 mm
-/// rechts vom linken Rahmen, Ende Papierbreite − linker Rand − 21 mm (im Original gespeichert und nachgemessen,
-/// Cloud 25.11.2026: Hochformat Rand 10 → 18…179, Querformat Rand 5 → 13…271). Die Höhe setzt der Auto-Stapel.
+/// rechts vom linken Rahmen, Ende Papierbreite − 13 mm (im Original gespeichert und nachgemessen, Cloud 25.11.2026:
+/// Hochformat Rand 10 → 18…197, Querformat Rand 5 → 13…284; im .epr steht die Länge 179 bzw. 271). Die Höhe setzt
+/// der Auto-Stapel.
 pub fn werkzeug_lage(s: &Sheet) -> (f32, f32) {
     let (x0, ..) = s.frame();
     let (w, _) = s.dims();
-    (x0 + 8.0, w - x0 - 21.0)
+    (x0 + 8.0, w - 13.0)
 }
 
 impl crate::app::App {
@@ -123,8 +124,8 @@ mod tests {
         let quer = Sheet::new(2);
         // Werte aus vom Original gespeicherten Dateien (W2-Kopie, Neubau EG bzw. Sicherungen -F10 …)
         assert_eq!(hoch.frame().0, 10.0);
-        assert_eq!(werkzeug_lage(&hoch), (18.0, 179.0));
+        assert_eq!(werkzeug_lage(&hoch), (18.0, 197.0));
         assert_eq!(quer.frame().0, 5.0);
-        assert_eq!(werkzeug_lage(&quer), (13.0, 271.0));
+        assert_eq!(werkzeug_lage(&quer), (13.0, 284.0));
     }
 }

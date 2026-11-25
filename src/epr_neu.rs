@@ -327,7 +327,8 @@ pub fn new_block(project: &Project, o: &Obj) -> Option<Block> {
             b.set_i32(6, to01(a.x));
             b.set_i32(7, to01(a.y));
             b.data[32..40].copy_from_slice(&sms.to_le_bytes());
-            b.set_i32(10, to01(*x2));
+            // Feld 10 = Länge (epr::busbar)
+            b.set_i32(10, to01(*x2 - a.x));
             // Feld 15 Byte 0 = Lage (Bit 0 unten, Bit 1 fest); die Strichart steht beim Stift der Schiene (SMS)
             b.set_i32(15, *lage as i32);
             b.data[0x2c..0x2e].copy_from_slice(&((versatz * 10.0).round() as i16).to_le_bytes());

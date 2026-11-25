@@ -31,9 +31,9 @@ fn neue_schiene_auf_querformat_wie_original() {
     app.dlg3_ok();
     let s = app.project.sheet(r).unwrap();
     assert_eq!(s.objects.len(), n + 1);
-    // Original: idx 96/97, a = (13, 112), x2 = 271, Name L12, Beschriftung (0, −4), Schiene „Schiene 12“
+    // Original: idx 96/97, a = (13, 112), Länge 271 → Ende 284, Name L12, Beschriftung (0, −4), Schiene „Schiene 12“
     let Kind::Busbar { a, x2, name, label, lage, .. } = &s.objects.last().unwrap().kind else { panic!("keine Schiene") };
-    assert_eq!((name.as_str(), a.x, *x2, *label, *lage), ("L12", 13.0, 271.0, P::new(0.0, -4.0), 0));
+    assert_eq!((name.as_str(), a.x, *x2, *label, *lage), ("L12", 13.0, 284.0, P::new(0.0, -4.0), 0));
     assert!((a.y - 112.0).abs() < 0.01, "Auto-Lage wie im Original: y = {}", a.y);
     let set = &app.project.anlagen[r.anlage].schienen["L12"];
     assert_eq!((set.name.as_str(), set.quer, set.pfeile), ("Schiene 12", true, false));
@@ -50,7 +50,7 @@ fn neue_schiene_auf_hochformat_und_abbruch() {
     assert!(app.project == vorher, "Abbruch nimmt Objekt und Schiene zurück");
     app.schiene_objekt_neu();
     app.dlg3_ok();
-    // Original: a = (18, 17), x2 = 179, Name L1 („Schiene 1“)
+    // Original: a = (18, 17), Länge 179 → Ende 197, Name L1 („Schiene 1“)
     let Kind::Busbar { a, x2, name, .. } = &app.project.sheet(r).unwrap().objects.last().unwrap().kind else { panic!() };
-    assert_eq!((name.as_str(), a.x, a.y, *x2), ("L1", 18.0, 17.0, 179.0));
+    assert_eq!((name.as_str(), a.x, a.y, *x2), ("L1", 18.0, 17.0, 197.0));
 }

@@ -387,16 +387,19 @@ fn bzd(b: &Block) -> Option<(P, String)> {
     (!t.is_empty()).then(|| (P::new(mm(b.i32(3) + b.i32(0)), mm(b.i32(4) + b.i32(1))), t))
 }
 
-/// Sammelschiene (OBJ, Feld 4 = 0xFFFF): Feld 6/7 Anfang, 10 Ende x, 2/3 Lage des Namens relativ zum Anfang,
+/// Sammelschiene (OBJ, Feld 4 = 0xFFFF): Feld 6/7 Anfang, 10 **Länge** (Cloud-Gegenprobe 25.11.2026: im Original
+/// Startpunkt 50, Länge 100 gesetzt → Feld 10 = 1000, gezeichnet 50…150 mm; alle 97 Schienen in W2 enden bei
+/// Anfang + Länge = rechter Rahmen − 8 mm), 2/3 Lage des Namens relativ zum Anfang,
 /// 8/9 Kennung der Schiene (SMS), 15 Byte 0 = Lage (Bit 0 unten gestapelt, Bit 1 fest; `sammelschiene_lage.rs`),
 /// 11 Wort 0 = Y-Versatz. Die Strichart kommt aus dem Stift der Schiene (SMS, PE = Strich/Punkt), nicht aus Feld 15:
 /// unten liegen in W2 auch N-Schienen, die das Original durchgezogen zeichnet.
 fn busbar(k: &Block, names: &std::collections::HashMap<u64, String>) -> Option<Kind> {
     let a = P::new(mm(k.i32(6)), mm(k.i32(7)));
-    let x2 = mm(k.i32(10));
-    if x2 <= a.x {
+    let laenge = mm(k.i32(10));
+    if laenge <= 0.0 {
         return None;
     }
+    let x2 = a.x + laenge;
     let sms = k.data.get(32..40).map(|b| u64::from_le_bytes(b.try_into().unwrap())).unwrap_or(0);
     Some(Kind::Busbar {
         a,
