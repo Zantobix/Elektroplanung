@@ -26,6 +26,9 @@ pub struct Zusatz {
     pub rad_zu: Option<f64>,
     /// Auswahlfilter der Sitzung (auswahl.rs, NR13): diese Objektarten treffen Klick, Rahmen und Strg+A nicht
     pub filter: crate::auswahl::Filter,
+    /// Blattreiter: aktiver Reiter im letzten Bild (Leiste mitführen bei Wechsel) und ob die Reiter überlaufen
+    pub reiter_zuletzt: Option<usize>,
+    pub reiter_ueberlauf: bool,
 }
 
 impl App {

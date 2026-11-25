@@ -385,6 +385,15 @@ impl App {
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
                                     mark(ui, &mut o.reiter_rad, "Mausrad über den Blattreitern wechselt das Blatt");
+                                    // auch unter Tastenkürzel; hier, weil man sie dort nicht vermutet (Nutzer 25.11.2026)
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new("Strg+Tab wechselt").font(bold(13.0)));
+                                        let t = |v: bool| if v { "nach Verlauf (zuletzt angezeigt)" } else { "nach Lage (rechts / links)" };
+                                        egui::ComboBox::from_id_salt("strgtab_p").width(200.0).selected_text(t(o.strg_tab_verlauf)).show_ui(ui, |ui| {
+                                            ui.selectable_value(&mut o.strg_tab_verlauf, false, t(false));
+                                            ui.selectable_value(&mut o.strg_tab_verlauf, true, t(true));
+                                        });
+                                    });
                                     if cfg!(target_os = "linux") {
                                         mark(ui, &mut o.desktop_eintrag, "Im Startmenü eintragen (mit Programmsymbol)");
                                         // vor dem Fenster gelesen, daher eigene Merkdatei statt der Optionen (wayland_wahl.rs)

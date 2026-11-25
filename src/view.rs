@@ -679,19 +679,21 @@ impl App {
         let mut clicked: Option<usize> = None;
         let mut action: Option<(usize, u8)> = None;
         let mut drop_tab: Option<(usize, usize)> = None;
-        // Reiterbereich endet vor dem Suchfeld; passen nicht alle Reiter, blättern zwei Pfeile (wie TTabControl)
+        // Reiterbereich endet vor dem Suchfeld; passen nicht alle Reiter, blättert eine Bildlaufleiste darunter (Nutzer
+        // 25.11.2026: statt der kleinen Pfeile des TTabControl); der aktive Reiter bleibt sichtbar (blattreiter.rs)
         let limit = full.right() - 299.0 - 4.0;
         // gleich beschriftete Reiter verschiedener Anlagen bekommen die Anlage vorangestellt (blattreiter.rs, M8)
         let labels: Vec<_> = crate::blattreiter::beschriftungen(&self.project, &self.tabs).into_iter().map(|t| ui.painter().layout_no_wrap(t, FontId::proportional(11.0), Color32::BLACK)).collect();
         let total: f32 = labels.iter().map(|g| g.size().x + 13.0).sum();
         let overflow = x + total > limit;
-        if self.tab_first >= self.tabs.len() {
-            self.tab_first = 0;
-        }
-        if self.active < self.tab_first {
-            self.tab_first = self.active;
-        }
-        let arrows_w = if overflow { 34.0 } else { 0.0 };
+        self.zusatz.reiter_ueberlauf = overflow;
+        let breiten: Vec<f32> = labels.iter().map(|g| g.size().x + 13.0).collect();
+        let platz = limit - x;
+        // Blattwechsel (Mausrad, Strg+Tab, Projektbaum): Leiste so weit mitführen, dass der aktive Reiter sichtbar ist
+        let wechsel = self.zusatz.reiter_zuletzt != Some(self.active);
+        self.zusatz.reiter_zuletzt = Some(self.active);
+        self.tab_first = crate::blattreiter::erster_sichtbar(&breiten, platz, self.tab_first, self.active, wechsel);
+        let arrows_w = 0.0;
         let mut last_visible = self.tab_first;
         for (i, r) in self.tabs.clone().iter().enumerate() {
             if i < self.tab_first {
@@ -764,23 +766,22 @@ impl App {
             }
         }
         if overflow {
-            for k in 0..2usize {
-                let rr = Rect::from_min_size(Pos2::new(limit - arrows_w + k as f32 * 17.0, full.top() + 2.0), Vec2::new(16.0, 16.0));
-                let resp = ui.interact(rr, ui.scope_id().with(("tabarrow", k)), Sense::click());
-                let p = ui.painter();
-                p.rect_filled(rr, 0.0, BG);
-                p.rect_stroke(rr, 0.0, Stroke::new(1.0, Color32::from_gray(160)), StrokeKind::Inside);
-                let c = rr.center();
-                let d = if k == 0 { -1.0 } else { 1.0 };
-                let tri = vec![Pos2::new(c.x + 2.5 * d, c.y), Pos2::new(c.x - 2.0 * d, c.y - 4.0), Pos2::new(c.x - 2.0 * d, c.y + 4.0)];
-                p.add(egui::Shape::convex_polygon(tri, Color32::BLACK, Stroke::NONE));
-                if resp.clicked() {
-                    if k == 0 {
-                        self.tab_first = self.tab_first.saturating_sub(1);
-                    } else if last_visible + 1 < self.tabs.len() {
-                        self.tab_first += 1;
-                    }
-                }
+            // Bildlaufleiste unter den Reitern: Schieber = sichtbarer Anteil, ziehen oder in die Leiste klicken blättert
+            let x0 = full.left() + 31.0;
+            let leiste = Rect::from_min_max(Pos2::new(x0, full.top() + 22.0), Pos2::new(limit, full.top() + 28.0));
+            let max_first = crate::blattreiter::groesster_erster(&breiten, platz);
+            let (anteil, lage) = (platz / total.max(1.0), if max_first == 0 { 0.0 } else { self.tab_first as f32 / max_first as f32 });
+            let sw = (leiste.width() * anteil).clamp(24.0, leiste.width());
+            let schieber = Rect::from_min_size(Pos2::new(leiste.left() + (leiste.width() - sw) * lage, leiste.top()), Vec2::new(sw, leiste.height()));
+            let resp = ui.interact(leiste, ui.scope_id().with("reiterleiste"), Sense::click_and_drag());
+            let p = ui.painter();
+            p.rect_filled(leiste, 3.0, Color32::from_gray(225));
+            let aktiv = resp.dragged() || resp.hovered();
+            p.rect_filled(schieber.shrink(0.5), 3.0, Color32::from_gray(if aktiv { 120 } else { 160 }));
+            if let Some(q) = resp.interact_pointer_pos().filter(|_| resp.dragged() || resp.clicked()) {
+                // Mitte des Schiebers folgt der Maus
+                let t = ((q.x - leiste.left() - sw / 2.0) / (leiste.width() - sw).max(1.0)).clamp(0.0, 1.0);
+                self.tab_first = (t * max_first as f32).round() as usize;
             }
         }
         if let Some(i) = clicked {
@@ -2791,7 +2792,7 @@ impl eframe::App for App {
         egui::Panel::bottom("status").exact_size(20.0).frame(pf).show(ui, |ui| {
             self.status_bar(ui);
         });
-        let reiter = egui::Panel::bottom("tabs").exact_size(23.0).frame(pf).show(ui, |ui| {
+        let reiter = egui::Panel::bottom("tabs").exact_size(if self.zusatz.reiter_ueberlauf { 30.0 } else { 23.0 }).frame(pf).show(ui, |ui| {
             self.bottom_row(ui);
         });
         // Mausrad über den Blattreitern wechselt das Blatt (Option, Nutzer 25.11.2026; blatt_tasten.rs)

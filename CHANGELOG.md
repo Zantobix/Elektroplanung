@@ -45,6 +45,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Blattreiter: statt zweier kleiner Pfeile eine Bildlaufleiste unter den Reitern; die Leiste läuft beim Blattwechsel
+  (Mausrad, Strg+Tab, Projektbaum) mit, sodass der aktive Reiter sichtbar bleibt. „Strg+Tab wechselt nach Lage/
+  Verlauf“ steht jetzt auch unter Programm › Programmverhalten.
 - Nach dem Verschieben werden Umwege aufgelöst: Schleifen (Leitung kreuzt sich selbst), Höcker im Innern einer
   Leitung und Zickzack-Wege, für die es einen einfachen Weg gibt – auch als kurzer Stich auf eine Leitung desselben
   Netzes. Nur, wenn der neue Weg nichts Fremdes berührt und kein Symbol durchquert.

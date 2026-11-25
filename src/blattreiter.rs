@@ -60,3 +60,52 @@ mod tests {
         assert_eq!(b[1], format!("UV1 {g}"));
     }
 }
+
+/// Erster sichtbarer Reiter: bei einem Blattwechsel (`wechsel`) so, dass der aktive ganz in `platz` passt (nach links
+/// nur so weit wie nötig); sonst die bisherige Lage, begrenzt auf den größten sinnvollen Anfang.
+pub fn erster_sichtbar(breiten: &[f32], platz: f32, erster: usize, aktiv: usize, wechsel: bool) -> usize {
+    let n = breiten.len();
+    if n == 0 {
+        return 0;
+    }
+    let mut e = erster.min(groesster_erster(breiten, platz));
+    if wechsel && aktiv < n {
+        if aktiv < e {
+            e = aktiv;
+        }
+        while e < aktiv && breiten[e..=aktiv].iter().sum::<f32>() > platz {
+            e += 1;
+        }
+    }
+    e
+}
+
+/// Größter sinnvoller erster Reiter: ab ihm passen alle folgenden in `platz`.
+pub fn groesster_erster(breiten: &[f32], platz: f32) -> usize {
+    let mut summe = 0.0;
+    for i in (0..breiten.len()).rev() {
+        summe += breiten[i];
+        if summe > platz {
+            return (i + 1).min(breiten.len().saturating_sub(1));
+        }
+    }
+    0
+}
+
+#[cfg(test)]
+mod leiste_tests {
+    use super::*;
+
+    #[test]
+    fn aktiver_reiter_bleibt_sichtbar() {
+        let b = vec![100.0; 10];
+        assert_eq!(groesster_erster(&b, 350.0), 7);
+        // Wechsel auf Reiter 6: Leiste rückt nach, bis 6 passt
+        assert_eq!(erster_sichtbar(&b, 350.0, 0, 6, true), 4);
+        // zurück auf 1: nach links
+        assert_eq!(erster_sichtbar(&b, 350.0, 4, 1, true), 1);
+        // ohne Wechsel (Leiste von Hand gerollt): bleibt
+        assert_eq!(erster_sichtbar(&b, 350.0, 5, 1, false), 5);
+        assert_eq!(groesster_erster(&b, 2000.0), 0);
+    }
+}
