@@ -553,7 +553,7 @@ impl App {
                                 *capture = None;
                             }
                         }
-                        ui.small("Kopieren, Ausschneiden, Einfügen: Strg+C, Strg+X, Strg+V (fest). Pfeiltasten verschieben die Markierung (mit Umschalt um 1 mm).");
+                        ui.small("Kopieren, Ausschneiden, Einfügen: Strg+C, Strg+X, Strg+V (fest). Pfeiltasten verschieben die Markierung um die Rasterweite, mit Strg um 1 mm, mit Umschalt um 0,1 mm (fest).");
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("Suchen").font(bold(13.0)));
                             ui.add(egui::TextEdit::singleline(suche).hint_text("Befehl oder Taste, z. B. „Blatt“ oder „Strg+S“").desired_width(320.0));

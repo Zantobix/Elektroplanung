@@ -40,7 +40,8 @@ anders ist als im Original und was noch fehlt, steht im [README](../README.md) u
   Teilstück bis zur nächsten Ecke (Entf löscht nur dieses Stück), **2×** bis zum nächsten Knoten, **3×** das Netz bis
   zu den Sammelschienen, **4×** das ganze Potential mit den Schienen, **5×** wieder das Teilstück. Die Statuszeile
   zeigt die Stufe.
-- Verschieben mit der Maus oder den Pfeiltasten: angeschlossene Leitungen folgen. Der **Netz-Wächter** lässt keine
+- Verschieben mit der Maus oder den Pfeiltasten (Rasterweite; **Strg** 1 mm, **Umschalt** 0,1 mm, beides unabhängig vom
+  Raster): angeschlossene Leitungen folgen. Der **Netz-Wächter** lässt keine
   Bearbeitung zu, die fremde Netze verbinden, trennen oder übereinanderlegen würde – die Statuszeile nennt den Grund.
 - **Bearbeiten › Auswahl** (auch im Kontextmenü der freien Fläche): alle Leitungen, Symbole, Texte … eines Blattes,
   „Gleiche wie markiert“, „Auswahl umkehren“ (Strg+I), „Verbundene Leitungen dazu“; unter „Filter“ lassen sich

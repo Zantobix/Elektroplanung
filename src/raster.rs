@@ -151,8 +151,16 @@ impl App {
     /// Schrittweite der Pfeiltasten wie im Original (0x43f054): Rasterweite, mit Umschalt 0,1 mm; der
     /// ausgeschaltete Rasterfang (im Original „Kein“) ebenfalls 0,1 mm.
     pub fn pfeil_schritt(&self, shift: bool) -> f32 {
+        self.pfeil_schritt_mit(shift, false)
+    }
+
+    /// Schritt der Pfeiltasten: Umschalt 0,1 mm, Strg 1 mm unabhängig vom Raster (Nutzer 25.11.2026), sonst die
+    /// Rasterweite (ohne Raster 0,1 mm).
+    pub fn pfeil_schritt_mit(&self, shift: bool, strg: bool) -> f32 {
         if shift || self.fang() <= 0.0 {
             0.1
+        } else if strg {
+            1.0
         } else {
             self.fang()
         }

@@ -18,6 +18,7 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Neu
 
+- Strg+Pfeiltaste verschiebt die Markierung um 1 mm unabhängig vom Raster (Umschalt weiter 0,1 mm).
 - Mausrad über den Blattreitern wechselt das Blatt (eine Rastung = ein Blatt; Option unter Programmverhalten).
 - Optionen › Tastenkürzel: Suchfeld nach Befehl oder Tastenkombination.
 - Strg+Umschalt+Tab wechselt zum Reiter links; Optionen › Tastenkürzel „Strg+Tab wechselt … nach Verlauf“ springt

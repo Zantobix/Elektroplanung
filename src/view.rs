@@ -2441,11 +2441,12 @@ impl App {
                 .map(|b| b.id)
                 .collect()
         });
-        let (arrows, shift, copy, cut, paste) = ctx.input(|i| {
+        let (arrows, shift, strg, copy, cut, paste) = ctx.input(|i| {
             let cmd = i.modifiers.command;
             (
                 [i.key_pressed(Key::ArrowLeft), i.key_pressed(Key::ArrowRight), i.key_pressed(Key::ArrowUp), i.key_pressed(Key::ArrowDown)],
                 i.modifiers.shift,
+                cmd,
                 i.events.iter().any(|e| matches!(e, Event::Copy)),
                 i.events.iter().any(|e| matches!(e, Event::Cut)),
                 i.events.iter().any(|e| matches!(e, Event::Paste(_))) || (cmd && i.key_pressed(Key::V)),
@@ -2494,7 +2495,7 @@ impl App {
             ctx.copy_text(t);
         }
         if arrows.iter().any(|b| *b) && !self.selection.is_empty() {
-            let st = self.pfeil_schritt(shift);
+            let st = self.pfeil_schritt_mit(shift, strg);
             let d = if arrows[0] {
                 P::new(-st, 0.0)
             } else if arrows[1] {
