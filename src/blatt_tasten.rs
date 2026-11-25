@@ -3,6 +3,10 @@
 //! FormKeyDown des Originals (nur, solange kein Eingabefeld die Tasten hat):
 //! - Strg+Tab: nächster Reiter, nach dem letzten wieder der erste. Umschalt wird nicht geprüft – Strg+Umschalt+Tab
 //!   blättert also ebenfalls vorwärts (kein „voriges Blatt“).
+//!   Nachbau (Nutzer 25.11.2026, Optionen › Tastenkürzel „Strg+Tab wechselt“): Strg+Umschalt+Tab geht einen Reiter
+//!   nach links; wahlweise folgt Strg+Tab dem Verlauf wie in Browsern/IDEs – zum zuletzt angezeigten Blatt, bei
+//!   gehaltener Strg-Taste mit jedem weiteren Tab weiter zurück (Umschalt wieder vor); erst beim Loslassen von Strg
+//!   zählt das erreichte Blatt als zuletzt angezeigt.
 //! - Leertaste: beim Platzieren eines Symbols (Klick oder Ziehen aus der Bibliothek) dreht sie die Vorschau um 90°
 //!   (Zustand +0xa68: 0 → 1 → 2 → 4 → 0 = Drehung 0/90/180/270°, beim Absetzen übernommen); sonst zurück zum zuletzt
 //!   angezeigten Blatt (+0x8f4 = Reiter, den 0x476768 beim Verlassen merkt) – zweimal drücken wechselt hin und her.
@@ -37,12 +41,19 @@ pub struct Stand {
     pub drehung: u8,
     /// in dieser Sitzung geänderte Blätter (Schriftfeld „Heute“)
     pub geaendert: HashSet<SheetRef>,
+    /// angezeigte Blätter, zuletzt angezeigtes zuerst (Strg+Tab nach Verlauf)
+    pub verlauf: Vec<SheetRef>,
+    /// laufendes Strg+Tab nach Verlauf: Reihenfolge beim ersten Druck und erreichte Stelle
+    pub zyklus: Option<(Vec<SheetRef>, usize)>,
+    /// Strg ist in diesem Bild gedrückt (setzt `shortcuts`; Ende des Strg+Tab-Zyklus)
+    pub strg_unten: bool,
 }
 
 /// Tastendruck, der hier ausgewertet wird.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Taste {
-    StrgTab,
+    /// Strg+Tab, mit Umschalt `zurueck`
+    StrgTab { zurueck: bool },
     Leertaste,
     StrgZiffer(u8),
     /// „/“: Knickrichtung der gezogenen Leitung kippen (wie KiCad)
@@ -58,7 +69,7 @@ pub fn tasten(i: &egui::InputState) -> Vec<Taste> {
         return v;
     }
     if strg && i.key_pressed(Key::Tab) {
-        v.push(Taste::StrgTab);
+        v.push(Taste::StrgTab { zurueck: m.shift });
     }
     if !strg && !m.shift && i.key_pressed(Key::Space) {
         v.push(Taste::Leertaste);
@@ -117,11 +128,23 @@ impl App {
     /// Je Bild: Blattwechsel für die Leertaste merken, Drehung nach dem Platzieren zurücksetzen.
     pub fn blatt_verfolgen(&mut self) {
         let jetzt = self.cur();
+        // Strg losgelassen: Strg+Tab-Zyklus beenden, das erreichte Blatt zählt als zuletzt angezeigt
+        if self.bt.zyklus.is_some() && !self.bt.strg_unten {
+            self.bt.zyklus = None;
+            if let Some(j) = jetzt {
+                self.bt.verlauf.retain(|r| *r != j);
+                self.bt.verlauf.insert(0, j);
+            }
+        }
         if jetzt != self.bt.jetzt {
             if self.bt.jetzt.is_some() {
                 self.bt.vorher = self.bt.jetzt;
             }
             self.bt.jetzt = jetzt;
+            if let (Some(j), None) = (jetzt, &self.bt.zyklus) {
+                self.bt.verlauf.retain(|r| *r != j);
+                self.bt.verlauf.insert(0, j);
+            }
         }
         if self.placing.is_none() && self.ring.is_none() {
             self.bt.drehung = 0;
@@ -136,11 +159,32 @@ impl App {
     /// Tastendruck ausführen (Aufrufer prüft, dass kein Eingabefeld und kein Dialog die Tasten hat).
     pub fn blatt_taste(&mut self, t: Taste) {
         match t {
-            Taste::StrgTab => {
-                if !self.tabs.is_empty() {
-                    self.active = if self.active + 1 < self.tabs.len() { self.active + 1 } else { 0 };
-                    self.selection.clear();
+            Taste::StrgTab { zurueck } => {
+                let n = self.tabs.len();
+                if n == 0 {
+                    return;
                 }
+                if self.opt.strg_tab_verlauf {
+                    let (folge, i) = self.bt.zyklus.take().unwrap_or_else(|| {
+                        // Verlauf der offenen Reiter, aktuelles Blatt vorn; nie angezeigte Reiter hinten in ihrer Lage
+                        let mut f: Vec<SheetRef> = self.cur().into_iter().collect();
+                        for r in self.bt.verlauf.iter().filter(|r| self.tabs.contains(r)).chain(self.tabs.iter()) {
+                            if !f.contains(r) {
+                                f.push(*r);
+                            }
+                        }
+                        (f, 0)
+                    });
+                    let i = if zurueck { (i + folge.len() - 1) % folge.len() } else { (i + 1) % folge.len() };
+                    if let Some(t) = self.tabs.iter().position(|r| *r == folge[i]) {
+                        self.active = t;
+                    }
+                    self.bt.zyklus = Some((folge, i));
+                } else {
+                    // nach Lage: rechts, mit Umschalt links (Original: Umschalt ohne Wirkung)
+                    self.active = if zurueck { (self.active + n - 1) % n } else { (self.active + 1) % n };
+                }
+                self.selection.clear();
             }
             Taste::Knick => {
                 self.knick_umschalten();
@@ -263,12 +307,12 @@ mod tests {
     fn strg_tab_und_leertaste() {
         let mut app = app_mit_blaettern(3);
         app.blatt_verfolgen();
-        app.blatt_taste(Taste::StrgTab);
+        app.blatt_taste(Taste::StrgTab { zurueck: false });
         app.blatt_verfolgen();
         assert_eq!(app.active, 1);
-        app.blatt_taste(Taste::StrgTab);
+        app.blatt_taste(Taste::StrgTab { zurueck: false });
         app.blatt_verfolgen();
-        app.blatt_taste(Taste::StrgTab);
+        app.blatt_taste(Taste::StrgTab { zurueck: false });
         app.blatt_verfolgen();
         assert_eq!(app.active, 0, "nach dem letzten Reiter wieder der erste");
         // Leertaste: zurück zum zuletzt angezeigten Blatt und wieder hin
@@ -278,6 +322,44 @@ mod tests {
         app.blatt_taste(Taste::Leertaste);
         app.blatt_verfolgen();
         assert_eq!(app.active, 0);
+    }
+
+    #[test]
+    fn strg_tab_nach_lage_und_verlauf() {
+        let mut app = app_mit_blaettern(4);
+        let tab = |app: &mut App, zurueck: bool| {
+            app.blatt_taste(Taste::StrgTab { zurueck });
+            app.blatt_verfolgen();
+        };
+        app.blatt_verfolgen();
+        // nach Lage: Umschalt geht nach links (vom ersten zum letzten)
+        tab(&mut app, true);
+        assert_eq!(app.active, 3);
+        tab(&mut app, false);
+        assert_eq!(app.active, 0);
+        // nach Verlauf: angezeigt wurden 0, 2, 1 (zuletzt 1)
+        app.opt.strg_tab_verlauf = true;
+        for a in [2, 1] {
+            app.active = a;
+            app.blatt_verfolgen();
+        }
+        app.bt.strg_unten = true;
+        tab(&mut app, false);
+        assert_eq!(app.active, 2, "zum zuletzt angezeigten");
+        tab(&mut app, false);
+        assert_eq!(app.active, 0, "Strg gehalten: weiter zurück");
+        tab(&mut app, true);
+        assert_eq!(app.active, 2, "Umschalt: wieder vor");
+        app.bt.strg_unten = false;
+        app.blatt_verfolgen();
+        // Strg losgelassen: 2 ist jetzt das aktuelle, 1 das zuletzt angezeigte
+        app.bt.strg_unten = true;
+        tab(&mut app, false);
+        assert_eq!(app.active, 1);
+        app.bt.strg_unten = false;
+        app.blatt_verfolgen();
+        tab(&mut app, false);
+        assert_eq!(app.active, 2, "zwei kurze Strg+Tab wechseln hin und her");
     }
 
     #[test]
@@ -300,7 +382,7 @@ mod tests {
         use crate::leitung_fuehrung::{Fuehrung, Richtung};
         let mut app = app_mit_blaettern(2);
         app.blatt_verfolgen();
-        app.blatt_taste(Taste::StrgTab);
+        app.blatt_taste(Taste::StrgTab { zurueck: false });
         app.blatt_verfolgen();
         let mut f = Fuehrung::neu(P::new(0.0, 0.0));
         f.bewegen(P::new(10.0, 0.0), 3.0);

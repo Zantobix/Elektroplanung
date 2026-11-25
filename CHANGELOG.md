@@ -18,6 +18,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Neu
 
+- Strg+Umschalt+Tab wechselt zum Reiter links; Optionen › Tastenkürzel „Strg+Tab wechselt … nach Verlauf“ springt
+  stattdessen zum zuletzt angezeigten Blatt (bei gehaltener Strg-Taste weiter zurück, wie in Browsern).
 - Projektdatei (.epr, .epj) ins Fenster ziehen öffnet sie; bei ungespeicherten Änderungen kommt vorher die
   Rückfrage zum Speichern. Beim Darüberziehen zeigt ein Hinweis, was beim Loslassen passiert.
 - Markieren: Auswahlbefehle (alle Objekte einer Art, gleiche wie markiert, Auswahl umkehren mit Strg+I, verbundene

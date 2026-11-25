@@ -76,6 +76,19 @@ pub fn reiter(ui: &mut egui::Ui, o: &mut Optionen, filter: &Filter) {
     ui.label(RichText::new("Auswahlbefehle (alle Leitungen, Symbole …, Gleiche wie markiert, Auswahl umkehren) und der Auswahlfilter: Bearbeiten › Auswahl und Kontextmenü der freien Fläche; Tastenkürzel unter „Tastenkürzel“.").small());
 }
 
+/// Zeile im Reiter Tastenkürzel: wohin Strg+Tab bzw. Strg+Umschalt+Tab wechselt.
+pub fn strg_tab_zeile(ui: &mut egui::Ui, o: &mut Optionen) {
+    ui.label("Strg+Tab / Strg+Umschalt+Tab wechselt");
+    let t = |v: bool| if v { "nach Verlauf (zuletzt angezeigt)" } else { "nach Lage (rechts / links)" };
+    egui::ComboBox::from_id_salt("strgtab").width(230.0).selected_text(t(o.strg_tab_verlauf)).show_ui(ui, |ui| {
+        ui.selectable_value(&mut o.strg_tab_verlauf, false, t(false));
+        ui.selectable_value(&mut o.strg_tab_verlauf, true, t(true));
+    });
+    ui.label(RichText::new(if o.strg_tab_verlauf { "Strg halten: weiter zurück" } else { "" }).small());
+    ui.label("");
+    ui.end_row();
+}
+
 /// Zeile im Reiter Tastenkürzel: Taste zum Hinzunehmen/Herausnehmen beim Markieren (Strg oder Umschalt).
 pub fn dazu_zeile(ui: &mut egui::Ui, o: &mut Optionen) {
     ui.label("Markierung erweitern (Taste beim Klicken)");

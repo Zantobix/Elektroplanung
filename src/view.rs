@@ -2384,6 +2384,7 @@ impl App {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
+        self.bt.strg_unten = ctx.input(|i| i.modifiers.ctrl || (i.modifiers.command && !i.modifiers.mac_cmd));
         self.blatt_verfolgen();
         // bei offenem Dialog, Variantenrad oder Kontextmenü wirken keine Zeichnungskürzel (Nachzeichnen 24.11.2026,
         // B23/S3: Strg+A/C/V und Alt+Enter wirkten bei offenem Eigenschaftendialog auf die Zeichnung)

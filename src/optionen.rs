@@ -59,6 +59,8 @@ pub struct Optionen {
     pub mehrfachklick_leitung: bool,
     /// höchste Stufe des Mehrfachklicks (1 Teilstück … 4 ganzes Potential), danach wieder 1 (NR13)
     pub mehrfachklick_stufen: u8,
+    /// Strg+Tab nach Verlauf (zuletzt angezeigtes Blatt) statt nach Lage der Reiter (Nutzer 25.11.2026)
+    pub strg_tab_verlauf: bool,
     /// Vormarkierung: Objekt unter der Maus hervorheben (NR13; aus = nur der Mauszeiger zeigt es)
     pub vormarkierung: bool,
     /// Farbe markierter Objekte (NR13; Vorgabe Rot wie bisher)
@@ -138,6 +140,7 @@ impl Default for Optionen {
             loeschen_mit_leitungen: true,
             mehrfachklick_leitung: true,
             mehrfachklick_stufen: 4,
+            strg_tab_verlauf: false,
             vormarkierung: true,
             markier_farbe: [220, 0, 0],
             desktop_eintrag: true,
@@ -541,6 +544,7 @@ impl App {
                             egui::Grid::new("tasten").striped(true).num_columns(4).show(ui, |ui| {
                                 // Taste zum Erweitern der Markierung: nur eine Umschalttaste, daher Auswahl statt Aufnahme
                                 crate::optionen_markieren::dazu_zeile(ui, o);
+                                crate::optionen_markieren::strg_tab_zeile(ui, o);
                                 for b in crate::kuerzel::BEFEHLE {
                                     ui.label(b.name);
                                     let cur = crate::kuerzel::belegung(&o.tasten, b.id);
