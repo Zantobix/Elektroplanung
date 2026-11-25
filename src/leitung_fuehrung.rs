@@ -218,11 +218,45 @@ impl Fuehrung {
         self.pts.push(q);
         true
     }
+
+    /// Klickbetrieb, Ende auf `ziel`: liegt die letzte gesetzte Ecke (auf das Raster gefangen) weniger als `raster`
+    /// quer neben dem Ziel, rückt sie samt ihrem waagerechten bzw. senkrechten Zulauf auf dessen Flucht. Sonst
+    /// entstünde vor einem Anschluss abseits des Rasters ein Stich von Bruchteilen eines Millimeters (Nachzeichnen
+    /// 25.11.2026: Ecke 210,0, Anschluss 210,7 → 0,7-mm-Stück).
+    pub fn ecke_auf_ziel(&mut self, ziel: P, raster: f32) {
+        let n = self.pts.len();
+        if n < 2 {
+            return;
+        }
+        let (v, l) = (self.pts[n - 2], self.pts[n - 1]);
+        let dx = ziel.x - l.x;
+        let dy = ziel.y - l.y;
+        // Zulauf waagerecht (gleiche Höhe wie die vorige Ecke): x der letzten Ecke anpassen, dann senkrecht zum Ziel
+        if (v.y - l.y).abs() < 0.01 && dx.abs() > 0.01 && dx.abs() < raster {
+            self.pts[n - 1].x = ziel.x;
+        } else if (v.x - l.x).abs() < 0.01 && dy.abs() > 0.01 && dy.abs() < raster {
+            self.pts[n - 1].y = ziel.y;
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn letzte_ecke_auf_den_anschluss() {
+        let mut f = Fuehrung::neu(p(150.7, 165.0));
+        f.klickbetrieb = true;
+        f.pts.extend([p(150.7, 157.5), p(210.0, 157.5)]);
+        f.ecke_auf_ziel(p(210.7, 165.0), 2.5);
+        assert_eq!(f.letzter(), p(210.7, 157.5));
+        // weiter als ein Raster daneben: bleibt
+        let mut g = Fuehrung::neu(p(0.0, 0.0));
+        g.pts.push(p(0.0, 10.0));
+        g.ecke_auf_ziel(p(5.0, 20.0), 2.5);
+        assert_eq!(g.letzter(), p(0.0, 10.0));
+    }
 
     fn p(x: f32, y: f32) -> P {
         P::new(x, y)

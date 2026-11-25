@@ -56,6 +56,10 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Leitung im Klickbetrieb: Eckpunkte ließen sich nicht setzen, wenn Drücken und Loslassen im selben Bild ankamen
+  (schneller Klick) oder ein Eckpunkt nahe einer anderen Leitung lag – der Klick verwarf die Leitung bzw. markierte
+  die Nachbarleitung. Die letzte Ecke rückt auf die Flucht eines Anschlusses abseits des Rasters statt einen
+  Bruchteil-Millimeter-Stich davor zu lassen.
 - Sammelschienen waren zu kurz gezeichnet: im .epr steht nicht das Ende, sondern die Länge der Schiene (im Original
   gegengeprüft). Alle Schienen enden jetzt wie im Original (z. B. bei 284 statt 271 mm); Leitungen, die hinter dem
   falschen Ende auf die Schiene trafen, gelten als angeschlossen. Eine kurze Schiene weit rechts wurde beim Laden

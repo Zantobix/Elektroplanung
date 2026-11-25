@@ -1498,6 +1498,7 @@ impl App {
                     let ziel = ziel.or_else(|| self.sheet().and_then(|s| crate::leitung_route::ende_auf_leitung_fang(s, f.letzter(), m, q, min, halb)));
                     match ziel {
                         Some(pin) if !(f.pts.len() == 1 && pin.dist(f.start()) < 0.01) => {
+                            f.ecke_auf_ziel(pin, self.raster());
                             let pts = self.leitungsweg(&f, pin);
                             self.drag = Drag::None;
                             if pts.len() >= 2 {
@@ -1542,7 +1543,7 @@ impl App {
 
         // Mehrfachklick auf eine Leitung in Stufen (Option, mehrfachklick.rs, NR12): 1× Teilstück, 2× bis Knoten,
         // 3× Netz ohne Sammelschiene, 4× ganzes Potential, 5× wieder Teilstück; eigener Zähler (egui kennt nur 3)
-        if inside && self.tool == Tool::Select && self.opt.mehrfachklick_leitung && !dazu && ui.input(|i| i.pointer.button_clicked(PointerButton::Primary)) {
+        if inside && self.tool == Tool::Select && self.opt.mehrfachklick_leitung && !dazu && !matches!(self.drag, Drag::Wire { .. }) && ui.input(|i| i.pointer.button_clicked(PointerButton::Primary)) {
             let mm = xf.m(h);
             if let Some(id) = self.hit_top(mm, tol).filter(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == *id && matches!(o.kind, Kind::Wire { .. })))) {
                 let t = ui.input(|i| i.time);
@@ -1711,7 +1712,14 @@ impl App {
                     if let Some(pin) = self.pin_near(m, tol, &[]).filter(|p| !ctrl && klemme_bei(*p).is_none() && !kurz_getroffen(*p)) {
                         let on_selected = self.selected_objs().iter().any(|o| canvas::hit(o, m, tol, &self.lib));
                         if !on_selected {
-                            self.drag = Drag::Wire { f: crate::leitung_fuehrung::Fuehrung::neu(pin) };
+                            let mut f = crate::leitung_fuehrung::Fuehrung::neu(pin);
+                            // Drücken und Loslassen im selben Bild (schneller Klick, xdotool): das Loslassen käme
+                            // sonst nicht mehr an – gleich in den Klickbetrieb wie nach einem Klick ohne Ziehen
+                            if released_l {
+                                f.klickbetrieb = true;
+                                self.info = "Leitung: Eckpunkte anklicken, auf einem Anschluss beenden (Rechtsklick bricht ab)".into();
+                            }
+                            self.drag = Drag::Wire { f };
                             return;
                         }
                     }
@@ -1933,6 +1941,12 @@ impl App {
                             self.edit_props(id);
                         }
                     }
+                }
+                // Klickbetrieb läuft schon: Loslassen nach einem Eckpunkt-Klick ändert nichts (vorher beendete es die
+                // Leitung wie ein Ziehen – Eckpunkte im Klickbetrieb waren unmöglich, Nachzeichnen 25.11.2026 #97)
+                Drag::Wire { f } if f.klickbetrieb => {
+                    self.drag = Drag::Wire { f };
+                    bleibt = true;
                 }
                 Drag::Wire { mut f } => {
                     let end = self.leitungsende(&f, m, xf.z);
