@@ -56,6 +56,8 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 - Endet eine gezeichnete Leitung frei knapp (bis 3 mm) neben einer anderen, nennt die Statuszeile den Abstand
   („Ende frei – Leitung 2,5 mm entfernt“).
 - Blatteigenschaften: Hinweis „-1 = wie Anlage“ am Feld Strompfade.
+- Bibliothek: Zusatzoptionen einiger Symbole hatten Zeichensalat als Namen („°o“, „¼ó“ bei Wechsler, Verbindung,
+  NOT-AUS) – Zufallstreffer beim Lesen von Symbole.tfi werden verworfen.
 - Hinzufügen › Blatt: hinter dem Dialog wurde das neue Blatt im Querformat gezeigt, während der Dialog das
   Hochformat des vorigen Blattes vorschlug. Das Blatt hat jetzt gleich die vorgeschlagene Ausrichtung.
 - Dialoge Sammelschiene, Klemmleiste und Texteigenschaft/Symboltitel/Symbolwert: der Fokus steht beim Öffnen im

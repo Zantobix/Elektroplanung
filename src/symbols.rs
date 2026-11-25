@@ -874,13 +874,25 @@ pub fn parse_lib_extras(raw: &[u8]) -> (Vec<Vec<(u32, String)>>, Vec<String>) {
             if opts.len() < b {
                 opts.resize(b, String::new());
             }
-            opts[b - 1] = cstr(name.unwrap());
+            let text = cstr(name.unwrap());
+            // Zufallstreffer der Suche (Binärwerte, die wie kurze Texte aussehen: „°o“, „¼ó“, „|“ bei Wechsler,
+            // Verbindung, NOT-AUS) verwerfen: echte Optionsnamen bestehen aus ASCII und Umlauten und enthalten einen
+            // Buchstaben oder eine Ziffer
+            if optionsname(&text) {
+                opts[b - 1] = text;
+            }
             q += 12 + len as usize;
         } else {
             q += 1;
         }
     }
     (alt, opts)
+}
+
+/// Sieht `t` wie ein Optionsname aus (nur ASCII und deutsche Umlaute, mindestens ein Buchstabe oder eine Ziffer)?
+pub fn optionsname(t: &str) -> bool {
+    let erlaubt = |c: char| c.is_ascii_graphic() || c == ' ' || "ÄÖÜäöüß".contains(c);
+    t.chars().all(erlaubt) && t.chars().any(|c| c.is_ascii_alphanumeric() || "ÄÖÜäöüß".contains(c))
 }
 
 // ---------------------------------------------------------------- Bearbeiten (Symboleditor, MCP)
@@ -1102,5 +1114,20 @@ mod bmk_tests {
         assert_eq!(display_bmk("-E1+%A+%P", 0, &ctx), "-E1");
         let ctx = BmkCtx { sheet: 1, ort: "W2".into(), anlage: String::new() };
         assert_eq!(display_bmk("-E1+%P", 0, &ctx), "-E1+W2");
+    }
+}
+
+#[cfg(test)]
+mod optionsname_tests {
+    use super::optionsname;
+
+    #[test]
+    fn optionsnamen_ohne_zufallstreffer() {
+        for ok in ["Rastend", "PE", "S/Ö", "Invert Out", "P-Kanal", "Überstrom für Thermo", "Kappe 1"] {
+            assert!(optionsname(ok), "{ok}");
+        }
+        for weg in ["°o", "¼o", "¨ì", "¼ó", "Ì4", "8¨", "|", "@Å", "\u{8c}o"] {
+            assert!(!optionsname(weg), "{weg}");
+        }
     }
 }
