@@ -29,6 +29,10 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Geändert
 
+- Mehrfachklick auf Leitungen in Stufen: 1× markiert nur das Teilstück bis zur nächsten Ecke (Entf löscht nur dieses
+  Stück), 2× die Leitung bis zum nächsten Knoten, 3× das Netz ohne über Sammelschienen weiterzugehen, 4× das ganze
+  Potential samt Schienen, der fünfte Klick beginnt wieder beim Teilstück; die Statuszeile nennt die Stufe. Vorher
+  markierte der Dreifachklick schon alles, was über eine gleichnamige Schiene verbunden ist.
 - Löschen wie im Original: Entf auf ein Symbol löscht die Leitungen mit, die an seinen Anschlüssen beginnen oder
   enden (vorher blieben sie als offene Stummel stehen). Wird dabei – oder einzeln – die Leitung gelöscht, die eine
   Sammelschiene an ihrem Anfang speist, setzt das Programm die Schiene wie das Original auf die volle Blattbreite

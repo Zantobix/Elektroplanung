@@ -264,10 +264,11 @@ Eine Kurzanleitung mit allen Tastenkürzeln steht in [docs/KURZANLEITUNG.md](doc
     Pfeiltasten und Einfügen verbinden nie ungewollt fremde Netze –
     was nur mit Kurzschluss, Trennung oder zwei Potentialen übereinander ginge, wird nicht ausgeführt (Meldung in der
     Statuszeile); ein freies Leitungsende darf gezielt verbinden (`src/netz_waechter.rs`, abschaltbar).
-  - Mehrfachklick auf Leitungen (nach PADS, Nutzer 24.11.2026): Klick markiert die Leitung, Doppelklick die Kette bis
-    zum nächsten Knoten (Abzweig, Anschluss, Klemmstelle, Schiene), Dreifachklick das ganze Netz. Eigenschaften einer
-    Leitung dann über Alt+Enter oder das Kontextmenü; bei Symbolen und allem anderen öffnet der Doppelklick weiter die
-    Eigenschaften (Option, `src/netz.rs` `kette`).
+  - Mehrfachklick auf Leitungen in Stufen (nach PADS, Nutzer 24./25.11.2026): 1× nur das Teilstück bis zur nächsten
+    Ecke (Entf löscht nur dieses Stück), 2× die Kette bis zum nächsten Knoten (Abzweig, Anschluss, Klemmstelle,
+    Schiene), 3× das Netz ohne über Sammelschienen weiterzugehen, 4× das ganze Potential samt Schienen, 5× wieder das
+    Teilstück; die Statuszeile nennt die Stufe. Eigenschaften einer Leitung dann über Alt+Enter oder das Kontextmenü;
+    bei Symbolen und allem anderen öffnet der Doppelklick weiter die Eigenschaften (Option, `src/mehrfachklick.rs`).
   - Brückenbögen an Kreuzungen: Kreuzen sich zwei Leitungen ohne Verbindung, springt die waagerechtere in einem
     Halbkreis (Ø 2 mm) über die andere – auf dem Bildschirm, im Druck, PDF und Bildexport; die Datei bleibt
     unverändert (`src/bruecken.rs`, abschaltbar unter Optionen › Programmverhalten).

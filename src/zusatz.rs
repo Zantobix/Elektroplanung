@@ -18,6 +18,9 @@ pub struct Zusatz {
     pub bauteilliste: Option<crate::bauteilliste::BauteilListeDlg>,
     /// Rückgängig-Stand nach dem Anlegen eines Eintrags, dessen Dialog offen ist (neu_anlegen.rs)
     pub neu: Option<usize>,
+    /// Mehrfachklick auf Leitungen (mehrfachklick.rs): Klickzähler und markiertes Teilstück (Leitung, Abschnitt)
+    pub klicks: crate::mehrfachklick::Zaehler,
+    pub teil: Option<(u64, usize)>,
 }
 
 impl App {

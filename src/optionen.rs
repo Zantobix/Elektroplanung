@@ -357,7 +357,7 @@ impl App {
                                     mark(ui, &mut o.einbinden_beim_verschieben, "Verschobenes Symbol in Leitung einbinden");
                                     mark(ui, &mut o.netz_waechter, "Keine Kurzschlüsse beim Bearbeiten (Netze schützen)");
                                     mark(ui, &mut o.loeschen_mit_leitungen, "Symbol löschen: angeschlossene Leitungen mitlöschen");
-                                    mark(ui, &mut o.mehrfachklick_leitung, "Leitung: Doppelklick bis Knoten, Dreifachklick ganzes Netz");
+                                    mark(ui, &mut o.mehrfachklick_leitung, "Leitung: Mehrfachklick 1× Teilstück, 2× bis Knoten, 3× Netz, 4× mit Schiene");
                                     if cfg!(target_os = "linux") {
                                         mark(ui, &mut o.desktop_eintrag, "Im Startmenü eintragen (mit Programmsymbol)");
                                     }

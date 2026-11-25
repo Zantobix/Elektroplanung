@@ -76,6 +76,7 @@ pub mod mitziehen;
 pub mod netz_folgen;
 pub mod netz_waechter;
 pub mod loeschen;
+pub mod mehrfachklick;
 pub mod desktop_eintrag;
 pub mod update_pruefung;
 pub mod wiederherstellung;

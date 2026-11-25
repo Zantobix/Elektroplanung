@@ -453,6 +453,8 @@ pub const MELDUNG_HALTEN: f64 = 4.0;
 /// Meldungen, die gehalten werden (Abweisungen des Netz-Wächters und ähnliche).
 pub fn wird_gehalten(t: &str) -> bool {
     t.starts_with("Nicht ausgeführt") || t.starts_with("Nicht gedreht") || t.starts_with("Nicht eingefügt")
+        // Stufe des Mehrfachklicks auf Leitungen (mehrfachklick.rs, NR12)
+        || ["Teilstück", "Bis zum Knoten:", "Netz ohne Sammelschiene:", "Ganzes Potential:"].iter().any(|p| t.starts_with(p))
 }
 
 impl crate::app::App {

@@ -35,8 +35,10 @@ anders ist als im Original und was noch fehlt, steht im [README](../README.md) u
 
 - Klick markiert ein Objekt, **Strg+Klick** nimmt weitere dazu oder heraus, ein Rahmen markiert alles darin
   (Optionen › Programmverhalten „Markierrichtung wie CAD“: von rechts nach links alles Berührte).
-- Auf Leitungen (Option, Standard an): **Doppelklick** markiert die Leitung bis zum nächsten Knoten,
-  **Dreifachklick** das ganze Netz ohne die Sammelschienen.
+- Auf Leitungen (Option, Standard an) zählt jeder weitere schnelle Klick eine Stufe weiter: **1×** nur das
+  Teilstück bis zur nächsten Ecke (Entf löscht nur dieses Stück), **2×** bis zum nächsten Knoten, **3×** das Netz bis
+  zu den Sammelschienen, **4×** das ganze Potential mit den Schienen, **5×** wieder das Teilstück. Die Statuszeile
+  zeigt die Stufe.
 - Verschieben mit der Maus oder den Pfeiltasten: angeschlossene Leitungen folgen. Der **Netz-Wächter** lässt keine
   Bearbeitung zu, die fremde Netze verbinden, trennen oder übereinanderlegen würde – die Statuszeile nennt den Grund.
 - **Entf** löscht die Markierung; ein Symbol nimmt wie im Original die Leitungen mit, die an seinen Anschlüssen

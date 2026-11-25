@@ -57,6 +57,10 @@ impl crate::app::App {
         if self.selection.is_empty() {
             return;
         }
+        // nur ein Teilstück markiert (Mehrfachklick Stufe 1): nur dieses Stück löschen
+        if self.teilstueck_loeschen() {
+            return;
+        }
         self.checkpoint();
         let mut sel = self.selection.clone();
         let wie_original = self.opt.loeschen_mit_leitungen;

@@ -1136,8 +1136,18 @@ impl App {
         }
         // Anschlusskreise wie im Original (nur Bildschirm), unter den Objekten
         crate::anschlusskreise::zeichnen(&clip, xf, sheet, &self.lib);
+        let teil = self.teil_auswahl();
         for o in &sheet.objects {
             let sel = self.selection.contains(&o.id);
+            // markiertes Teilstück (Mehrfachklick Stufe 1): Leitung normal, nur das Stück in der Markierfarbe
+            if let (Some((tid, i)), Kind::Wire { pts, leitung, .. }) = (teil, &o.kind) {
+                if tid == o.id {
+                    canvas::draw_object(&dc, o, None);
+                    let w = self.project.leitungen.get(*leitung).map(|l| l.width_mm).unwrap_or(0.25);
+                    clip.line_segment([xf.s(pts[i]), xf.s(pts[i + 1])], Stroke::new((w * xf.z).max(1.0) + 1.5, SEL));
+                    continue;
+                }
+            }
             canvas::draw_object(&dc, o, if sel { Some(SEL) } else { None });
         }
         for j in canvas::junctions(sheet) {
@@ -1496,10 +1506,15 @@ impl App {
             return;
         }
 
-        if inside && self.tool == Tool::Select && self.opt.mehrfachklick_leitung && !ctrl && ui.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)) {
-            if let Some(id) = self.selection.first().copied().filter(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == *id && matches!(o.kind, Kind::Wire { .. })))) {
+        // Mehrfachklick auf eine Leitung in Stufen (Option, mehrfachklick.rs, NR12): 1× Teilstück, 2× bis Knoten,
+        // 3× Netz ohne Sammelschiene, 4× ganzes Potential, 5× wieder Teilstück; eigener Zähler (egui kennt nur 3)
+        if inside && self.tool == Tool::Select && self.opt.mehrfachklick_leitung && !ctrl && ui.input(|i| i.pointer.button_clicked(PointerButton::Primary)) {
+            let mm = xf.m(h);
+            if let Some(id) = self.hit_top(mm, tol).filter(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == *id && matches!(o.kind, Kind::Wire { .. })))) {
+                let t = ui.input(|i| i.time);
+                let stufe = self.zusatz.klicks.zaehlen(id, [h.x, h.y], t);
+                self.mehrfachklick(id, mm, tol, stufe);
                 self.drag = Drag::None;
-                self.netz_markieren(id);
                 return;
             }
         }
@@ -1510,12 +1525,10 @@ impl App {
             let top = self.doppelklick_ziel(m, tol);
             // Mehrfachklick auf eine Leitung (Option, nach PADS): Doppelklick = bis zum nächsten Knoten,
             // Dreifachklick = ganzes Netz; Eigenschaften über Alt+Enter bzw. Kontextmenü
-            if self.opt.mehrfachklick_leitung && !ctrl {
-                if let Some(id) = self.hit_top(m, tol).filter(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == *id && matches!(o.kind, Kind::Wire { .. })))) {
-                    self.drag = Drag::None;
-                    self.kette_markieren(id);
-                    return;
-                }
+            if self.opt.mehrfachklick_leitung && !ctrl && self.hit_top(m, tol).is_some_and(|id| self.sheet().is_some_and(|s| s.objects.iter().any(|o| o.id == id && matches!(o.kind, Kind::Wire { .. })))) {
+                // schon oben über den Klickzähler erledigt (mehrfachklick.rs)
+                self.drag = Drag::None;
+                return;
             }
             if self.verweis_doppelklick(top, m, tol) {
                 self.drag = Drag::None;
