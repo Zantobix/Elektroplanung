@@ -79,7 +79,7 @@ pub fn tool_list() -> Vec<Value> {
         tool("set_symbol", "Eigenschaften eines gesetzten Symbols ändern (nur angegebene): bmk (Titel), value (Wert), title_x/title_y, value_x/value_y, title_align/value_align (0 links, 1 mittig, 2 rechts), rot (0–3), mirror_h, mirror_v, scale, option (Bild, Index aus get_symbol.variants), flags (Zusatzoptionen als Bitmaske) bzw. flag_names (Liste der Namen), alt (Alternativtext-Satz, 0 = Standard), funktion, rack (Rackposition), counter (Index für %C), querverweise, sicherung (Freigaben), texts [[Nr, Text]], params [[Nr, Wert]], owner (Eigentümer: Objekt-Id, 0 = keiner).",
             mit(blatt(), json!({
                 "id": {"type": "integer"}, "bmk": {"type": "string"}, "value": {"type": "string"},
-                "title_x": {"type": "number"}, "title_y": {"type": "number"}, "value_x": {"type": "number"}, "value_y": {"type": "number"},
+                "title_x": {"type": "number"}, "title_y": {"type": "number"}, "title_vertical": {"type": "boolean"}, "value_x": {"type": "number"}, "value_y": {"type": "number"},
                 "title_align": {"type": "integer"}, "value_align": {"type": "integer"}, "rot": {"type": "integer"},
                 "mirror_h": {"type": "boolean"}, "mirror_v": {"type": "boolean"}, "scale": {"type": "number"},
                 "option": {"type": "integer"}, "flags": {"type": "integer"}, "flag_names": {"type": "array", "items": {"type": "string"}},
@@ -466,9 +466,10 @@ impl Server {
         if let Some(b) = flag_bits {
             *flags = b;
         }
-        if num("title_x").is_some() || num("title_y").is_some() {
+        // Titel: Lage gegenüber dem Einfügepunkt und senkrechte Schrift (get_symbol „title“ {x, y, vertical})
+        if num("title_x").is_some() || num("title_y").is_some() || ja(a, "title_vertical").is_some() {
             let (alt, v) = title.unwrap_or((P::default(), false));
-            *title = Some((P::new(num("title_x").unwrap_or(alt.x), num("title_y").unwrap_or(alt.y)), v));
+            *title = Some((P::new(num("title_x").unwrap_or(alt.x), num("title_y").unwrap_or(alt.y)), ja(a, "title_vertical").unwrap_or(v)));
         }
         if num("value_x").is_some() || num("value_y").is_some() {
             let alt = ext.value_off.unwrap_or_default();
