@@ -39,6 +39,8 @@ pub struct NetzOpt<'a> {
     pub rund: &'a dyn Fn(P) -> P,
     /// gemerkte Leitungsformen je Quadrant (leitung_gedaechtnis.rs)
     pub formen: Option<&'a crate::leitung_gedaechtnis::Gedaechtnis>,
+    /// beim Halten zuerst ein Stich dieser Länge aus dem festen Anschluss (0 = ohne; Ausweichform, NR5)
+    pub halten_stich: f32,
 }
 
 /// Abbildung alter auf neue Lagen der geänderten Objekte.
@@ -588,7 +590,7 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
     }
     // primär gehaltene Leitungen an ihren festen Anschlüssen (vor dem Abbild, damit Abzweige auf ihnen folgen)
     if opt.halten {
-        halten(&vs, s, lib, primaer);
+        halten(&vs, s, lib, primaer, opt.halten_stich);
     }
     let mut basis = Abbild::default();
     for id in primaer {
@@ -673,8 +675,9 @@ pub fn nachfuehren(vorher: &[Obj], s: &mut Sheet, lib: &[SymDef], primaer: &[u64
 }
 
 /// Primär geänderte Leitungen, deren Enden vorher an etwas Festem hingen, wieder dort anschließen.
-fn halten(vs: &Sheet, s: &mut Sheet, lib: &[SymDef], primaer: &[u64]) {
-    use crate::schiene_halten::{abgreifen, anbinden, binden, schienen};
+fn halten(vs: &Sheet, s: &mut Sheet, lib: &[SymDef], primaer: &[u64], stich: f32) {
+    use crate::schiene_halten::{abgreifen, anbinden_stich, binden, schienen};
+    let anbinden = |v: &mut Vec<P>, q: P, alt: Option<P>| anbinden_stich(v, q, alt, stich);
     let alle = schienen(s, &[]);
     for o in s.objects.iter_mut().filter(|o| primaer.contains(&o.id)) {
         let Kind::Wire { pts, .. } = &mut o.kind else { continue };
@@ -820,7 +823,7 @@ impl crate::app::App {
         let (fang, no_snap, ursprung) = (self.fang(), self.no_snap, self.raster_ursprung());
         let rund = move |p: P| if fang > 0.0 && !no_snap { crate::raster::fang(p, fang, ursprung) } else { p };
         let formen = std::mem::take(&mut self.formen);
-        let opt = NetzOpt { stich, halten, fix_active, rund: &rund, formen: Some(&formen) };
+        let opt = NetzOpt { stich, halten, fix_active, rund: &rund, formen: Some(&formen), halten_stich: self.halten_stich };
         self.with_sheet(|s, _| {
             nachfuehren(&vorher, s, &lib, primaer, &opt);
         });
@@ -838,18 +841,35 @@ impl crate::app::App {
 
     /// Objekte `primaer` gegenüber dem gemerkten Stand um `d` verschoben setzen und das Netz nachführen.
     pub fn netz_verschieben(&mut self, primaer: &[u64], d: P) {
-        let vorher = std::mem::take(&mut self.netz_vorher);
-        self.with_sheet(|s, _| {
-            for o in s.objects.iter_mut().filter(|o| primaer.contains(&o.id)) {
-                if let Some(o0) = vorher.iter().find(|x| x.id == o.id) {
-                    let mut k = o0.kind.clone();
-                    k.translate(d);
-                    o.kind = k;
-                }
+        // Ausweichformen für den Netz-Wächter (NR5): würde das Querstück an einem festen Anschluss fremde Netze
+        // verbinden, erst einen Stich (½ bzw. 1 Raster) aus dem Anschluss, dann quer – wie beim Teilstück
+        let st = self.stich();
+        let stiche: Vec<f32> = if self.opt.netz_waechter { vec![0.0, st, 2.0 * st] } else { vec![0.0] };
+        let ausgang = self.sheet().map(|s| s.objects.clone());
+        for (k, l) in stiche.iter().enumerate() {
+            if let (Some(a), true) = (&ausgang, k > 0) {
+                let a = a.clone();
+                self.with_sheet(|s, _| s.objects = a);
             }
-        });
-        self.netz_vorher = vorher;
-        self.netz_nachfuehren(primaer, true);
+            let vorher = std::mem::take(&mut self.netz_vorher);
+            self.with_sheet(|s, _| {
+                for o in s.objects.iter_mut().filter(|o| primaer.contains(&o.id)) {
+                    if let Some(o0) = vorher.iter().find(|x| x.id == o.id) {
+                        let mut kind = o0.kind.clone();
+                        kind.translate(d);
+                        o.kind = kind;
+                    }
+                }
+            });
+            self.netz_vorher = vorher;
+            self.halten_stich = *l;
+            self.netz_nachfuehren(primaer, true);
+            self.halten_stich = 0.0;
+            let ok = self.sheet().is_none_or(|s| crate::netz_waechter::pruefen(&self.netz_vorher, s, &self.lib, primaer).is_none());
+            if ok || k + 1 == stiche.len() {
+                break;
+            }
+        }
         self.netz_waechter(primaer);
     }
 }

@@ -104,6 +104,25 @@ pub fn anbinden(v: &mut Vec<P>, q: P, alt: Option<P>) {
     }
 }
 
+/// Wie `anbinden`, aber zuerst ein Stich der Länge `l` aus dem festen Punkt `q` in der alten Richtung `alt`, dann
+/// das Querstück (Ausweichform für den Netz-Wächter: das Querstück direkt am Anschluss liefe durch einen
+/// Nachbaranschluss, NR5). Ohne Richtung wie `anbinden`.
+pub fn anbinden_stich(v: &mut Vec<P>, q: P, alt: Option<P>, l: f32) {
+    let Some(r) = alt.filter(|_| l > EPS) else { return anbinden(v, q, alt) };
+    let s = q.add(P::new(r.x * l, r.y * l));
+    let p0 = v[0];
+    if p0.dist(q) < EPS {
+        return;
+    }
+    // vom Stich aus achsengerade zum verschobenen Ende: erst quer zur alten Richtung, dann entlang
+    let quer = if r.x.abs() > 0.5 { P::new(s.x, p0.y) } else { P::new(p0.x, s.y) };
+    for p in [quer, s, q] {
+        if v[0].dist(p) > EPS {
+            v.insert(0, p);
+        }
+    }
+}
+
 /// Achsenrichtung des ersten Stücks (Einheitsvektor) oder `None` (schräg bzw. Länge 0).
 pub fn achse(a: P, b: P) -> Option<P> {
     let d = b.sub(a);
@@ -232,6 +251,14 @@ pub fn gerade_zum_gleis(id: u64, pts: &[P], ends: [bool; 2], d: P, dirs: [Option
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn anbinden_mit_stich() {
+        // Anschluss (0|0), Endstück lief nach rechts; Leitung um 10 nach unten verschoben: erst 2,5 nach rechts, dann quer
+        let mut v = vec![P::new(0.0, 10.0), P::new(20.0, 10.0)];
+        super::anbinden_stich(&mut v, P::new(0.0, 0.0), Some(P::new(1.0, 0.0)), 2.5);
+        assert_eq!(v, vec![P::new(0.0, 0.0), P::new(2.5, 0.0), P::new(2.5, 10.0), P::new(0.0, 10.0), P::new(20.0, 10.0)]);
+    }
+
     use super::*;
 
     fn p(x: f32, y: f32) -> P {

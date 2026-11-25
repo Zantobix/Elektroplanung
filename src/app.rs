@@ -296,6 +296,8 @@ pub struct App {
     pub schiene_drag: Option<(usize, usize)>,
     /// weitere Dialoge (zusatz.rs: Parameter, Projektgrafik)
     pub zusatz: crate::zusatz::Zusatz,
+    /// Stich beim Halten der Enden einer verschobenen Leitung (netz_folgen.rs, nur während netz_verschieben)
+    pub halten_stich: f32,
 }
 
 impl App {
@@ -417,6 +419,7 @@ impl App {
             meldung: None,
             multi_props: None,
             zusatz: Default::default(),
+            halten_stich: 0.0,
             lib_drag: false,
             schiene_drag: None,
             lib_dir: None,

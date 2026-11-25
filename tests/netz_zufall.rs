@@ -263,7 +263,8 @@ fn w2_zufaellige_bearbeitungen_halten_verbindungen() {
     assert_eq!(l.netz, 0, "Bearbeitungen mit geänderten Netzen");
     // Kennzahl: vom Netz-Wächter abgewiesene Schritte (meist Zufallsziel auf einer fremden Leitung) – darf nur sinken;
     // ohne die Abweisungen „Symbol auf Symbol“ (S02, seit 24.11.2026 abends, gewollt)
-    assert!(l.abgewiesen <= 123, "{} Schritte abgewiesen", l.abgewiesen);
+    // 25.11.2026: 123 → 117 (ganze Leitung: Ausweichform mit Stich am festen Anschluss, NR5)
+    assert!(l.abgewiesen <= 117, "{} Schritte abgewiesen", l.abgewiesen);
     assert_eq!(l.fehler, 0);
     // Kennzahl (Runde 13): übrig sind Fälle, in denen die Zufallsverschiebung ein Objekt auf fremde Leitungen bzw.
     // Anschlüsse setzt und es keinen sauberen Weg mehr gibt
