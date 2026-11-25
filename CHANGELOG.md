@@ -72,6 +72,9 @@ erhält der Abschnitt deren Nummer. Gliederung: `### Neu`, `### Geändert`, `###
 
 ### Behoben
 
+- Linux/Wayland: Projektdateien ließen sich nicht ins Fenster ziehen (winit meldet unter Wayland keine abgelegten
+  Dateien). Das Programm startet unter Wayland jetzt über XWayland, wenn verfügbar; Optionen › Programmverhalten
+  schaltet auf echtes Wayland zurück (dann ohne Drag & Drop, wirkt nach Neustart).
 - Verschieben: kam ein Symbol an eine frühere Lage zurück, setzte das Rückkehr-Gedächtnis alle Leitungen des Blattes
   zurück – auch inzwischen von Hand geänderte Leitungen anderer Netze, die dann beim Ziehen hin- und hersprangen.
   Jetzt nur die Leitungen in den Netzen der bewegten Objekte.

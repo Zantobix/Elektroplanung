@@ -78,6 +78,7 @@ pub mod netz_waechter;
 pub mod loeschen;
 pub mod auswahl;
 pub mod umweg;
+pub mod wayland_wahl;
 pub mod datei_ablegen;
 pub mod mehrfachklick;
 pub mod desktop_eintrag;

@@ -387,6 +387,11 @@ impl App {
                                     mark(ui, &mut o.reiter_rad, "Mausrad über den Blattreitern wechselt das Blatt");
                                     if cfg!(target_os = "linux") {
                                         mark(ui, &mut o.desktop_eintrag, "Im Startmenü eintragen (mit Programmsymbol)");
+                                        // vor dem Fenster gelesen, daher eigene Merkdatei statt der Optionen (wayland_wahl.rs)
+                                        let mut xw = !crate::wayland_wahl::nativ();
+                                        if ui.checkbox(&mut xw, RichText::new("Unter Wayland über XWayland starten (Drag & Drop von Dateien)").font(bold(13.0))).on_hover_text("Wirkt nach dem nächsten Start. Aus = echtes Wayland, dann lassen sich Projektdateien nicht ins Fenster ziehen.").changed() {
+                                            crate::wayland_wahl::setzen(!xw);
+                                        }
                                     }
                                     mark(ui, &mut o.update_pruefen, "Beim Start nach neuer Version suchen");
                                     ui.horizontal(|ui| {

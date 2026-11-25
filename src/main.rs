@@ -12,6 +12,8 @@ fn main() -> eframe::Result {
         elektroplanung::mcp::run_stdio();
         return Ok(());
     }
+    // Wayland: über XWayland starten, damit Dateien per Drag & Drop ankommen (wayland_wahl.rs)
+    elektroplanung::wayland_wahl::vor_dem_start();
     let shot = args.iter().position(|a| a == "--screenshot").and_then(|i| args.get(i + 1)).map(PathBuf::from);
 
     let mut vp = egui::ViewportBuilder::default()
