@@ -167,12 +167,21 @@ nicht. Gemessen werden stattdessen:
   nachgebauten Beschriftungen (Info-Box des Autors, An-/Abmelden am Datenbankserver, S7-Import); das Werkzeug
   listet sie getrennt auf. Nach der früheren Zählung (alle 604) sind es 589 = 97,5 %.
 
+## Bedienung
+
+Eine Kurzanleitung mit allen Tastenkürzeln steht in [docs/KURZANLEITUNG.md](docs/KURZANLEITUNG.md).
+
 ## Bekannte Grenzen
 
 - Neue Klemmstellen und Klemmleisten werden geschrieben (OBJ, KLM mit KFO-Einträgen, `src/klemmen.rs`). Neue Textboxen, Tabellen, Bilder (samt
   Projektbild), Verweise und Sammelschienen werden geschrieben (`src/epr_neu.rs`); ihr Aufbau folgt der
-  Speicherroutine des Originals, im Original geöffnet ist das Ergebnis noch nicht geprüft
-  (`cargo run --example neu_objekte` erzeugt eine Testdatei).
+  Speicherroutine des Originals. Im Original geöffnet und ohne Beanstandung geprüft: je Objektart eine neue Datei
+  und eine geänderte Kopie des Beispielprojekts sowie das ganze Beispielprojekt, über MCP neu gezeichnet. Noch nicht
+  geprüft sind Dateien aus längeren Bedienabläufen (Sicherungsplan, DXF-Import, eigenes Symbol, neue Anlage).
+- Bauteile: Gruppe und Hersteller speichert das Originalformat nur als Verweis auf Gruppen.tfi der Bibliothek;
+  andere Werte gehen im `.epr` verloren (das Programm nennt sie beim Speichern, MCP schon beim Anlegen).
+- Noch nicht wie im Original verglichen: Klemmennummern und Verweise beim Löschen, das Löschen von Klemmstellen,
+  die Zeichenlänge von Sammelschienen mit Querverweispfeil (das Original zeichnet sie etwas länger).
 - Schriftname je Text (STR nach dem STL, sonst die Standardschrift des Projekts): Zeichenfläche und Bildexport
   zeichnen mit der installierten Schrift (gesucht über die Namenstabelle der Schriftdateien in den Schriftordnern
   des Systems – Windows: Fonts und Benutzerschriften; Linux: XDG-Ordner wie /usr/share/fonts und
